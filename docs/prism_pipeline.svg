@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="560" viewBox="0 0 1180 560" role="img" aria-labelledby="title desc">
+  <title id="title">Minimal PRISM pipeline</title>
+  <desc id="desc">A visual overview of the deterministic PRISM test implementation from raw market data through L0 to L5 and the output contract.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f7efe3"/>
+      <stop offset="100%" stop-color="#e7f0ed"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1b2a2f" flood-opacity="0.16"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#2f4858"/>
+    </marker>
+    <style>
+      .title { font: 700 28px Georgia, serif; fill: #1f3037; }
+      .subtitle { font: 400 14px Georgia, serif; fill: #52646b; }
+      .box-title { font: 700 15px Georgia, serif; fill: #1f3037; }
+      .box-body { font: 400 12px Georgia, serif; fill: #40545b; }
+      .tiny { font: 400 11px Georgia, serif; fill: #52646b; }
+      .arrow { stroke: #2f4858; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .soft { fill: #ffffff; stroke: #b9c8c2; stroke-width: 1.4; filter: url(#shadow); }
+      .layer { fill: #fffaf1; stroke: #d3b36f; stroke-width: 1.4; filter: url(#shadow); }
+      .output { fill: #edf7f3; stroke: #6aa38e; stroke-width: 1.6; filter: url(#shadow); }
+      .gate { fill: #f6e8d9; stroke: #c17652; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect width="1180" height="560" rx="28" fill="url(#bg)"/>
+  <text x="40" y="56" class="title">Minimal PRISM v0.3.0 Test Pipeline</text>
+  <text x="40" y="82" class="subtitle">Deterministic, inspectable implementation of the architecture contract: prediction + probability + reasoning trace + uncertainty bounds.</text>
+
+  <rect x="44" y="132" width="145" height="86" rx="16" class="soft"/>
+  <text x="66" y="162" class="box-title">Raw Market Data</text>
+  <text x="66" y="184" class="box-body">OHLCV candles</text>
+  <text x="66" y="202" class="box-body">CSV input</text>
+
+  <rect x="238" y="132" width="160" height="86" rx="16" class="soft"/>
+  <text x="260" y="162" class="box-title">Prepare Frame</text>
+  <text x="260" y="184" class="box-body">returns, volatility</text>
+  <text x="260" y="202" class="box-body">target_return</text>
+
+  <line x1="190" y1="175" x2="226" y2="175" class="arrow"/>
+
+  <rect x="450" y="66" width="170" height="76" rx="16" class="layer"/>
+  <text x="476" y="96" class="box-title">L0 Router</text>
+  <text x="476" y="118" class="box-body">hybrid d_model encoding</text>
+
+  <rect x="450" y="168" width="170" height="76" rx="16" class="layer"/>
+  <text x="476" y="198" class="box-title">L1 Causal Graph</text>
+  <text x="476" y="220" class="box-body">feature DAG + target</text>
+
+  <rect x="450" y="270" width="170" height="76" rx="16" class="layer"/>
+  <text x="476" y="300" class="box-title">L2 Temporal</text>
+  <text x="476" y="322" class="box-body">state scan + Granger</text>
+
+  <line x1="398" y1="160" x2="438" y2="112" class="arrow"/>
+  <line x1="398" y1="175" x2="438" y2="205" class="arrow"/>
+  <line x1="398" y1="190" x2="438" y2="300" class="arrow"/>
+
+  <rect x="686" y="168" width="178" height="76" rx="16" class="layer"/>
+  <text x="712" y="198" class="box-title">L3 Symbolic Rules</text>
+  <text x="712" y="220" class="box-body">IF-THEN + DAG gate</text>
+
+  <rect x="686" y="294" width="178" height="76" rx="16" class="layer"/>
+  <text x="712" y="324" class="box-title">L4 Calibration</text>
+  <text x="712" y="346" class="box-body">ridge ensemble + CP</text>
+
+  <line x1="620" y1="205" x2="674" y2="205" class="arrow"/>
+  <line x1="620" y1="104" x2="674" y2="196" class="arrow"/>
+  <line x1="620" y1="104" x2="674" y2="324" class="arrow"/>
+
+  <rect x="930" y="210" width="190" height="94" rx="18" class="output"/>
+  <text x="958" y="242" class="box-title">L5 Reasoning Fusion</text>
+  <text x="958" y="264" class="box-body">concepts + active rules</text>
+  <text x="958" y="282" class="box-body">causal/temporal trace</text>
+
+  <line x1="864" y1="206" x2="918" y2="246" class="arrow"/>
+  <line x1="864" y1="332" x2="918" y2="276" class="arrow"/>
+  <line x1="620" y1="308" x2="918" y2="258" class="arrow"/>
+
+  <rect x="930" y="382" width="190" height="98" rx="18" class="output"/>
+  <text x="966" y="414" class="box-title">PRISMOutput</text>
+  <text x="966" y="438" class="box-body">prediction</text>
+  <text x="966" y="456" class="box-body">probability</text>
+  <text x="966" y="474" class="box-body">trace + bounds</text>
+
+  <line x1="1025" y1="304" x2="1025" y2="370" class="arrow"/>
+
+  <rect x="676" y="68" width="200" height="58" rx="14" class="gate"/>
+  <text x="702" y="94" class="box-title">Rule gate invariant</text>
+  <text x="702" y="114" class="tiny">condition true AND edge to target_return</text>
+  <line x1="776" y1="126" x2="776" y2="156" class="arrow"/>
+
+  <text x="52" y="516" class="tiny">Key constraint: L3 rules can explain a prediction only if L1 supports a feature-to-target_return edge.</text>
+</svg>
