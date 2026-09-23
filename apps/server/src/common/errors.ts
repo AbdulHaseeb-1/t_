@@ -23,3 +23,10 @@ export class LlmUnavailableError extends HttpException {
     super({ message, code: 'LLM_UNAVAILABLE' }, HttpStatus.SERVICE_UNAVAILABLE);
   }
 }
+
+/** The provider rejected our request (e.g. invalid model name). */
+export class LlmRequestError extends HttpException {
+  constructor(provider: string, message: string) {
+    super({ message: `${provider}: ${message}`, code: 'LLM_REQUEST_FAILED' }, HttpStatus.BAD_GATEWAY);
+  }
+}

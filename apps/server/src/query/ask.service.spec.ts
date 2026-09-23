@@ -150,10 +150,22 @@ describe('AskService', () => {
     expect(String(calls[1].messages.at(-1)?.content)).toContain('only SELECT');
   });
 
-  it('returns a refusal without touching the database', async () => {
-    const { service, db } = setup(['```sql\n-- CANNOT_ANSWER: no weather data\n```'], () => scalar);
+  it('confirms a refusal with the smart tier before returning it, without touching the database', async () => {
+    const refusal = '```sql\n-- CANNOT_ANSWER: no weather data\n```';
+    const { service, db, calls } = setup([refusal, refusal], () => scalar);
     const r = await service.ask(ask("what's the weather"));
     expect(r).toMatchObject({ sql: null, result: null, answer: expect.stringContaining('no weather data') });
+    expect(calls.map((c) => c.tier)).toEqual(['fast', 'smart']);
     expect(db.readOnlyQuery).not.toHaveBeenCalled();
+  });
+
+  it('lets the smart tier overturn an over-eager fast-tier refusal', async () => {
+    const { service, calls } = setup(
+      ['```sql\n-- CANNOT_ANSWER: no revenue column\n```', '```sql\nSELECT 1 AS OrderCount\n```'],
+      () => scalar,
+    );
+    const r = await service.ask(ask('top products by revenue'));
+    expect(r).toMatchObject({ sql: 'SELECT 1 AS OrderCount', attempts: 2 });
+    expect(calls.map((c) => c.tier)).toEqual(['fast', 'smart']);
   });
 });

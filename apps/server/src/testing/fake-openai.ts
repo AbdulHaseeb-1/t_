@@ -5,6 +5,8 @@ import { type Env, validateEnv } from '../config/env.js';
 
 export interface FakeReply {
   status?: number;
+  errorMessage?: string;
+  param?: string;
   content?: string | null;
   toolCalls?: { id: string; name: string; arguments: string }[];
   usage?: Record<string, unknown>;
@@ -28,7 +30,11 @@ export class FakeOpenAI {
         res.setHeader('content-type', 'application/json');
         if (r.status && r.status >= 400) {
           res.statusCode = r.status;
-          res.end(JSON.stringify({ error: { message: `fake ${r.status}` } }));
+          res.end(
+            JSON.stringify({
+              error: { message: r.errorMessage ?? `fake ${r.status}`, param: r.param ?? null },
+            }),
+          );
           return;
         }
         res.end(

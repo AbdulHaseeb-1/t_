@@ -3,7 +3,7 @@ import OpenAI, { APIConnectionError, APIError } from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 import { AppConfig } from '../config/app-config.js';
 import type { ProviderMode, ProviderName } from '../config/env.js';
-import { LlmUnavailableError } from '../common/errors.js';
+import { LlmRequestError, LlmUnavailableError } from '../common/errors.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { ModelPricingService } from './model-pricing.service.js';
 import type { CallUsage, ChatRequest, ChatResult, Tier, UsageMeter } from './llm.types.js';
@@ -23,6 +23,36 @@ export interface ProviderStats {
   cachedPromptTokens: number;
   completionTokens: number;
   costUsd: number;
+}
+
+/** Optional parameters we can drop when a model rejects them (e.g. temperature on reasoning models). */
+const DROPPABLE_PARAMS = new Set([
+  'temperature',
+  'reasoning_effort',
+  'reasoning',
+  'prompt_cache_key',
+  'provider',
+]);
+
+/** Returns the rejected optional parameter, if the error is an "unsupported parameter/value" 400. */
+export function rejectedParam(err: unknown): string | undefined {
+  if (!(err instanceof APIError) || err.status !== 400) return undefined;
+  const candidate = err.param ?? /'(\w+)'/.exec(err.message)?.[1];
+  if (!candidate || !DROPPABLE_PARAMS.has(candidate)) return undefined;
+  return /unsupported|not supported|does not support|unrecognized|unknown/i.test(err.message)
+    ? candidate
+    : undefined;
+}
+
+/** Some reasoning models accept tools on Chat Completions only with reasoning disabled. */
+export function toolsNeedNoReasoning(err: unknown): boolean {
+  return (
+    err instanceof APIError &&
+    err.status === 400 &&
+    /tools?/i.test(err.message) &&
+    /reasoning_effort/i.test(err.message) &&
+    /'none'/.test(err.message)
+  );
 }
 
 /** Upstream failures worth failing over for; anything else is our bug or bad input. */
@@ -45,6 +75,10 @@ export class LlmService {
   private readonly logger = new Logger(LlmService.name);
   private readonly providers = new Map<ProviderName, Provider>();
   private readonly stats = new Map<ProviderName, ProviderStats>();
+  /** `provider:model` -> parameters that model rejected; learned at runtime, never re-sent. */
+  private readonly unsupported = new Map<string, Set<string>>();
+  /** `provider:model` keys that require `reasoning_effort: 'none'` when tools are sent. */
+  private readonly noReasoningWithTools = new Set<string>();
   private mode: ProviderMode;
   private order: ProviderName[];
 
@@ -140,7 +174,10 @@ export class LlmService {
       } catch (err) {
         lastError = err;
         this.bump(provider.name, { failures: 1 });
-        if (!isFailoverError(err)) throw err;
+        if (!isFailoverError(err)) {
+          if (err instanceof APIError) throw new LlmRequestError(provider.name, err.message);
+          throw err;
+        }
         provider.breaker.failure();
         this.logger.warn(`${provider.name} failed (${(err as Error).message}); trying next provider`);
       }
@@ -162,6 +199,27 @@ export class LlmService {
   }
 
   private async call(p: Provider, req: ChatRequest): Promise<ChatResult> {
+    const key = `${p.name}:${p.models[req.tier]}`;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.send(p, req);
+      } catch (err) {
+        if (req.tools?.length && toolsNeedNoReasoning(err) && !this.noReasoningWithTools.has(key)) {
+          this.noReasoningWithTools.add(key);
+          this.logger.warn(`${key} needs reasoning_effort=none with tools; applying from now on`);
+          continue;
+        }
+        const param = rejectedParam(err);
+        const known = this.unsupported.get(key) ?? new Set<string>();
+        if (!param || known.has(param) || attempt >= DROPPABLE_PARAMS.size) throw err;
+        known.add(param);
+        this.unsupported.set(key, known);
+        this.logger.warn(`${key} rejects "${param}"; omitting it from now on`);
+      }
+    }
+  }
+
+  private async send(p: Provider, req: ChatRequest): Promise<ChatResult> {
     const model = p.models[req.tier];
     const maxTokens = req.maxTokens ?? this.config.get('LLM_MAX_OUTPUT_TOKENS');
     const effort = p.reasoning[req.tier];
@@ -184,6 +242,10 @@ export class LlmService {
       if (sort) body.provider = { sort };
       if (effort) body.reasoning = { effort };
     }
+
+    const key = `${p.name}:${model}`;
+    if (req.tools?.length && this.noReasoningWithTools.has(key)) body.reasoning_effort = 'none';
+    for (const param of this.unsupported.get(key) ?? []) delete body[param];
 
     const started = performance.now();
     const res = await p.client.chat.completions.create(body);

@@ -14,11 +14,12 @@ Rules:
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
-- For "top", "latest", "most" use TOP (n) with ORDER BY. Never return more than {maxRows} rows.
+- For "top", "most", "least", "highest" use TOP (n) WITH TIES and ORDER BY, so ties are never hidden. Never return more than {maxRows} rows.
 - Keep WHERE clauses sargable: compare columns to ranges (col >= '2024-01-01' AND col < '2025-01-01') instead of wrapping columns in functions.
 - Use ISNULL/COALESCE for nullable aggregates, NULLIF to avoid division by zero, CAST(... AS decimal(18,2)) for ratios.
 - Give computed columns readable aliases.
-- If the schema cannot answer the question, output: \`\`\`sql
+- Derive standard business metrics from available columns (e.g. revenue = quantity * unit price, age from a birth date) instead of refusing.
+- Only if no reasonable query exists, output: \`\`\`sql
 -- CANNOT_ANSWER: <short reason>
 \`\`\``;
 
@@ -41,6 +42,7 @@ export function sqlMessages(
 export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's question using ONLY the SQL result provided.
 - Lead with the direct answer in one sentence, then the key figures.
 - Use a compact markdown table only when several rows matter.
+- If several rows tie for first place, name all of them.
 - If the result was sampled or capped, say so. Never invent or extrapolate numbers.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
@@ -55,7 +57,7 @@ export const AGENT_SYSTEM = `You are a senior data analyst with read-only access
 Work efficiently: every tool call costs time and money.
 - The schema excerpt below is usually enough. Only call search_schema/describe_tables when a needed table or column is missing.
 - Prefer one well-aggregated query over many small ones. Run independent queries in parallel tool calls.
-- T-SQL only, SELECT/WITH only, bracketed schema-qualified identifiers, TOP (n) for limits.
+- T-SQL only, SELECT/WITH only, bracketed schema-qualified identifiers, TOP (n) WITH TIES for rankings.
 - When you have enough evidence, stop calling tools and write the final answer: direct answer first, then supporting figures, then brief caveats. Use markdown. Never invent numbers.`;
 
 export function extractSql(text: string): string {

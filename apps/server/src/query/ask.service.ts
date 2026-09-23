@@ -87,12 +87,13 @@ export class AskService {
     if (!result) {
       const snapshot = await this.catalog.snapshot();
       const messages = sqlMessages(snapshot.database, ctx, input.question, maxRows);
-      const maxAttempts = 1 + this.config.get('ASK_MAX_REPAIRS');
+      let maxAttempts = 1 + this.config.get('ASK_MAX_REPAIRS');
+      let forceSmart = false;
 
       while (attempts < maxAttempts) {
         attempts++;
         const isLast = attempts === maxAttempts;
-        const tier: Tier = isLast && attempts > 1 ? 'smart' : input.tier;
+        const tier: Tier = forceSmart || (isLast && attempts > 1) ? 'smart' : input.tier;
         const res = await this.timed(timings, 'llmMs', () =>
           this.llm.chat(
             { tier, messages, temperature: 0, maxTokens: 800, cacheKey: `sql:${schemaHash}` },
@@ -103,6 +104,12 @@ export class AskService {
         sql = extractSql(text);
 
         const reason = cannotAnswerReason(sql);
+        if (reason && tier !== 'smart') {
+          // Cheap models refuse too eagerly; one smart-tier look is cheaper than a wrong "no".
+          forceSmart = true;
+          maxAttempts = Math.max(maxAttempts, attempts + 1);
+          continue;
+        }
         if (reason) {
           return this.finish(input, answerKey, started, timings, meter, {
             sql: null,

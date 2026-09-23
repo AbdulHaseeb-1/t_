@@ -73,6 +73,59 @@ describe('LlmService', () => {
     expect(openrouter.requests).toHaveLength(0);
   });
 
+  it('learns parameters a model rejects and stops sending them', async () => {
+    openai = new FakeOpenAI((body) =>
+      'temperature' in body
+        ? {
+            status: 400,
+            param: 'temperature',
+            errorMessage: "Unsupported value: 'temperature' does not support 0 with this model.",
+          }
+        : { content: 'ok' },
+    );
+    const llm = await service();
+    const meter = new UsageMeter();
+    const first = await llm.chat({ tier: 'fast', messages, temperature: 0 }, meter);
+    expect(first.message.content).toBe('ok');
+    expect(openai.requests).toHaveLength(2);
+    expect(openrouter.requests).toHaveLength(0); // handled in place, no failover
+
+    await llm.chat({ tier: 'fast', messages, temperature: 0 });
+    expect(openai.requests).toHaveLength(3); // no wasted round trip the second time
+    expect(openai.requests[2]).not.toHaveProperty('temperature');
+  });
+
+  it('disables reasoning for tool calls when the model requires it, without affecting plain calls', async () => {
+    openai = new FakeOpenAI((body) =>
+      body.tools && body.reasoning_effort !== 'none'
+        ? {
+            status: 400,
+            param: 'reasoning_effort',
+            errorMessage:
+              "Function tools with reasoning_effort are not supported for gpt-6-luna in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+          }
+        : { content: 'ok' },
+    );
+    const llm = await service({ LLM_REASONING_EFFORT_FAST: 'low' });
+    const tools = [
+      { type: 'function' as const, function: { name: 'run_sql', parameters: { type: 'object' } } },
+    ];
+    await llm.chat({ tier: 'fast', messages, tools });
+    await llm.chat({ tier: 'fast', messages, tools });
+    await llm.chat({ tier: 'fast', messages });
+    expect(openai.requests.map((r) => r.reasoning_effort)).toEqual(['low', 'none', 'none', 'low']);
+  });
+
+  it('maps other upstream 400s to a 502 with the provider message', async () => {
+    openai = new FakeOpenAI(() => ({ status: 400, errorMessage: 'The model `gpt-x` does not exist' }));
+    const llm = await service();
+    const err = await llm.chat({ tier: 'fast', messages }).catch((e: unknown) => e);
+    expect(err).toMatchObject({
+      status: 502,
+      message: expect.stringContaining('openai: 400 The model `gpt-x`'),
+    });
+  });
+
   it('pins a provider when the mode is switched at runtime', async () => {
     const llm = await service();
     llm.setMode('openrouter');

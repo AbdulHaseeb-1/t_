@@ -80,6 +80,18 @@ Both providers use one OpenAI-compatible code path.
 6. **Zero-LLM paths.** `/query/sql` and scalar answers skip the model.
 7. **`answer: false`** returns data only, which halves calls when a UI renders the table itself.
 
+## Measured on `gpt-6-luna` (synthetic sample DB)
+
+| Reasoning effort (fast tier) | Avg latency | Avg cost / question | Correct |
+|---|---|---|---|
+| provider default | 6.1 s | $0.000319 | 4/4 (one needed a repair loop) |
+| low | 3.8 s | $0.000183 | 4/4 |
+| **none** (shipped default) | **2.4 s** | **$0.000134** | **4/4** |
+
+That is about **7,500 new questions per $1**; repeats are free. Escalation reuses the same model with `medium` reasoning, and it is used only after failed attempts or a fast-tier refusal.
+
+The server adapts to model quirks at runtime. If a model rejects an optional parameter such as `temperature` on reasoning models, the server drops it for that model and retries. Tool calls use `reasoning_effort: none` when a model requires it.
+
 ## Safety model (defence in depth)
 
 1. Connect as a `db_datareader` login (created by `attach.sh`), so writes are refused by SQL Server itself.
