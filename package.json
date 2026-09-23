@@ -1,0 +1,19 @@
+{
+  "name": "db-intelligence",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter server start:dev",
+    "build": "pnpm --filter server build",
+    "start": "pnpm --filter server start:prod",
+    "test": "pnpm --filter server test",
+    "test:e2e": "pnpm --filter server test:e2e",
+    "lint": "pnpm --filter server lint",
+    "typecheck": "pnpm --filter server typecheck",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
+  }
+}
