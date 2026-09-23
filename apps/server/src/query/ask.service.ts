@@ -62,6 +62,23 @@ interface Attempt {
 
 type Trace = AskResponse['trace'];
 
+/** `CustomerCount` / `total_revenue` -> `Customer count` / `Total revenue`. */
+export function humanizeColumn(name: string): string {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/[_\s]+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Result';
+}
+
+export function formatScalar(v: unknown): string {
+  if (v === null || v === undefined) return 'no value';
+  if (typeof v === 'number') return v.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  return String(v);
+}
+
 function isSqlFailure(err: unknown): err is HttpException {
   return err instanceof UnsafeSqlError || err instanceof SqlExecutionError;
 }
@@ -282,7 +299,7 @@ export class AskService {
     if (result.rowCount === 0) return 'The query returned no rows.';
     // A single value needs no language model.
     if (result.rowCount === 1 && result.columns.length === 1) {
-      return `**${result.columns[0].name}**: ${String(result.rows[0][0])}`;
+      return `${humanizeColumn(result.columns[0].name)}: **${formatScalar(result.rows[0][0])}**`;
     }
     const table = toPromptTable(result, this.config.get('ASK_ANSWER_MAX_ROWS'));
     const res = await this.timed(timings, 'llmMs', () =>

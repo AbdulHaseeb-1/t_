@@ -6,7 +6,7 @@ import type { SchemaCatalogService } from '../database/schema/schema-catalog.ser
 import type { LlmService } from '../llm/llm.service.js';
 import type { ChatRequest } from '../llm/llm.types.js';
 import { testConfig } from '../testing/fake-openai.js';
-import { AskService } from './ask.service.js';
+import { AskService, formatScalar, humanizeColumn } from './ask.service.js';
 import { ExamplesService } from './examples.service.js';
 import { QueryCacheService } from './query-cache.service.js';
 
@@ -89,7 +89,7 @@ describe('AskService', () => {
     const first = await service.ask(ask('How many orders?'));
     expect(first).toMatchObject({
       sql: 'SELECT COUNT(*) AS OrderCount FROM dbo.Orders',
-      answer: '**OrderCount**: 42',
+      answer: 'Order count: **42**',
       cache: null,
       attempts: 1,
     });
@@ -245,5 +245,14 @@ describe('AskService', () => {
     const other = await service.ask(ask('and for 2024?', { answer: false }));
     expect(other.cache).toBeNull();
     expect(calls).toHaveLength(2);
+  });
+
+  it('phrases single values without a model call', () => {
+    expect(humanizeColumn('CustomerCount')).toBe('Customer count');
+    expect(humanizeColumn('total_net_revenue')).toBe('Total net revenue');
+    expect(humanizeColumn('AvgOrderUSD')).toBe('Avg order usd');
+    expect(formatScalar(7525868.5)).toBe('7,525,868.5');
+    expect(formatScalar(2.666666)).toBe('2.6667');
+    expect(formatScalar(null)).toBe('no value');
   });
 });

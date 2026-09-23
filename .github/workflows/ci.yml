@@ -40,3 +40,18 @@ jobs:
           DB_HOST: localhost
           DB_USER: sa
           DB_PASSWORD: Ci_Passw0rd!2026
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter mobile typecheck
+      - run: pnpm --filter mobile lint
+      - run: pnpm --filter mobile test
+      - run: pnpm --filter mobile build:web
