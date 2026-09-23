@@ -15,3 +15,4 @@ coverage/
 *.bacpac
 infra/mssql/data/*
 !infra/mssql/data/.gitkeep
+eval/reports/

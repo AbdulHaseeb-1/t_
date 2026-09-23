@@ -1,0 +1,401 @@
+<meta charset="utf-8">
+<title>Retail accuracy scorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f5;
+    --surface: #ffffff;
+    --sunken: #eceff0;
+    --ink: #172026;
+    --muted: #5b666e;
+    --rule: #d9dfe1;
+    --accent: #1f5f8b;
+    --accent-soft: #dce8f2;
+    --good: #2f7d4f;
+    --warn: #a2690f;
+    --bad: #b43c3c;
+    --good-soft: #dff0e5;
+    --warn-soft: #f6ead3;
+    --bad-soft: #f6dddd;
+    --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #121719;
+      --surface: #192024;
+      --sunken: #0f1315;
+      --ink: #e3e9ec;
+      --muted: #98a4ab;
+      --rule: #2a3439;
+      --accent: #74aee0;
+      --accent-soft: #1d3446;
+      --good: #62c18a;
+      --warn: #deaa4f;
+      --bad: #e57b7b;
+      --good-soft: #17352a;
+      --warn-soft: #3a2f17;
+      --bad-soft: #3d1f22;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #121719;
+    --surface: #192024;
+    --sunken: #0f1315;
+    --ink: #e3e9ec;
+    --muted: #98a4ab;
+    --rule: #2a3439;
+    --accent: #74aee0;
+    --accent-soft: #1d3446;
+    --good: #62c18a;
+    --warn: #deaa4f;
+    --bad: #e57b7b;
+    --good-soft: #17352a;
+    --warn-soft: #3a2f17;
+    --bad-soft: #3d1f22;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 15px/1.55 var(--sans);
+    padding-inline: 16px;
+    padding-block: 32px 64px;
+  }
+  table { font: inherit; color: inherit; border-collapse: collapse; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 40px; }
+  h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.2; }
+  h1 { font-size: clamp(26px, 4vw, 34px); font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; font-weight: 600; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+  .muted { color: var(--muted); }
+  .mono, code, pre { font-family: var(--mono); }
+  .num { font-variant-numeric: tabular-nums; }
+  section { display: grid; gap: 14px; }
+  .section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+  .section-head p { margin: 0; max-width: 68ch; font-size: 14px; }
+
+  header.run { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+  header.run .lede { display: grid; gap: 10px; }
+  header.run .meta { margin: 0; font-size: 14px; }
+  .headline { text-align: right; }
+  .headline .big { font: 600 clamp(40px, 7vw, 60px)/1 var(--mono); letter-spacing: -0.03em; }
+  .headline .cap { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  @media (max-width: 640px) {
+    header.run { grid-template-columns: 1fr; }
+    .headline { text-align: left; }
+  }
+
+  .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; }
+  .scroll { overflow-x: auto; }
+  .grid-table { width: 100%; min-width: 640px; }
+  .grid-table th, .grid-table td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  .grid-table th:first-child, .grid-table td:first-child { text-align: left; }
+  .grid-table thead th { font: 500 12px/1.3 var(--sans); color: var(--muted); letter-spacing: 0.02em; background: var(--sunken); }
+  .grid-table tbody tr:last-child td { border-bottom: 0; }
+  .variant-name { font: 600 14px var(--mono); }
+  .variant-name.best::after { content: 'best'; margin-left: 8px; font: 500 10px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 6px; border-radius: 3px; background: var(--accent-soft); color: var(--accent); vertical-align: 2px; }
+  .overrides { display: block; font: 400 12px var(--mono); color: var(--muted); white-space: normal; max-width: 34ch; margin-top: 2px; }
+
+  .acc { display: grid; grid-template-columns: 120px 64px; gap: 10px; align-items: center; justify-content: end; }
+  .bar { height: 8px; background: var(--sunken); border-radius: 2px; overflow: hidden; position: relative; }
+  .bar > span { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 2px; }
+  .acc b { font: 600 14px var(--mono); }
+  .sd { font-size: 12px; color: var(--muted); }
+
+  .heat td.cell { font: 500 13px var(--mono); }
+  .heat td.cell span { display: inline-block; min-width: 58px; padding: 4px 8px; border-radius: 3px; text-align: center; }
+  .n { color: var(--muted); font: 400 12px var(--mono); }
+
+  .stack { display: flex; height: 14px; border-radius: 3px; overflow: hidden; background: var(--sunken); }
+  .stack span { display: block; height: 100%; }
+  .fail-rows { display: grid; gap: 14px; padding: 16px; }
+  .fail-row { display: grid; grid-template-columns: minmax(110px, 180px) minmax(0, 1fr) 70px; gap: 14px; align-items: center; }
+  .fail-row .total { text-align: right; font: 500 13px var(--mono); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 0 16px 16px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+  .flips { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .flips li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14px; }
+
+  .pill { display: inline-block; font: 500 11px/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; white-space: nowrap; }
+  .pill.correct, .pill.fixed { background: var(--good-soft); color: var(--good); }
+  .pill.wrong, .pill.broken { background: var(--bad-soft); color: var(--bad); }
+  .pill.error { background: var(--warn-soft); color: var(--warn); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  .controls label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+  select, input[type="search"] {
+    font: 400 14px var(--sans); color: var(--ink); background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; max-width: 100%;
+  }
+  input[type="search"] { width: 220px; }
+  .chips { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+  .chips button {
+    font: 500 13px var(--sans); color: var(--muted); background: var(--surface); border: 0; padding: 6px 12px; cursor: pointer;
+  }
+  .chips button + button { border-left: 1px solid var(--rule); }
+  .chips button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .count { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  .cases { display: grid; }
+  details.case { border-bottom: 1px solid var(--rule); }
+  details.case:last-child { border-bottom: 0; }
+  details.case > summary {
+    list-style: none; cursor: pointer; padding: 12px 16px;
+    display: grid; grid-template-columns: 78px 64px minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
+  }
+  details.case > summary::-webkit-details-marker { display: none; }
+  details.case > summary:hover { background: var(--sunken); }
+  details.case[open] > summary { background: var(--sunken); }
+  .case-id { font: 500 13px var(--mono); color: var(--muted); }
+  .case-q { min-width: 0; }
+  .case-q small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .case-stats { font: 400 12px var(--mono); color: var(--muted); text-align: right; white-space: nowrap; }
+  @media (max-width: 640px) {
+    details.case > summary { grid-template-columns: auto minmax(0, 1fr); }
+    .case-id { grid-row: 2; grid-column: 1; }
+    .case-stats { grid-column: 2; text-align: left; }
+  }
+  .case-body { padding: 4px 16px 20px; display: grid; gap: 16px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .pair > div { display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .pair h3, .case-body h3 { font: 500 12px var(--sans); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  pre.sql { margin: 0; padding: 12px; background: var(--sunken); border-radius: 4px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; white-space: pre; }
+  .rows { font-size: 12.5px; min-width: 100%; }
+  .rows th, .rows td { padding: 4px 8px; border-bottom: 1px solid var(--rule); text-align: left; white-space: nowrap; font-family: var(--mono); }
+  .rows th { color: var(--muted); font-weight: 500; }
+  .reason { margin: 0; padding: 10px 12px; border-left: 3px solid var(--bad); background: var(--bad-soft); border-radius: 0 4px 4px 0; font-size: 14px; }
+  .trace { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 400 12.5px var(--mono); color: var(--muted); }
+  .trace b { color: var(--ink); font-weight: 500; }
+  .answer { margin: 0; white-space: pre-wrap; font-size: 14px; max-width: 80ch; }
+  footer { font-size: 13px; color: var(--muted); max-width: 80ch; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="run">
+    <div class="lede">
+      <span class="eyebrow">Text-to-SQL evaluation</span>
+      <h1 id="title"></h1>
+      <p class="meta muted" id="meta"></p>
+    </div>
+    <div class="headline" id="headline"></div>
+  </header>
+
+  <section aria-labelledby="h-variants">
+    <div class="section-head">
+      <h2 id="h-variants">Variants</h2>
+      <p class="muted">Execution accuracy: generated SQL must return the same rows as the gold query. Column names, column order and extra columns are ignored; row order counts only where the question asks for it.</p>
+    </div>
+    <div class="panel scroll"><table class="grid-table" id="variants"></table></div>
+  </section>
+
+  <section aria-labelledby="h-tags">
+    <div class="section-head">
+      <h2 id="h-tags">Accuracy by capability</h2>
+      <p class="muted">Each row is a skill the questions exercise; n is the number of questions per repeat.</p>
+    </div>
+    <div class="panel scroll"><table class="grid-table heat" id="tags"></table></div>
+  </section>
+
+  <section aria-labelledby="h-fail">
+    <div class="section-head">
+      <h2 id="h-fail">Where answers go wrong</h2>
+      <p class="muted">Failed runs per variant, split by cause.</p>
+    </div>
+    <div class="panel"><div class="fail-rows" id="fail-rows"></div><div class="legend" id="legend"></div></div>
+  </section>
+
+  <section aria-labelledby="h-flips" id="flips-section">
+    <div class="section-head">
+      <h2 id="h-flips">Changes against the baseline</h2>
+      <p class="muted" id="flips-note"></p>
+    </div>
+    <ul class="flips" id="flips"></ul>
+  </section>
+
+  <section aria-labelledby="h-cases">
+    <div class="section-head">
+      <h2 id="h-cases">Cases</h2>
+    </div>
+    <div class="controls">
+      <label for="f-variant">Variant <select id="f-variant"></select></label>
+      <span class="chips" role="group" aria-label="Verdict" id="f-verdict">
+        <button type="button" data-v="all" aria-pressed="true">All</button>
+        <button type="button" data-v="failed" aria-pressed="false">Failed</button>
+        <button type="button" data-v="correct" aria-pressed="false">Correct</button>
+      </span>
+      <label for="f-tag">Capability <select id="f-tag"></select></label>
+      <input type="search" id="f-search" placeholder="Search questions or SQL" aria-label="Search questions or SQL">
+      <span class="count" id="count"></span>
+    </div>
+    <div class="panel cases" id="cases"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script type="application/json" id="eval-data">{"info":{"dataset":"retail","database":"Eval_Retail","startedAt":"2026-09-23T19:04:02.653Z","durationS":38.572,"repeats":4,"cases":1,"models":["openai:gpt-6-luna"],"withAnswers":false,"title":"Retail accuracy scorecard"},"summaries":[{"variant":"default","overrides":{},"cases":1,"repeats":4,"accuracy":0.75,"accuracyStdDev":0.4330127018922193,"passAtK":1,"passAllK":0,"stability":0,"firstTryAccuracy":0,"byTag":{"hierarchy":{"correct":3,"total":4,"accuracy":0.75},"multi-hop":{"correct":3,"total":4,"accuracy":0.75}},"byDifficulty":{"hard":{"correct":3,"total":4,"accuracy":0.75}},"categories":{"wrong_rows":1,"correct":3},"rescues":{"repair":0,"emptyRecheck":3,"escalation":3,"vote":3},"latency":{"meanMs":9628,"p50Ms":9849,"p95Ms":10965,"maxMs":10965},"cost":{"totalUsd":0.0018250000000000002,"perQuestionUsd":0.00045625000000000006,"perCorrectUsd":0.0006083333333333334},"tokens":{"prompt":9268,"cachedPrompt":7758,"completion":3191,"llmCalls":8}}],"flips":[],"results":[{"variant":"default","repeat":0,"id":"q17","question":"What is total net revenue for each top-level product category (the categories that have no parent)?","tags":["hierarchy","multi-hop"],"difficulty":"hard","expect":"result","goldSql":"SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName","gold":{"columns":["CategoryName","NetRevenue"],"rows":[["Home",1457999.6],["Electronics",5327196],["Clothing",562062.45]],"rowCount":3},"sql":"SELECT\n    c.[CategoryName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct])) AS [TotalNetRevenue]\nFROM [catalog].[Categories] AS c\nINNER JOIN [catalog].[Products] AS p\n    ON p.[CategoryId] = c.[CategoryId]\nINNER JOIN [sales].[OrderItems] AS oi\n    ON oi.[ProductId] = p.[ProductId]\nWHERE c.[ParentCategoryId] IS NULL\nGROUP BY c.[CategoryId], c.[CategoryName];","answer":null,"attempts":2,"trace":{"candidates":2,"repairs":0,"emptyRecheck":true,"escalated":true,"examples":0,"agreement":1},"latencyMs":10547,"llmMs":10537,"dbMs":9,"usage":{"llmCalls":2,"promptTokens":2318,"cachedPromptTokens":1053,"completionTokens":921,"costUsd":0.000598,"models":["openai:gpt-6-luna"]},"predicted":{"columns":["CategoryName","TotalNetRevenue"],"rows":[],"rowCount":0},"verdict":"wrong","category":"wrong_rows","detail":"expected 3 rows, got 0"},{"variant":"default","repeat":1,"id":"q17","question":"What is total net revenue for each top-level product category (the categories that have no parent)?","tags":["hierarchy","multi-hop"],"difficulty":"hard","expect":"result","goldSql":"SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName","gold":{"columns":["CategoryName","NetRevenue"],"rows":[["Home",1457999.6],["Electronics",5327196],["Clothing",562062.45]],"rowCount":3},"sql":"WITH [CategoryHierarchy] AS (\n    SELECT\n        [c].[CategoryId] AS [TopCategoryId],\n        [c].[CategoryId] AS [CategoryId]\n    FROM [catalog].[Categories] AS [c]\n    WHERE [c].[ParentCategoryId] IS NULL\n\n    UNION ALL\n\n    SELECT\n        [h].[TopCategoryId],\n        [child].[CategoryId]\n    FROM [CategoryHierarchy] AS [h]\n    JOIN [catalog].[Categories] AS [child]\n        ON [child].[ParentCategoryId] = [h].[CategoryId]\n)\nSELECT\n    [root].[CategoryName],\n    COALESCE(SUM([oi].[Quantity] * [oi].[UnitPrice] * (1 - [oi].[DiscountPct])), 0) AS [TotalNetRevenue]\nFROM [catalog].[Categories] AS [root]\nLEFT JOIN [CategoryHierarchy] AS [h]\n    ON [h].[TopCategoryId] = [root].[CategoryId]\nLEFT JOIN [catalog].[Products] AS [p]\n    ON [p].[CategoryId] = [h].[CategoryId]\nLEFT JOIN [sales].[OrderItems] AS [oi]\n    ON [oi].[ProductId] = [p].[ProductId]\nWHERE [root].[ParentCategoryId] IS NULL\nGROUP BY [root].[CategoryId], [root].[CategoryName]\nOPTION (MAXRECURSION 100);","answer":null,"attempts":2,"trace":{"candidates":2,"repairs":0,"emptyRecheck":true,"escalated":true,"examples":0,"agreement":1},"latencyMs":10965,"llmMs":10927,"dbMs":37,"usage":{"llmCalls":2,"promptTokens":2316,"cachedPromptTokens":2083,"completionTokens":895,"costUsd":0.000492,"models":["openai:gpt-6-luna"]},"predicted":{"columns":["CategoryName","TotalNetRevenue"],"rows":[["Clothing",562062.45],["Electronics",5327196],["Home",1457999.6]],"rowCount":3},"verdict":"correct","category":"correct"},{"variant":"default","repeat":2,"id":"q17","question":"What is total net revenue for each top-level product category (the categories that have no parent)?","tags":["hierarchy","multi-hop"],"difficulty":"hard","expect":"result","goldSql":"SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName","gold":{"columns":["CategoryName","NetRevenue"],"rows":[["Home",1457999.6],["Electronics",5327196],["Clothing",562062.45]],"rowCount":3},"sql":"WITH [CategoryHierarchy] AS\n(\n    SELECT\n        c.[CategoryId] AS [RootCategoryId],\n        c.[CategoryId] AS [CategoryId]\n    FROM [catalog].[Categories] AS c\n    WHERE c.[ParentCategoryId] IS NULL\n\n    UNION ALL\n\n    SELECT\n        h.[RootCategoryId],\n        child.[CategoryId]\n    FROM [CategoryHierarchy] AS h\n    INNER JOIN [catalog].[Categories] AS child\n        ON child.[ParentCategoryId] = h.[CategoryId]\n)\nSELECT\n    root.[CategoryName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct])) AS [TotalNetRevenue]\nFROM [CategoryHierarchy] AS h\nINNER JOIN [catalog].[Categories] AS root\n    ON root.[CategoryId] = h.[RootCategoryId]\nINNER JOIN [catalog].[Products] AS p\n    ON p.[CategoryId] = h.[CategoryId]\nINNER JOIN [sales].[OrderItems] AS oi\n    ON oi.[ProductId] = p.[ProductId]\nGROUP BY root.[CategoryId], root.[CategoryName];","answer":null,"attempts":2,"trace":{"candidates":2,"repairs":0,"emptyRecheck":true,"escalated":true,"examples":0,"agreement":1},"latencyMs":7151,"llmMs":7117,"dbMs":34,"usage":{"llmCalls":2,"promptTokens":2318,"cachedPromptTokens":2312,"completionTokens":611,"costUsd":0.000329,"models":["openai:gpt-6-luna"]},"predicted":{"columns":["CategoryName","TotalNetRevenue"],"rows":[["Clothing",562062.45],["Electronics",5327196],["Home",1457999.6]],"rowCount":3},"verdict":"correct","category":"correct"},{"variant":"default","repeat":3,"id":"q17","question":"What is total net revenue for each top-level product category (the categories that have no parent)?","tags":["hierarchy","multi-hop"],"difficulty":"hard","expect":"result","goldSql":"SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName","gold":{"columns":["CategoryName","NetRevenue"],"rows":[["Home",1457999.6],["Electronics",5327196],["Clothing",562062.45]],"rowCount":3},"sql":"WITH [CategoryTree] AS (\n    SELECT\n        c.[CategoryId] AS [TopLevelCategoryId],\n        c.[CategoryName] AS [TopLevelCategoryName],\n        c.[CategoryId] AS [CategoryId]\n    FROM [catalog].[Categories] AS c\n    WHERE c.[ParentCategoryId] IS NULL\n\n    UNION ALL\n\n    SELECT\n        ct.[TopLevelCategoryId],\n        ct.[TopLevelCategoryName],\n        child.[CategoryId]\n    FROM [CategoryTree] AS ct\n    JOIN [catalog].[Categories] AS child\n        ON child.[ParentCategoryId] = ct.[CategoryId]\n)\nSELECT\n    ct.[TopLevelCategoryName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct])) AS [TotalNetRevenue]\nFROM [CategoryTree] AS ct\nJOIN [catalog].[Products] AS p\n    ON p.[CategoryId] = ct.[CategoryId]\nJOIN [sales].[OrderItems] AS oi\n    ON oi.[ProductId] = p.[ProductId]\nGROUP BY ct.[TopLevelCategoryId], ct.[TopLevelCategoryName];","answer":null,"attempts":2,"trace":{"candidates":2,"repairs":0,"emptyRecheck":true,"escalated":true,"examples":0,"agreement":1},"latencyMs":9849,"llmMs":9808,"dbMs":39,"usage":{"llmCalls":2,"promptTokens":2316,"cachedPromptTokens":2310,"completionTokens":764,"costUsd":0.000406,"models":["openai:gpt-6-luna"]},"predicted":{"columns":["TopLevelCategoryName","TotalNetRevenue"],"rows":[["Electronics",5327196],["Clothing",562062.45],["Home",1457999.6]],"rowCount":3},"verdict":"correct","category":"correct"}]}</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById('eval-data').textContent);
+  const { info, summaries, flips, results } = data;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const pct = (x) => (x * 100).toFixed(1) + '%';
+  const usd = (x) => '$' + (x < 0.01 ? x.toFixed(5) : x.toFixed(4));
+  const secs = (ms) => (ms / 1000).toFixed(1) + 's';
+
+  const CATS = {
+    wrong_values: ['Wrong values', 'var(--bad)'],
+    wrong_rows: ['Wrong row count', 'color-mix(in oklab, var(--bad) 70%, var(--warn))'],
+    wrong_columns: ['Missing column', 'color-mix(in oklab, var(--bad) 45%, var(--warn))'],
+    wrong_order: ['Wrong order', 'var(--warn)'],
+    false_refusal: ['Refused answerable', 'color-mix(in oklab, var(--accent) 60%, var(--muted))'],
+    missed_refusal: ['Answered unanswerable', 'var(--accent)'],
+    sql_error: ['SQL error', 'color-mix(in oklab, var(--warn) 60%, var(--muted))'],
+    unsafe_sql: ['Unsafe SQL', 'var(--ink)'],
+    llm_error: ['LLM error', 'var(--muted)'],
+    other_error: ['Other error', 'color-mix(in oklab, var(--muted) 50%, var(--rule))'],
+  };
+
+  const best = summaries.reduce((a, b) => (b.accuracy > a.accuracy ? b : a), summaries[0]);
+  const multi = summaries.length > 1;
+
+  $('title').textContent = info.title;
+  $('meta').textContent = `${info.cases} questions × ${info.repeats} repeat${info.repeats > 1 ? 's' : ''} × ${summaries.length} variant${multi ? 's' : ''} · ${info.database} · ${info.models.join(', ') || 'no model'} · ${new Date(info.startedAt).toLocaleString()} · ${Math.round(info.durationS)}s`;
+  $('headline').innerHTML = `<div class="big num">${pct(best.accuracy)}</div><div class="cap">${multi ? 'best variant: ' + esc(best.variant) : 'execution accuracy'} · ${usd(best.cost.perCorrectUsd)} per correct answer</div>`;
+
+  // Variants table
+  $('variants').innerHTML =
+    '<thead><tr><th>Variant</th><th>Accuracy</th><th>First try</th><th>pass@k</th><th>Stable</th><th>p50</th><th>p95</th><th>$ / question</th><th>$ / correct</th><th>LLM calls</th></tr></thead><tbody>' +
+    summaries.map((s) => {
+      const ov = Object.entries(s.overrides).map(([k, v]) => `${k}=${v}`).join(' ');
+      return `<tr>
+        <td><span class="variant-name ${multi && s === best ? 'best' : ''}">${esc(s.variant)}</span>${ov ? `<span class="overrides">${esc(ov)}</span>` : ''}</td>
+        <td><div class="acc"><div class="bar" aria-hidden="true"><span style="width:${(s.accuracy * 100).toFixed(1)}%"></span></div><b class="num">${pct(s.accuracy)}</b></div>${s.repeats > 1 ? `<div class="sd">± ${(s.accuracyStdDev * 100).toFixed(1)} pts</div>` : ''}</td>
+        <td class="num">${pct(s.firstTryAccuracy)}</td>
+        <td class="num">${pct(s.passAtK)}</td>
+        <td class="num">${pct(s.stability)}</td>
+        <td class="num">${secs(s.latency.p50Ms)}</td>
+        <td class="num">${secs(s.latency.p95Ms)}</td>
+        <td class="num">${usd(s.cost.perQuestionUsd)}</td>
+        <td class="num">${usd(s.cost.perCorrectUsd)}</td>
+        <td class="num">${s.tokens.llmCalls}</td>
+      </tr>`;
+    }).join('') + '</tbody>';
+
+  // Capability heat table (difficulty first, then tags)
+  const heatCell = (r) => {
+    if (!r) return '<td class="cell"><span class="muted">–</span></td>';
+    const a = r.accuracy * 100;
+    const bg = `color-mix(in oklab, color-mix(in oklab, var(--good) ${a.toFixed(0)}%, var(--bad)) 22%, transparent)`;
+    return `<td class="cell"><span style="background:${bg}">${a.toFixed(0)}%</span></td>`;
+  };
+  const rows = (group, pick) => {
+    const keys = [...new Set(summaries.flatMap((s) => Object.keys(pick(s))))];
+    if (group === 'difficulty') keys.sort((a, b) => ['easy', 'medium', 'hard'].indexOf(a) - ['easy', 'medium', 'hard'].indexOf(b));
+    else keys.sort((a, b) => (pick(best)[a]?.accuracy ?? 0) - (pick(best)[b]?.accuracy ?? 0));
+    return keys.map((k) => `<tr><td>${group === 'difficulty' ? `<b>${esc(k)}</b>` : esc(k)} <span class="n">n=${(pick(summaries[0])[k]?.total ?? 0) / summaries[0].repeats}</span></td>${summaries.map((s) => heatCell(pick(s)[k])).join('')}</tr>`).join('');
+  };
+  $('tags').innerHTML = `<thead><tr><th>Capability</th>${summaries.map((s) => `<th>${esc(s.variant)}</th>`).join('')}</tr></thead><tbody>${rows('difficulty', (s) => s.byDifficulty)}${rows('tag', (s) => s.byTag)}</tbody>`;
+
+  // Failure stacks, all drawn on one scale: the largest failure count.
+  const used = Object.keys(CATS).filter((c) => summaries.some((s) => s.categories[c]));
+  const maxFail = Math.max(1, ...summaries.map((s) => used.reduce((t, c) => t + (s.categories[c] || 0), 0)));
+  $('fail-rows').innerHTML = summaries.map((s) => {
+    const total = used.reduce((t, c) => t + (s.categories[c] || 0), 0);
+    const runs = s.cases * s.repeats;
+    const segs = used.filter((c) => s.categories[c]).map((c) => `<span title="${esc(CATS[c][0])}: ${s.categories[c]}" style="width:${((s.categories[c] / maxFail) * 100).toFixed(2)}%;background:${CATS[c][1]}"></span>`).join('');
+    return `<div class="fail-row"><span class="variant-name">${esc(s.variant)}</span><div class="stack" role="img" aria-label="${total} failed of ${runs}">${segs}</div><span class="total num">${total} / ${runs}</span></div>`;
+  }).join('');
+  $('legend').innerHTML = used.length ? used.map((c) => `<span><i style="background:${CATS[c][1]}"></i>${esc(CATS[c][0])}</span>`).join('') : '<span>No failures.</span>';
+
+  // Flips
+  if (!multi) $('flips-section').hidden = true;
+  else if (!flips.length) { $('flips-note').textContent = `No question changed outcome relative to ${summaries[0].variant}.`; $('flips').hidden = true; }
+  else {
+    $('flips-note').textContent = `Majority verdict per question, compared with ${summaries[0].variant}.`;
+    $('flips').innerHTML = flips.map((f) => `<li><span class="pill ${f.change}">${f.change}</span><span class="mono muted">${esc(f.to)} · ${esc(f.id)}</span><span>${esc(f.question)}</span></li>`).join('');
+  }
+
+  // Case explorer
+  const state = { variant: summaries[0].variant, verdict: 'all', tag: 'all', q: '' };
+  $('f-variant').innerHTML = summaries.map((s) => `<option value="${esc(s.variant)}">${esc(s.variant)}</option>`).join('');
+  const tags = [...new Set(results.flatMap((r) => r.tags))].sort();
+  $('f-tag').innerHTML = '<option value="all">All</option>' + tags.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+
+  const table = (p) => {
+    if (!p) return '<p class="muted">No result.</p>';
+    const more = p.rowCount > p.rows.length ? `<p class="muted" style="margin:4px 0 0;font-size:12px">${p.rows.length} of ${p.rowCount} rows shown</p>` : `<p class="muted" style="margin:4px 0 0;font-size:12px">${p.rowCount} row${p.rowCount === 1 ? '' : 's'}</p>`;
+    return `<div class="scroll"><table class="rows"><thead><tr>${p.columns.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${p.rows.map((r) => `<tr>${r.map((v) => `<td>${v === null ? '<span class="muted">NULL</span>' : esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${more}`;
+  };
+
+  const caseHtml = (r) => {
+    const t = r.trace || {};
+    const traceBits = [
+      ['attempts', r.attempts], ['repairs', t.repairs ?? 0], ['candidates', t.candidates ?? 0],
+      ...(t.agreement ? [['agreement', `${t.agreement}/${t.candidates}`]] : []),
+      ['examples', t.examples ?? 0], ['empty recheck', t.emptyRecheck ? 'yes' : 'no'], ['escalated', t.escalated ? 'yes' : 'no'],
+      ['llm', secs(r.llmMs)], ['db', `${r.dbMs}ms`],
+      ['tokens', r.usage ? `${r.usage.promptTokens}+${r.usage.completionTokens}` : '–'],
+      ['cost', r.usage?.costUsd != null ? usd(r.usage.costUsd) : '–'],
+    ];
+    const verdictLabel = r.verdict === 'error' ? 'error' : r.verdict;
+    return `<details class="case">
+      <summary>
+        <span><span class="pill ${r.verdict}">${verdictLabel}</span></span>
+        <span class="case-id">${esc(r.id)}${r.repeat ? ` #${r.repeat + 1}` : ''}</span>
+        <span class="case-q">${esc(r.question)}<small>${r.verdict === 'correct' ? esc(r.tags.join(' · ')) : esc(r.category.replace(/_/g, ' '))} · ${esc(r.difficulty)}</small></span>
+        <span class="case-stats">${secs(r.latencyMs)} · ${r.usage?.costUsd != null ? usd(r.usage.costUsd) : '–'}</span>
+      </summary>
+      <div class="case-body">
+        ${r.verdict !== 'correct' && r.detail ? `<p class="reason">${esc(r.detail)}</p>` : ''}
+        <div class="pair">
+          <div><h3>Gold SQL</h3>${r.goldSql ? `<pre class="sql">${esc(r.goldSql)}</pre>` : '<p class="muted">Expected a refusal.</p>'}</div>
+          <div><h3>Generated SQL</h3>${r.sql ? `<pre class="sql">${esc(r.sql)}</pre>` : '<p class="muted">No SQL (refused or failed before execution).</p>'}</div>
+        </div>
+        <div class="pair">
+          <div><h3>Gold result</h3>${r.goldSql ? table(r.gold) : '<p class="muted">–</p>'}</div>
+          <div><h3>Generated result</h3>${table(r.predicted)}</div>
+        </div>
+        ${r.answer ? `<div><h3>Answer</h3><p class="answer">${esc(r.answer)}</p></div>` : ''}
+        <div class="trace">${traceBits.map(([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`).join('')}</div>
+      </div>
+    </details>`;
+  };
+
+  const render = () => {
+    const q = state.q.toLowerCase();
+    const list = results
+      .filter((r) => r.variant === state.variant)
+      .filter((r) => state.verdict === 'all' || (state.verdict === 'correct' ? r.verdict === 'correct' : r.verdict !== 'correct'))
+      .filter((r) => state.tag === 'all' || r.tags.includes(state.tag))
+      .filter((r) => !q || r.question.toLowerCase().includes(q) || (r.sql || '').toLowerCase().includes(q) || r.id.toLowerCase().includes(q))
+      .sort((a, b) => (a.verdict === 'correct') - (b.verdict === 'correct') || a.id.localeCompare(b.id) || a.repeat - b.repeat);
+    $('count').textContent = `${list.length} shown`;
+    $('cases').innerHTML = list.length ? list.map(caseHtml).join('') : '<p class="muted" style="padding:16px;margin:0">No cases match these filters.</p>';
+  };
+
+  $('f-variant').addEventListener('change', (e) => { state.variant = e.target.value; render(); });
+  $('f-tag').addEventListener('change', (e) => { state.tag = e.target.value; render(); });
+  $('f-search').addEventListener('input', (e) => { state.q = e.target.value; render(); });
+  $('f-verdict').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    state.verdict = b.dataset.v;
+    for (const x of $('f-verdict').querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+    render();
+  });
+  render();
+
+  $('footer').textContent = `Generated by the db-intelligence evaluation harness. Dataset “${info.dataset}”. Latency is end-to-end per question (LLM + database). Cost uses provider-reported or catalog prices. pass@k: solved in at least one of ${info.repeats} repeat(s); Stable: same verdict in every repeat.`;
+})();
+</script>

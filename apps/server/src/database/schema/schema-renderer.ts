@@ -1,5 +1,7 @@
 import type { TableInfo } from './schema.types.js';
 
+const MAX_RENDERED_VALUES = 12;
+
 function compactCount(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -9,7 +11,7 @@ function compactCount(n: number): string {
 
 /**
  * One line per table, e.g.
- *   dbo.Orders ~12.3k rows | OrderId int PK, CustomerId int ->dbo.Customers.Id, Total decimal(18,2)
+ *   dbo.Orders ~12.3k rows | OrderId int PK, CustomerId int ->dbo.Customers.Id, Status varchar(12) {Open|Closed}
  * Roughly 3-5x fewer tokens than CREATE TABLE DDL with the same information
  * an LLM needs to write correct joins.
  */
@@ -28,6 +30,10 @@ export function renderTable(t: TableInfo): string {
       if (c.pk) s += ' PK';
       if (c.fk) s += ` ->${c.fk}`;
       if (c.description) s += ` "${c.description}"`;
+      if (c.values?.length) {
+        const shown = c.values.slice(0, MAX_RENDERED_VALUES).join('|');
+        s += ` {${shown}${c.values.length > MAX_RENDERED_VALUES ? '|...' : ''}}`;
+      }
       return s;
     })
     .join(', ');

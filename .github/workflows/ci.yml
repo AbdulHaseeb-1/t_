@@ -34,3 +34,9 @@ jobs:
         env:
           E2E_DB_HOST: localhost
           E2E_DB_PASSWORD: Ci_Passw0rd!2026
+      - name: Validate eval dataset gold SQL (no LLM calls)
+        run: pnpm --filter server exec node dist/eval/cli.js --seed --check
+        env:
+          DB_HOST: localhost
+          DB_USER: sa
+          DB_PASSWORD: Ci_Passw0rd!2026

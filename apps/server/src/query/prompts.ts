@@ -13,31 +13,56 @@ Rules:
 - Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE/MERGE, INTO, DECLARE, SET, EXEC, temp tables, or multiple statements.
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
+- Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled').
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
-- For "top", "most", "least", "highest" use TOP (n) WITH TIES and ORDER BY, so ties are never hidden. Never return more than {maxRows} rows.
-- Keep WHERE clauses sargable: compare columns to ranges (col >= '2024-01-01' AND col < '2025-01-01') instead of wrapping columns in functions.
-- Use ISNULL/COALESCE for nullable aggregates, NULLIF to avoid division by zero, CAST(... AS decimal(18,2)) for ratios.
-- Give computed columns readable aliases.
-- Derive standard business metrics from available columns (e.g. revenue = quantity * unit price, age from a birth date) instead of refusing.
+- Apply exactly the filters the question states. Do not silently exclude rows (e.g. cancelled orders, inactive customers) unless asked.
+- T-SQL integer division truncates: CAST to decimal(18,4) before AVG of integer columns and before dividing.
+- Count entities with COUNT(DISTINCT key) whenever joins can repeat rows.
+- For "never", "without", "no ..." use NOT EXISTS (NOT IN breaks on NULLs).
+- For an overall "top", "most", "least", "highest" use TOP (n) WITH TIES and ORDER BY, so ties are never hidden.
+- For the top item(s) per group ("for each region, the best rep") compute RANK() OVER (PARTITION BY group ORDER BY measure DESC) in a CTE and filter rank <= n.
+- Never return more than {maxRows} rows.
+- Return a readable identifier (e.g. the name) next to each measure, not only an id.
+- Filter dates with half-open ranges (col >= '2024-01-01' AND col < '2025-01-01'); use YEAR()/MONTH() only in SELECT/GROUP BY.
+- Use NULLIF to avoid division by zero. Give computed columns readable aliases.
+- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
 - Only if no reasonable query exists, output: \`\`\`sql
 -- CANNOT_ANSWER: <short reason>
 \`\`\``;
+
+export interface FewShot {
+  question: string;
+  sql: string;
+}
 
 export function sqlMessages(
   database: string,
   ctx: SchemaContext,
   question: string,
   maxRows: number,
+  examples: FewShot[] = [],
 ): ChatCompletionMessageParam[] {
-  return [
+  const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: SQL_RULES.replace('{maxRows}', String(maxRows)) },
     {
       role: 'system',
-      content: `Database: ${database}\nSchema (schema.table ~rows | column type [PK] [->referenced column]):\n${ctx.text}`,
+      content: `Database: ${database}\nSchema (schema.table ~rows | column type [PK] [->referenced column] [{stored values}]):\n${ctx.text}`,
     },
-    { role: 'user', content: question },
   ];
+  if (examples.length) {
+    // After the stable prefix, so rules + schema stay cacheable.
+    messages.push({
+      role: 'system',
+      content:
+        'Verified examples for this database (follow their conventions):\n\n' +
+        examples.map((e) => `Q: ${e.question}\n\`\`\`sql\n${e.sql}\n\`\`\``).join('\n\n'),
+    });
+  }
+  messages.push({ role: 'user', content: question });
+  return messages;
 }
+
+export const EMPTY_RESULT_RECHECK = `That query ran but returned no rows. Re-check it: text filters against the {stored values} in the schema (codes vs names, spelling, case), date ranges, and join paths (e.g. parent/child hierarchies where the rows sit at the child level). If zero rows is genuinely correct, return the same query unchanged. Reply with a single \`\`\`sql block.`;
 
 export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's question using ONLY the SQL result provided.
 - Lead with the direct answer in one sentence, then the key figures.

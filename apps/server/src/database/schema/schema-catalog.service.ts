@@ -8,6 +8,7 @@ import { buildSnapshot, INTROSPECTION_SQL } from './schema-introspector.js';
 import { renderIndex, renderTable, renderTables } from './schema-renderer.js';
 import { SchemaRetriever } from './schema-retriever.js';
 import type { SchemaContext, SchemaSnapshot, TableInfo } from './schema.types.js';
+import { hintCandidates, toHint, valueHintSql } from './value-hints.js';
 
 function globToRegExp(glob: string): RegExp {
   const src = glob
@@ -125,6 +126,7 @@ export class SchemaCatalogService implements OnModuleInit {
     const recordsets = await this.db.internalQuery(INTROSPECTION_SQL);
     // Cache the unfiltered snapshot so changing SCHEMA_INCLUDE/EXCLUDE never needs a re-introspect.
     const snapshot = buildSnapshot(this.config.get('DB_NAME'), recordsets);
+    if (this.config.get('SCHEMA_VALUE_HINTS')) await this.sampleValues(this.applyFilters(snapshot).tables);
     this.logger.log(
       `Introspected ${snapshot.tables.length} objects in ${Math.round(performance.now() - started)}ms`,
     );
@@ -132,6 +134,33 @@ export class SchemaCatalogService implements OnModuleInit {
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, JSON.stringify(snapshot));
     return this.prepare(snapshot);
+  }
+
+  /** Fills `column.values` in place. Failures (timeouts, permissions) just leave a column without hints. */
+  private async sampleValues(tables: TableInfo[]): Promise<void> {
+    const maxDistinct = this.config.get('SCHEMA_VALUE_HINTS_MAX_DISTINCT');
+    const queue = hintCandidates(tables, {
+      maxDistinct,
+      maxTableRows: this.config.get('SCHEMA_VALUE_HINTS_MAX_TABLE_ROWS'),
+      maxColumns: this.config.get('SCHEMA_VALUE_HINTS_MAX_COLUMNS'),
+      exclude: this.config.get('SCHEMA_VALUE_HINTS_EXCLUDE'),
+    });
+    let sampled = 0;
+    const worker = async () => {
+      for (let item = queue.shift(); item; item = queue.shift()) {
+        try {
+          const [rows = []] = await this.db.internalQuery(valueHintSql(item.table, item.column, maxDistinct));
+          item.column.values = toHint(rows as { v: unknown }[], maxDistinct);
+          if (item.column.values) sampled++;
+        } catch (err) {
+          this.logger.debug(
+            `Value hints skipped for ${item.table.id}.${item.column.name}: ${(err as Error).message}`,
+          );
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
+    this.logger.log(`Value hints: ${sampled} categorical columns`);
   }
 
   private applyFilters(s: SchemaSnapshot): SchemaSnapshot {

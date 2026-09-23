@@ -7,6 +7,7 @@ import type { LlmService } from '../llm/llm.service.js';
 import type { ChatRequest } from '../llm/llm.types.js';
 import { testConfig } from '../testing/fake-openai.js';
 import { AskService } from './ask.service.js';
+import { ExamplesService } from './examples.service.js';
 import { QueryCacheService } from './query-cache.service.js';
 
 const scalar: QueryResult = {
@@ -30,8 +31,8 @@ const table: QueryResult = {
   elapsedMs: 4,
 };
 
-function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult) {
-  const config = testConfig({ ASK_MAX_REPAIRS: '2' });
+function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult, env: Record<string, string> = {}) {
+  const config = testConfig({ ASK_MAX_REPAIRS: '2', ...env });
   const calls: ChatRequest[] = [];
   const llm = {
     chat: vi.fn(async (req: ChatRequest, meter?: { add: (u: unknown) => void }) => {
@@ -64,8 +65,9 @@ function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult) {
       schemaHash: 'h1',
     }),
   } as unknown as SchemaCatalogService;
-  const service = new AskService(config, db, catalog, llm, new QueryCacheService(config));
-  return { service, calls, db, llm };
+  const examples = new ExamplesService(config);
+  const service = new AskService(config, db, catalog, llm, new QueryCacheService(config), examples);
+  return { service, calls, db, llm, examples };
 }
 
 const ask = (question: string, extra = {}) => ({
@@ -167,5 +169,64 @@ describe('AskService', () => {
     const r = await service.ask(ask('top products by revenue'));
     expect(r).toMatchObject({ sql: 'SELECT 1 AS OrderCount', attempts: 2 });
     expect(calls.map((c) => c.tier)).toEqual(['fast', 'smart']);
+  });
+
+  it('votes between parallel candidates by result, not by SQL text', async () => {
+    const { service, calls } = setup(
+      [
+        '```sql\nSELECT 1 AS wrong\n```',
+        '```sql\nSELECT Country, Revenue FROM a\n```',
+        '```sql\nSELECT Revenue, Country FROM b\n```',
+      ],
+      (sql) =>
+        sql.includes('wrong')
+          ? scalar
+          : {
+              ...table,
+              columns: [...table.columns],
+              rows: sql.includes('FROM b') ? table.rows.map((r) => [...r].reverse()) : table.rows,
+            },
+      { ASK_SQL_CANDIDATES: '3' },
+    );
+    const r = await service.ask(ask('revenue by country', { answer: false }));
+    expect(r.sql).toBe('SELECT Country, Revenue FROM a');
+    expect(r.trace).toMatchObject({ candidates: 3, votes: 3, agreement: 2 });
+    expect(calls).toHaveLength(3);
+  });
+
+  it('rechecks text filters once when a query returns no rows', async () => {
+    const empty = { ...table, rows: [], rowCount: 0 };
+    const { service, calls } = setup(
+      [
+        "```sql\nSELECT * FROM x WHERE Country = 'Pakistan'\n```",
+        "```sql\nSELECT * FROM x WHERE Country = 'PK'\n```",
+      ],
+      (sql) => (sql.includes("'PK'") ? table : empty),
+    );
+    const r = await service.ask(ask('revenue in Pakistan', { answer: false }));
+    expect(r.sql).toContain("'PK'");
+    expect(r.trace).toMatchObject({ emptyRecheck: true, escalated: true });
+    expect(calls[1].tier).toBe('smart');
+    expect(String(calls[1].messages.at(-1)?.content)).toContain('returned no rows');
+  });
+
+  it('keeps a genuinely empty result when the recheck returns the same query', async () => {
+    const empty = { ...table, rows: [], rowCount: 0 };
+    const q = "```sql\nSELECT * FROM x WHERE Status = 'Lost'\n```";
+    const { service } = setup([q, q], () => empty);
+    const r = await service.ask(ask('lost orders', { answer: false }));
+    expect(r).toMatchObject({ result: { rowCount: 0 }, trace: { emptyRecheck: true } });
+    expect(r.usage.llmCalls).toBe(2);
+  });
+
+  it('injects the closest verified examples after the cacheable prefix', async () => {
+    const { service, calls, examples } = setup(['```sql\nSELECT 1 AS OrderCount\n```'], () => scalar, {
+      ASK_FEWSHOT_K: '3',
+    });
+    examples.replaceAll([{ question: 'Revenue by country last year', sql: 'SELECT 42' }]);
+    const r = await service.ask(ask('revenue by country this year', { answer: false }));
+    expect(r.trace.examples).toBe(1);
+    expect(calls[0].messages.map((m) => m.role)).toEqual(['system', 'system', 'system', 'user']);
+    expect(String(calls[0].messages[2].content)).toContain('SELECT 42');
   });
 });

@@ -27,3 +27,9 @@ export const sqlSchema = z.object({
   maxRows,
 });
 export type SqlInput = z.infer<typeof sqlSchema>;
+
+export const exampleSchema = z.object({
+  question,
+  sql: z.string().min(1).max(20_000),
+});
+export type ExampleInput = z.infer<typeof exampleSchema>;

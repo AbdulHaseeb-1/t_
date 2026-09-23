@@ -22,7 +22,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     toolCalls?: { id: string; name: string; arguments: string }[];
   };
 
-  const inject = async (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) => {
+  const inject = async (method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, payload?: object) => {
     const res = await app
       .getHttpAdapter()
       .getInstance()
@@ -67,6 +67,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       DB_POOL_MAX: '1', // forces connection reuse so session-state leaks would show up
       DB_MAX_ROWS: '100',
       SCHEMA_CACHE_FILE: CACHE_FILE,
+      EXAMPLES_FILE: '.cache/e2e-examples.json',
       OPENAI_API_KEY: 'test',
       OPENAI_BASE_URL: await llm.start(),
       LLM_PROVIDER: 'openai',
@@ -83,6 +84,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     await app?.close();
     await llm?.stop();
     await rm(CACHE_FILE, { force: true });
+    await rm('.cache/e2e-examples.json', { force: true });
   });
 
   it('reports health without an API key and protects everything else', async () => {
@@ -108,6 +110,27 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       'dbo.Orders ~500 rows | OrderId int PK, CustomerId int ->dbo.Customers.CustomerId, OrderDate date',
     );
     expect(ctx.body.text).toContain('-- Every sellable item');
+    // Categorical values are sampled; personal columns never are.
+    expect(ctx.body.text).toMatch(/Country char\(2\) \{(PK|AE|GB)\|(PK|AE|GB)\|(PK|AE|GB)\}/);
+    expect(ctx.body.text).toContain('FullName nvarchar(100),');
+    expect(ctx.body.text).not.toContain('Customer 1|');
+  });
+
+  it('stores verified examples only when their SQL runs', async () => {
+    const bad = await inject('POST', '/query/examples', {
+      question: 'broken example',
+      sql: 'SELECT nope FROM dbo.Orders',
+    });
+    expect(bad.status).toBe(422);
+    const ok = await inject('POST', '/query/examples', {
+      question: 'Orders per country',
+      sql: 'SELECT COUNT(*) AS n FROM dbo.Orders',
+    });
+    expect(ok.status).toBe(201);
+    const list = await inject('GET', '/query/examples');
+    expect(list.body).toEqual([expect.objectContaining({ id: ok.body.id, question: 'Orders per country' })]);
+    const del = await inject('DELETE', `/query/examples/${ok.body.id}`);
+    expect(del.status).toBe(200);
   });
 
   it('runs direct SQL with a row cap and no session-state leak', async () => {

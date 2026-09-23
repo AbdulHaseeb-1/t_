@@ -86,7 +86,15 @@ export class LlmService {
     private readonly config: AppConfig,
     private readonly pricing: ModelPricingService,
   ) {
-    const common = { timeout: config.get('LLM_TIMEOUT_MS'), maxRetries: 1 };
+    const hasFallback =
+      config.get('LLM_PROVIDER') === 'auto' &&
+      !!config.get('OPENAI_API_KEY') &&
+      !!config.get('OPENROUTER_API_KEY');
+    // With a fallback, fail over fast; without one, wait out rate limits (the SDK honours retry-after).
+    const common = {
+      timeout: config.get('LLM_TIMEOUT_MS'),
+      maxRetries: hasFallback ? 1 : config.get('LLM_MAX_RETRIES'),
+    };
     const breaker = () =>
       new CircuitBreaker(config.get('LLM_BREAKER_THRESHOLD'), config.get('LLM_BREAKER_COOLDOWN_MS'));
     const reasoning = {

@@ -7,6 +7,8 @@ export interface ColumnInfo {
   /** `schema.table.column` this column references. */
   fk?: string;
   description?: string;
+  /** Most frequent distinct values of a low-cardinality text column. */
+  values?: string[];
 }
 
 export interface TableInfo {

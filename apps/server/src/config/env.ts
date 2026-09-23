@@ -59,6 +59,33 @@ export const envSchema = z.object({
   SCHEMA_FULL_CONTEXT_MAX_CHARS: z.coerce.number().int().positive().default(24_000),
   SCHEMA_MAX_TABLES: z.coerce.number().int().positive().default(10),
 
+  /**
+   * Sample distinct values of low-cardinality text columns into the schema
+   * (e.g. Status {Shipped|Cancelled}) so filters use real codes. Columns whose
+   * names look personal are never sampled.
+   */
+  SCHEMA_VALUE_HINTS: bool(true),
+  SCHEMA_VALUE_HINTS_MAX_DISTINCT: z.coerce.number().int().positive().default(25),
+  SCHEMA_VALUE_HINTS_MAX_TABLE_ROWS: z.coerce.number().int().positive().default(5_000_000),
+  SCHEMA_VALUE_HINTS_MAX_COLUMNS: z.coerce.number().int().positive().default(400),
+  SCHEMA_VALUE_HINTS_EXCLUDE: z
+    .string()
+    .default(
+      'name|mail|phone|mobile|fax|address|street|zip|postal|ssn|passport|password|pwd|token|secret|iban|card|account|birth|dob|salary|note|comment|description|url|ip',
+    ),
+
+  /** Verified question -> SQL pairs used as few-shot examples. */
+  EXAMPLES_FILE: z.string().default('examples.json'),
+  /**
+   * Off by default: on the retail eval, few-shot gave no gain (88.3% vs 88.3%) and
+   * one regression. Enable (e.g. 3) once you have curated examples, and verify with the eval.
+   */
+  ASK_FEWSHOT_K: z.coerce.number().int().nonnegative().default(0),
+  /** Parallel SQL candidates with result voting (self-consistency). 1 = off. */
+  ASK_SQL_CANDIDATES: z.coerce.number().int().positive().max(7).default(1),
+  /** Re-examine text filters once when a query returns no rows. */
+  ASK_EMPTY_RESULT_RECHECK: bool(true),
+
   LLM_PROVIDER: z.enum(['auto', ...PROVIDERS]).default('auto'),
   /** Try order for `auto`. The first configured provider is primary. */
   LLM_FALLBACK_ORDER: z
@@ -77,6 +104,11 @@ export const envSchema = z.object({
       return order as ProviderName[];
     }),
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(45_000),
+  /**
+   * SDK retries (honouring retry-after) when a provider has no fallback.
+   * Providers with a fallback in auto mode retry once, then fail over fast.
+   */
+  LLM_MAX_RETRIES: z.coerce.number().int().nonnegative().default(3),
   LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1500),
   LLM_REASONING_EFFORT_FAST: reasoningEffort,
   LLM_REASONING_EFFORT_SMART: reasoningEffort,

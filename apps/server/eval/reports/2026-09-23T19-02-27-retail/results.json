@@ -1,0 +1,3085 @@
+{
+  "info": {
+    "dataset": "retail",
+    "database": "Eval_Retail",
+    "startedAt": "2026-09-23T19:02:27.658Z",
+    "durationS": 17.626,
+    "repeats": 1,
+    "cases": 40,
+    "models": [
+      "openai:gpt-6-luna"
+    ],
+    "withAnswers": false
+  },
+  "summaries": [
+    {
+      "variant": "default",
+      "overrides": {},
+      "cases": 40,
+      "repeats": 1,
+      "accuracy": 0.95,
+      "accuracyStdDev": 0,
+      "passAtK": 0.95,
+      "passAllK": 0.95,
+      "stability": 1,
+      "firstTryAccuracy": 0.9,
+      "byTag": {
+        "aggregation": {
+          "correct": 6,
+          "total": 6,
+          "accuracy": 1
+        },
+        "anti-join": {
+          "correct": 2,
+          "total": 2,
+          "accuracy": 1
+        },
+        "date": {
+          "correct": 8,
+          "total": 9,
+          "accuracy": 0.8888888888888888
+        },
+        "derived-metric": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "distinct": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "filter": {
+          "correct": 2,
+          "total": 2,
+          "accuracy": 1
+        },
+        "having": {
+          "correct": 2,
+          "total": 2,
+          "accuracy": 1
+        },
+        "hierarchy": {
+          "correct": 0,
+          "total": 1,
+          "accuracy": 0
+        },
+        "integer-division": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "join": {
+          "correct": 4,
+          "total": 5,
+          "accuracy": 0.8
+        },
+        "multi-hop": {
+          "correct": 4,
+          "total": 5,
+          "accuracy": 0.8
+        },
+        "null-handling": {
+          "correct": 3,
+          "total": 3,
+          "accuracy": 1
+        },
+        "percentage": {
+          "correct": 3,
+          "total": 3,
+          "accuracy": 1
+        },
+        "pivot": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "ranking": {
+          "correct": 5,
+          "total": 5,
+          "accuracy": 1
+        },
+        "self-join": {
+          "correct": 4,
+          "total": 4,
+          "accuracy": 1
+        },
+        "ties": {
+          "correct": 3,
+          "total": 3,
+          "accuracy": 1
+        },
+        "time-series": {
+          "correct": 2,
+          "total": 2,
+          "accuracy": 1
+        },
+        "top-n-per-group": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "unanswerable": {
+          "correct": 2,
+          "total": 2,
+          "accuracy": 1
+        },
+        "units": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "value-mapping": {
+          "correct": 12,
+          "total": 12,
+          "accuracy": 1
+        },
+        "view": {
+          "correct": 1,
+          "total": 1,
+          "accuracy": 1
+        },
+        "window": {
+          "correct": 3,
+          "total": 3,
+          "accuracy": 1
+        }
+      },
+      "byDifficulty": {
+        "easy": {
+          "correct": 15,
+          "total": 15,
+          "accuracy": 1
+        },
+        "hard": {
+          "correct": 8,
+          "total": 9,
+          "accuracy": 0.8888888888888888
+        },
+        "medium": {
+          "correct": 15,
+          "total": 16,
+          "accuracy": 0.9375
+        }
+      },
+      "categories": {
+        "correct": 38,
+        "wrong_rows": 1,
+        "wrong_columns": 1
+      },
+      "rescues": {
+        "repair": 0,
+        "emptyRecheck": 0,
+        "escalation": 2,
+        "vote": 2
+      },
+      "latency": {
+        "meanMs": 1647,
+        "p50Ms": 1571,
+        "p95Ms": 2294,
+        "maxMs": 2535
+      },
+      "cost": {
+        "totalUsd": 0.0057259999999999985,
+        "perQuestionUsd": 0.00014314999999999996,
+        "perCorrectUsd": 0.00015068421052631575
+      },
+      "tokens": {
+        "prompt": 43048,
+        "cachedPrompt": 0,
+        "completion": 3317,
+        "llmCalls": 42
+      }
+    }
+  ],
+  "flips": [],
+  "results": [
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q01",
+      "question": "How many customers do we have?",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Customers FROM sales.Customers",
+      "gold": {
+        "columns": [
+          "Customers"
+        ],
+        "rows": [
+          [
+            400
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS CustomerCount\nFROM [sales].[Customers] AS c;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1689,
+      "llmMs": 1681,
+      "dbMs": 7,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1017,
+        "cachedPromptTokens": 0,
+        "completionTokens": 23,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CustomerCount"
+        ],
+        "rows": [
+          [
+            400
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q02",
+      "question": "How many customers are based in Pakistan?",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE CountryCode = 'PK'",
+      "gold": {
+        "columns": [
+          "Customers"
+        ],
+        "rows": [
+          [
+            115
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS CustomerCount\nFROM [sales].[Customers] AS c\nWHERE c.[CountryCode] = 'PK';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1743,
+      "llmMs": 1730,
+      "dbMs": 8,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1018,
+        "cachedPromptTokens": 0,
+        "completionTokens": 33,
+        "costUsd": 0.000118,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CustomerCount"
+        ],
+        "rows": [
+          [
+            115
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q03",
+      "question": "How many active corporate customers are there?",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE Segment = 'Corporate' AND IsActive = 1",
+      "gold": {
+        "columns": [
+          "Customers"
+        ],
+        "rows": [
+          [
+            134
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS ActiveCorporateCustomerCount\nFROM [sales].[Customers] AS c\nWHERE c.[IsActive] = 1\n  AND c.[Segment] = 'Corporate';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1663,
+      "llmMs": 1648,
+      "dbMs": 11,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1018,
+        "cachedPromptTokens": 0,
+        "completionTokens": 45,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "ActiveCorporateCustomerCount"
+        ],
+        "rows": [
+          [
+            134
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q04",
+      "question": "How many orders were cancelled in 2025?",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Cancelled' AND OrderDate >= '2025-01-01' AND OrderDate < '2026-01-01'",
+      "gold": {
+        "columns": [
+          "Orders"
+        ],
+        "rows": [
+          [
+            131
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS CancelledOrderCount\nFROM [sales].[Orders] AS o\nWHERE o.[Status] = 'Cancelled'\n  AND o.[OrderDate] >= '2025-01-01'\n  AND o.[OrderDate] < '2026-01-01';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1797,
+      "llmMs": 1782,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1020,
+        "cachedPromptTokens": 0,
+        "completionTokens": 66,
+        "costUsd": 0.000135,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CancelledOrderCount"
+        ],
+        "rows": [
+          [
+            131
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q05",
+      "question": "What is the total gross sales across all order items, i.e. quantity times unit price before any discount?",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT SUM(Quantity * UnitPrice) AS GrossSales FROM sales.OrderItems",
+      "gold": {
+        "columns": [
+          "GrossSales"
+        ],
+        "rows": [
+          [
+            7525868.5
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    SUM(CAST(oi.Quantity AS decimal(18,4)) * oi.UnitPrice) AS TotalGrossSales\nFROM [sales].[OrderItems] AS oi;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1750,
+      "llmMs": 1739,
+      "dbMs": 11,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1032,
+        "cachedPromptTokens": 0,
+        "completionTokens": 43,
+        "costUsd": 0.000125,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "TotalGrossSales"
+        ],
+        "rows": [
+          [
+            7525868.5
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q06",
+      "question": "What was total net revenue (quantity × unit price × (1 − discount)) from delivered orders placed in 2024?",
+      "tags": [
+        "join",
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.Status = 'Delivered' AND o.OrderDate >= '2024-01-01' AND o.OrderDate < '2025-01-01'",
+      "gold": {
+        "columns": [
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            3394636.1
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    SUM(CAST(oi.Quantity AS decimal(18,4)) * oi.UnitPrice * (1 - oi.DiscountPct)) AS TotalNetRevenue\nFROM [sales].[Orders] AS o\nJOIN [sales].[OrderItems] AS oi\n    ON oi.OrderId = o.OrderId\nWHERE o.Status = 'Delivered'\n  AND o.OrderDate >= '2024-01-01'\n  AND o.OrderDate < '2025-01-01';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1553,
+      "llmMs": 1535,
+      "dbMs": 17,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1035,
+        "cachedPromptTokens": 0,
+        "completionTokens": 105,
+        "costUsd": 0.000156,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "TotalNetRevenue"
+        ],
+        "rows": [
+          [
+            3394636.1
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q07",
+      "question": "What was net revenue by customer country code in 2025?",
+      "tags": [
+        "join",
+        "aggregation",
+        "date"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT c.CountryCode, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY c.CountryCode",
+      "gold": {
+        "columns": [
+          "CountryCode",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "US",
+            1105638.55
+          ],
+          [
+            "PK",
+            1000535.75
+          ],
+          [
+            "DE",
+            447741.45
+          ],
+          [
+            "AE",
+            592730.5
+          ],
+          [
+            "GB",
+            526971.1
+          ]
+        ],
+        "rowCount": 5
+      },
+      "sql": "SELECT\n    c.CountryCode,\n    SUM(v.NetRevenue) AS NetRevenue\nFROM [sales].[vOrderRevenue] AS v\nJOIN [sales].[Customers] AS c\n    ON c.CustomerId = v.CustomerId\nWHERE v.OrderDate >= '2025-01-01'\n  AND v.OrderDate < '2026-01-01'\nGROUP BY c.CountryCode;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1604,
+      "llmMs": 1585,
+      "dbMs": 20,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1023,
+        "cachedPromptTokens": 0,
+        "completionTokens": 87,
+        "costUsd": 0.000146,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CountryCode",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "US",
+            1105638.55
+          ],
+          [
+            "PK",
+            1000535.75
+          ],
+          [
+            "DE",
+            447741.45
+          ],
+          [
+            "AE",
+            592730.5
+          ],
+          [
+            "GB",
+            526971.1
+          ]
+        ],
+        "rowCount": 5
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q08",
+      "question": "Which 5 products generated the most net revenue overall? Show product name and net revenue, highest first.",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT TOP (5) WITH TIES p.ProductName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId GROUP BY p.ProductName ORDER BY NetRevenue DESC",
+      "gold": {
+        "columns": [
+          "ProductName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "Phone C24",
+            458640
+          ],
+          [
+            "Laptop B9",
+            429744
+          ],
+          [
+            "Phone A8",
+            425880
+          ],
+          [
+            "Laptop E33",
+            401856
+          ],
+          [
+            "Phone D32",
+            391680
+          ]
+        ],
+        "rowCount": 5
+      },
+      "sql": "SELECT TOP (5) WITH TIES\n    p.[ProductName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct])) AS [NetRevenue]\nFROM [sales].[OrderItems] AS oi\nJOIN [catalog].[Products] AS p\n    ON p.[ProductId] = oi.[ProductId]\nGROUP BY p.[ProductId], p.[ProductName]\nORDER BY [NetRevenue] DESC;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1571,
+      "llmMs": 1554,
+      "dbMs": 17,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1031,
+        "cachedPromptTokens": 0,
+        "completionTokens": 101,
+        "costUsd": 0.000154,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "ProductName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "Phone C24",
+            458640
+          ],
+          [
+            "Laptop B9",
+            429744
+          ],
+          [
+            "Phone A8",
+            425880
+          ],
+          [
+            "Laptop E33",
+            401856
+          ],
+          [
+            "Phone D32",
+            391680
+          ]
+        ],
+        "rowCount": 5
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q09",
+      "question": "Which month of 2024 had the most orders? Give the month number and order count.",
+      "tags": [
+        "ranking",
+        "ties",
+        "date"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT TOP (1) WITH TIES MONTH(OrderDate) AS MonthNumber, COUNT(*) AS Orders FROM sales.Orders WHERE OrderDate >= '2024-01-01' AND OrderDate < '2025-01-01' GROUP BY MONTH(OrderDate) ORDER BY COUNT(*) DESC",
+      "gold": {
+        "columns": [
+          "MonthNumber",
+          "Orders"
+        ],
+        "rows": [
+          [
+            7,
+            256
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT TOP (1) WITH TIES\n    MONTH(o.[OrderDate]) AS [MonthNumber],\n    COUNT(*) AS [OrderCount]\nFROM [sales].[Orders] AS o\nWHERE o.[OrderDate] >= '2024-01-01'\n  AND o.[OrderDate] < '2025-01-01'\nGROUP BY MONTH(o.[OrderDate])\nORDER BY COUNT(*) DESC;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1923,
+      "llmMs": 1909,
+      "dbMs": 13,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1029,
+        "cachedPromptTokens": 0,
+        "completionTokens": 90,
+        "costUsd": 0.000148,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "MonthNumber",
+          "OrderCount"
+        ],
+        "rows": [
+          [
+            7,
+            256
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q10",
+      "question": "What is the average quantity per order line?",
+      "tags": [
+        "integer-division",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT AVG(CAST(Quantity AS decimal(18,4))) AS AvgQuantity FROM sales.OrderItems",
+      "gold": {
+        "columns": [
+          "AvgQuantity"
+        ],
+        "rows": [
+          [
+            2.5
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT AVG(CAST([oi].[Quantity] AS decimal(18,4))) AS [AverageQuantityPerOrderLine]\nFROM [sales].[OrderItems] AS [oi];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1439,
+      "llmMs": 1428,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1019,
+        "cachedPromptTokens": 0,
+        "completionTokens": 42,
+        "costUsd": 0.000123,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "AverageQuantityPerOrderLine"
+        ],
+        "rows": [
+          [
+            2.5
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q11",
+      "question": "What percentage of all orders were placed through the web channel? Answer as a number between 0 and 100.",
+      "tags": [
+        "percentage",
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT 100.0 * SUM(CASE WHEN Channel = 'Web' THEN 1 ELSE 0 END) / COUNT(*) AS WebPct FROM sales.Orders",
+      "gold": {
+        "columns": [
+          "WebPct"
+        ],
+        "rows": [
+          [
+            50
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    CAST(100.0 * COUNT(CASE WHEN o.[Channel] = 'Web' THEN 1 END)\n         / NULLIF(COUNT(*), 0) AS decimal(18,4)) AS [WebOrderPercentage]\nFROM [sales].[Orders] AS o;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1324,
+      "llmMs": 1312,
+      "dbMs": 11,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1033,
+        "cachedPromptTokens": 0,
+        "completionTokens": 66,
+        "costUsd": 0.000136,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "WebOrderPercentage"
+        ],
+        "rows": [
+          [
+            50
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q12",
+      "question": "For each sales channel, what percentage of its orders were cancelled (0-100)?",
+      "tags": [
+        "percentage",
+        "aggregation"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT Channel, 100.0 * SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) / COUNT(*) AS CancelledPct FROM sales.Orders GROUP BY Channel",
+      "gold": {
+        "columns": [
+          "Channel",
+          "CancelledPct"
+        ],
+        "rows": [
+          [
+            "Store",
+            4.333333333333
+          ],
+          [
+            "Phone",
+            4.333333333333
+          ],
+          [
+            "Web",
+            4.333333333333
+          ]
+        ],
+        "rowCount": 3
+      },
+      "sql": "SELECT\n    [o].[Channel],\n    CAST(100.0 * COUNT(DISTINCT CASE WHEN [o].[Status] = 'Cancelled' THEN [o].[OrderId] END)\n        / NULLIF(COUNT(DISTINCT [o].[OrderId]), 0) AS decimal(18,2)) AS [CancelledOrderPercentage]\nFROM [sales].[Orders] AS [o]\nGROUP BY [o].[Channel];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1896,
+      "llmMs": 1880,
+      "dbMs": 15,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1027,
+        "cachedPromptTokens": 0,
+        "completionTokens": 94,
+        "costUsd": 0.00015,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "Channel",
+          "CancelledOrderPercentage"
+        ],
+        "rows": [
+          [
+            "Store",
+            4.33
+          ],
+          [
+            "Phone",
+            4.33
+          ],
+          [
+            "Web",
+            4.33
+          ]
+        ],
+        "rowCount": 3
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q13",
+      "question": "How many customers have never placed an order?",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Customers FROM sales.Customers c WHERE NOT EXISTS (SELECT 1 FROM sales.Orders o WHERE o.CustomerId = c.CustomerId)",
+      "gold": {
+        "columns": [
+          "Customers"
+        ],
+        "rows": [
+          [
+            10
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS CustomersWithNoOrders\nFROM [sales].[Customers] AS c\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM [sales].[Orders] AS o\n    WHERE o.[CustomerId] = c.[CustomerId]\n);",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1206,
+      "llmMs": 1193,
+      "dbMs": 13,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1019,
+        "cachedPromptTokens": 0,
+        "completionTokens": 58,
+        "costUsd": 0.000131,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CustomersWithNoOrders"
+        ],
+        "rows": [
+          [
+            10
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q14",
+      "question": "List the names of products that have never been sold.",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT p.ProductName FROM catalog.Products p WHERE NOT EXISTS (SELECT 1 FROM sales.OrderItems oi WHERE oi.ProductId = p.ProductId)",
+      "gold": {
+        "columns": [
+          "ProductName"
+        ],
+        "rows": [
+          [
+            "Shirt F45"
+          ],
+          [
+            "Dress F46"
+          ],
+          [
+            "Puzzle F47"
+          ],
+          [
+            "Phone F48"
+          ]
+        ],
+        "rowCount": 4
+      },
+      "sql": "SELECT p.[ProductName]\nFROM [catalog].[Products] AS p\nWHERE NOT EXISTS (\n    SELECT 1\n    FROM [sales].[OrderItems] AS oi\n    WHERE oi.[ProductId] = p.[ProductId]\n);",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1452,
+      "llmMs": 1438,
+      "dbMs": 14,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1021,
+        "cachedPromptTokens": 0,
+        "completionTokens": 56,
+        "costUsd": 0.00013,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "ProductName"
+        ],
+        "rows": [
+          [
+            "Shirt F45"
+          ],
+          [
+            "Dress F46"
+          ],
+          [
+            "Puzzle F47"
+          ],
+          [
+            "Phone F48"
+          ]
+        ],
+        "rowCount": 4
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q15",
+      "question": "List every sales rep's full name together with their manager's full name.",
+      "tags": [
+        "self-join",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT e.FullName AS SalesRep, m.FullName AS Manager FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId WHERE e.Title = 'Sales Rep'",
+      "gold": {
+        "columns": [
+          "SalesRep",
+          "Manager"
+        ],
+        "rows": [
+          [
+            "Sara Ahmed",
+            "Manager South"
+          ],
+          [
+            "Omar Malik",
+            "Manager East"
+          ],
+          [
+            "Hina Butt",
+            "Manager West"
+          ],
+          [
+            "Bilal Sheikh",
+            "Manager North"
+          ],
+          [
+            "Zara Raza",
+            "Manager South"
+          ],
+          [
+            "Usman Iqbal",
+            "Manager East"
+          ],
+          [
+            "Maryam Khan",
+            "Manager West"
+          ],
+          [
+            "Hamza Ahmed",
+            "Manager North"
+          ]
+        ],
+        "rowCount": 20
+      },
+      "sql": "SELECT\n    e.[FullName] AS [SalesRepFullName],\n    m.[FullName] AS [ManagerFullName]\nFROM [hr].[Employees] AS e\nLEFT JOIN [hr].[Employees] AS m\n    ON e.[ManagerId] = m.[EmployeeId]\nWHERE e.[Title] = 'Sales Rep';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1561,
+      "llmMs": 1551,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1025,
+        "cachedPromptTokens": 0,
+        "completionTokens": 76,
+        "costUsd": 0.00014,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "SalesRepFullName",
+          "ManagerFullName"
+        ],
+        "rows": [
+          [
+            "Sara Ahmed",
+            "Manager South"
+          ],
+          [
+            "Omar Malik",
+            "Manager East"
+          ],
+          [
+            "Hina Butt",
+            "Manager West"
+          ],
+          [
+            "Bilal Sheikh",
+            "Manager North"
+          ],
+          [
+            "Zara Raza",
+            "Manager South"
+          ],
+          [
+            "Usman Iqbal",
+            "Manager East"
+          ],
+          [
+            "Maryam Khan",
+            "Manager West"
+          ],
+          [
+            "Hamza Ahmed",
+            "Manager North"
+          ]
+        ],
+        "rowCount": 20
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q16",
+      "question": "Which manager has the most direct reports? Give the manager's name and the number of direct reports.",
+      "tags": [
+        "self-join",
+        "ties",
+        "ranking"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT TOP (1) WITH TIES m.FullName, COUNT(*) AS DirectReports FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId GROUP BY m.EmployeeId, m.FullName ORDER BY COUNT(*) DESC",
+      "gold": {
+        "columns": [
+          "FullName",
+          "DirectReports"
+        ],
+        "rows": [
+          [
+            "Manager North",
+            5
+          ],
+          [
+            "Manager South",
+            5
+          ],
+          [
+            "Manager East",
+            5
+          ],
+          [
+            "Manager West",
+            5
+          ]
+        ],
+        "rowCount": 4
+      },
+      "sql": "SELECT TOP (1) WITH TIES\n    m.[FullName] AS [ManagerName],\n    COUNT(e.[EmployeeId]) AS [DirectReportCount]\nFROM [hr].[Employees] AS m\nJOIN [hr].[Employees] AS e\n    ON e.[ManagerId] = m.[EmployeeId]\nGROUP BY m.[EmployeeId], m.[FullName]\nORDER BY COUNT(e.[EmployeeId]) DESC;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1592,
+      "llmMs": 1574,
+      "dbMs": 18,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1030,
+        "cachedPromptTokens": 0,
+        "completionTokens": 93,
+        "costUsd": 0.00015,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "ManagerName",
+          "DirectReportCount"
+        ],
+        "rows": [
+          [
+            "Manager North",
+            5
+          ],
+          [
+            "Manager South",
+            5
+          ],
+          [
+            "Manager East",
+            5
+          ],
+          [
+            "Manager West",
+            5
+          ]
+        ],
+        "rowCount": 4
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q17",
+      "question": "What is total net revenue for each top-level product category (the categories that have no parent)?",
+      "tags": [
+        "hierarchy",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName",
+      "gold": {
+        "columns": [
+          "CategoryName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "Home",
+            1457999.6
+          ],
+          [
+            "Electronics",
+            5327196
+          ],
+          [
+            "Clothing",
+            562062.45
+          ]
+        ],
+        "rowCount": 3
+      },
+      "sql": "SELECT\n    c.[CategoryName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct])) AS [TotalNetRevenue]\nFROM [catalog].[Categories] AS c\nJOIN [catalog].[Products] AS p\n    ON p.[CategoryId] = c.[CategoryId]\nJOIN [sales].[OrderItems] AS oi\n    ON oi.[ProductId] = p.[ProductId]\nWHERE c.[ParentCategoryId] IS NULL\nGROUP BY c.[CategoryId], c.[CategoryName];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 2261,
+      "llmMs": 2248,
+      "dbMs": 12,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1029,
+        "cachedPromptTokens": 0,
+        "completionTokens": 119,
+        "costUsd": 0.000162,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CategoryName",
+          "TotalNetRevenue"
+        ],
+        "rows": [],
+        "rowCount": 0
+      },
+      "verdict": "wrong",
+      "category": "wrong_rows",
+      "detail": "expected 3 rows, got 0"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q18",
+      "question": "Which customers placed more than 40 orders? Give customer id and number of orders.",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT CustomerId, COUNT(*) AS Orders FROM sales.Orders GROUP BY CustomerId HAVING COUNT(*) > 40",
+      "gold": {
+        "columns": [
+          "CustomerId",
+          "Orders"
+        ],
+        "rows": [
+          [
+            29,
+            158
+          ],
+          [
+            9,
+            157
+          ],
+          [
+            21,
+            158
+          ],
+          [
+            1,
+            158
+          ],
+          [
+            25,
+            158
+          ],
+          [
+            13,
+            157
+          ],
+          [
+            5,
+            158
+          ],
+          [
+            33,
+            158
+          ]
+        ],
+        "rowCount": 10
+      },
+      "sql": "SELECT\n    c.CustomerId,\n    COUNT(o.OrderId) AS OrderCount\nFROM [sales].[Customers] AS c\nJOIN [sales].[Orders] AS o\n    ON o.CustomerId = c.CustomerId\nGROUP BY c.CustomerId\nHAVING COUNT(o.OrderId) > 40;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1391,
+      "llmMs": 1375,
+      "dbMs": 16,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1027,
+        "cachedPromptTokens": 0,
+        "completionTokens": 69,
+        "costUsd": 0.000137,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CustomerId",
+          "OrderCount"
+        ],
+        "rows": [
+          [
+            1,
+            158
+          ],
+          [
+            5,
+            158
+          ],
+          [
+            9,
+            157
+          ],
+          [
+            13,
+            157
+          ],
+          [
+            17,
+            158
+          ],
+          [
+            21,
+            158
+          ],
+          [
+            25,
+            158
+          ],
+          [
+            29,
+            158
+          ]
+        ],
+        "rowCount": 10
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q19",
+      "question": "For each region, which sales rep generated the highest net revenue? Show region name, rep name and net revenue.",
+      "tags": [
+        "top-n-per-group",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "WITH r AS (SELECT reg.RegionName, e.FullName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue, RANK() OVER (PARTITION BY reg.RegionName ORDER BY SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) DESC) AS rk FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN hr.Employees e ON e.EmployeeId = o.SalesRepId JOIN sales.Regions reg ON reg.RegionId = e.RegionId GROUP BY reg.RegionName, e.EmployeeId, e.FullName) SELECT RegionName, FullName, NetRevenue FROM r WHERE rk = 1",
+      "gold": {
+        "columns": [
+          "RegionName",
+          "FullName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "East",
+            "Usman Iqbal",
+            242427
+          ],
+          [
+            "North",
+            "Usman Malik",
+            446652.8
+          ],
+          [
+            "South",
+            "Maryam Butt",
+            387461
+          ],
+          [
+            "West",
+            "Zara Ahmed",
+            407191
+          ]
+        ],
+        "rowCount": 4
+      },
+      "sql": "WITH RepRevenue AS (\n    SELECT\n        r.RegionId,\n        e.EmployeeId,\n        SUM(v.NetRevenue) AS NetRevenue\n    FROM [sales].[vOrderRevenue] AS v\n    INNER JOIN [sales].[Orders] AS o\n        ON o.OrderId = v.OrderId\n    INNER JOIN [hr].[Employees] AS e\n        ON e.EmployeeId = o.SalesRepId\n    INNER JOIN [sales].[Regions] AS r\n        ON r.RegionId = e.RegionId\n    WHERE e.Title = 'Sales Rep'\n    GROUP BY r.RegionId, e.EmployeeId\n),\nRankedRevenue AS (\n    SELECT\n        RegionId,\n        EmployeeId,\n        NetRevenue,\n        RANK() OVER (PARTITION BY RegionId ORDER BY NetRevenue DESC) AS RevenueRank\n    FROM RepRevenue\n)\nSELECT\n    r.RegionName,\n    e.FullName AS RepName,\n    rr.NetRevenue\nFROM RankedRevenue AS rr\nINNER JOIN [sales].[Regions] AS r\n    ON r.RegionId = rr.RegionId\nINNER JOIN [hr].[Employees] AS e\n    ON e.EmployeeId = rr.EmployeeId\nWHERE rr.RevenueRank = 1;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 2261,
+      "llmMs": 2229,
+      "dbMs": 32,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1033,
+        "cachedPromptTokens": 0,
+        "completionTokens": 255,
+        "costUsd": 0.000231,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "RegionName",
+          "RepName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "North",
+            "Usman Malik",
+            446652.8
+          ],
+          [
+            "South",
+            "Maryam Butt",
+            387461
+          ],
+          [
+            "East",
+            "Usman Iqbal",
+            242427
+          ],
+          [
+            "West",
+            "Zara Ahmed",
+            407191
+          ]
+        ],
+        "rowCount": 4
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q20",
+      "question": "Show monthly net revenue for 2025 with a running total: month number, revenue and cumulative revenue, in month order.",
+      "tags": [
+        "window",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "WITH m AS (SELECT MONTH(o.OrderDate) AS MonthNumber, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY MONTH(o.OrderDate)) SELECT MonthNumber, NetRevenue, SUM(NetRevenue) OVER (ORDER BY MonthNumber ROWS UNBOUNDED PRECEDING) AS CumulativeRevenue FROM m",
+      "gold": {
+        "columns": [
+          "MonthNumber",
+          "NetRevenue",
+          "CumulativeRevenue"
+        ],
+        "rows": [
+          [
+            1,
+            311514.85,
+            311514.85
+          ],
+          [
+            2,
+            289351.4,
+            600866.25
+          ],
+          [
+            3,
+            315871.8,
+            916738.05
+          ],
+          [
+            4,
+            303391.1,
+            1220129.15
+          ],
+          [
+            5,
+            306495.5,
+            1526624.65
+          ],
+          [
+            6,
+            301500.55,
+            1828125.2
+          ],
+          [
+            7,
+            311976.6,
+            2140101.8
+          ],
+          [
+            8,
+            311550.65,
+            2451652.45
+          ]
+        ],
+        "rowCount": 12
+      },
+      "sql": "SELECT\n    MONTH([v].[OrderDate]) AS [MonthNumber],\n    SUM([v].[NetRevenue]) AS [Revenue],\n    SUM(SUM([v].[NetRevenue])) OVER (\n        ORDER BY MONTH([v].[OrderDate])\n        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n    ) AS [CumulativeRevenue]\nFROM [sales].[vOrderRevenue] AS [v]\nWHERE [v].[OrderDate] >= '2025-01-01'\n  AND [v].[OrderDate] < '2026-01-01'\nGROUP BY MONTH([v].[OrderDate])\nORDER BY [MonthNumber];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1544,
+      "llmMs": 1520,
+      "dbMs": 24,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1035,
+        "cachedPromptTokens": 0,
+        "completionTokens": 139,
+        "costUsd": 0.000173,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "MonthNumber",
+          "Revenue",
+          "CumulativeRevenue"
+        ],
+        "rows": [
+          [
+            1,
+            311514.85,
+            311514.85
+          ],
+          [
+            2,
+            289351.4,
+            600866.25
+          ],
+          [
+            3,
+            315871.8,
+            916738.05
+          ],
+          [
+            4,
+            303391.1,
+            1220129.15
+          ],
+          [
+            5,
+            306495.5,
+            1526624.65
+          ],
+          [
+            6,
+            301500.55,
+            1828125.2
+          ],
+          [
+            7,
+            311976.6,
+            2140101.8
+          ],
+          [
+            8,
+            311550.65,
+            2451652.45
+          ]
+        ],
+        "rowCount": 12
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q21",
+      "question": "Compare net revenue in 2024 and 2025 for each channel: show channel, 2024 revenue and 2025 revenue.",
+      "tags": [
+        "pivot",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT o.Channel, SUM(CASE WHEN o.OrderDate < '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2024, SUM(CASE WHEN o.OrderDate >= '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2025 FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2024-01-01' AND o.OrderDate < '2026-01-01' GROUP BY o.Channel",
+      "gold": {
+        "columns": [
+          "Channel",
+          "Revenue2024",
+          "Revenue2025"
+        ],
+        "rows": [
+          [
+            "Store",
+            1142994.1,
+            1134280.2
+          ],
+          [
+            "Phone",
+            720715.5,
+            726996.3
+          ],
+          [
+            "Web",
+            1809931.1,
+            1812340.85
+          ]
+        ],
+        "rowCount": 3
+      },
+      "sql": "SELECT\n    [r].[Channel] AS [Channel],\n    SUM(CASE WHEN [r].[OrderDate] >= '2024-01-01' AND [r].[OrderDate] < '2025-01-01' THEN [r].[NetRevenue] ELSE 0 END) AS [Revenue2024],\n    SUM(CASE WHEN [r].[OrderDate] >= '2025-01-01' AND [r].[OrderDate] < '2026-01-01' THEN [r].[NetRevenue] ELSE 0 END) AS [Revenue2025]\nFROM [sales].[vOrderRevenue] AS [r]\nWHERE ([r].[OrderDate] >= '2024-01-01' AND [r].[OrderDate] < '2025-01-01')\n   OR ([r].[OrderDate] >= '2025-01-01' AND [r].[OrderDate] < '2026-01-01')\nGROUP BY [r].[Channel];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 2299,
+      "llmMs": 2268,
+      "dbMs": 31,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1038,
+        "cachedPromptTokens": 0,
+        "completionTokens": 211,
+        "costUsd": 0.000209,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "Channel",
+          "Revenue2024",
+          "Revenue2025"
+        ],
+        "rows": [
+          [
+            "Store",
+            1142994.1,
+            1134280.2
+          ],
+          [
+            "Phone",
+            720715.5,
+            726996.3
+          ],
+          [
+            "Web",
+            1809931.1,
+            1812340.85
+          ]
+        ],
+        "rowCount": 3
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q22",
+      "question": "How many distinct products were sold in December 2025?",
+      "tags": [
+        "distinct",
+        "date"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(DISTINCT oi.ProductId) AS Products FROM sales.OrderItems oi JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE o.OrderDate >= '2025-12-01' AND o.OrderDate < '2026-01-01'",
+      "gold": {
+        "columns": [
+          "Products"
+        ],
+        "rows": [
+          [
+            44
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(DISTINCT oi.ProductId) AS DistinctProductsSold\nFROM [sales].[OrderItems] AS oi\nJOIN [sales].[Orders] AS o\n    ON o.OrderId = oi.OrderId\nWHERE o.OrderDate >= '2025-12-01'\n  AND o.OrderDate < '2026-01-01'\n  AND o.Status <> 'Cancelled';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1439,
+      "llmMs": 1423,
+      "dbMs": 16,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1022,
+        "cachedPromptTokens": 0,
+        "completionTokens": 86,
+        "costUsd": 0.000145,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "DistinctProductsSold"
+        ],
+        "rows": [
+          [
+            44
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q23",
+      "question": "How many orders have no sales rep assigned?",
+      "tags": [
+        "null-handling"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE SalesRepId IS NULL",
+      "gold": {
+        "columns": [
+          "Orders"
+        ],
+        "rows": [
+          [
+            3000
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS [OrdersWithoutSalesRep]\nFROM [sales].[Orders] AS o\nWHERE o.[SalesRepId] IS NULL;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1220,
+      "llmMs": 1211,
+      "dbMs": 9,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1019,
+        "cachedPromptTokens": 0,
+        "completionTokens": 36,
+        "costUsd": 0.00012,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "OrdersWithoutSalesRep"
+        ],
+        "rows": [
+          [
+            3000
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q24",
+      "question": "How many orders took more than 3 days to ship, counting days from the order date to the shipped date?",
+      "tags": [
+        "date",
+        "null-handling"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE ShippedDate IS NOT NULL AND DATEDIFF(day, CAST(OrderDate AS date), ShippedDate) > 3",
+      "gold": {
+        "columns": [
+          "Orders"
+        ],
+        "rows": [
+          [
+            2260
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS OrdersShippedAfterMoreThan3Days\nFROM [sales].[Orders] AS o\nWHERE o.ShippedDate IS NOT NULL\n  AND o.ShippedDate > DATEADD(DAY, 3, CAST(o.OrderDate AS date));",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1641,
+      "llmMs": 1630,
+      "dbMs": 11,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1033,
+        "cachedPromptTokens": 0,
+        "completionTokens": 62,
+        "costUsd": 0.000134,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "OrdersShippedAfterMoreThan3Days"
+        ],
+        "rows": [
+          [
+            2260
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q25",
+      "question": "What is the total amount paid using digital wallets?",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT SUM(Amount) AS Paid FROM sales.Payments WHERE Method = 'Wallet'",
+      "gold": {
+        "columns": [
+          "Paid"
+        ],
+        "rows": [
+          [
+            1847367.65
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT SUM([p].[Amount]) AS [TotalAmountPaidUsingDigitalWallets]\nFROM [sales].[Payments] AS [p]\nWHERE [p].[Method] = 'Wallet';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1218,
+      "llmMs": 1210,
+      "dbMs": 9,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1020,
+        "cachedPromptTokens": 0,
+        "completionTokens": 44,
+        "costUsd": 0.000124,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "TotalAmountPaidUsingDigitalWallets"
+        ],
+        "rows": [
+          [
+            1847367.65
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q26",
+      "question": "How many orders were paid in more than one payment?",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Orders FROM (SELECT OrderId FROM sales.Payments GROUP BY OrderId HAVING COUNT(*) > 1) x",
+      "gold": {
+        "columns": [
+          "Orders"
+        ],
+        "rows": [
+          [
+            337
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS OrdersPaidInMoreThanOnePayment\nFROM (\n    SELECT p.OrderId\n    FROM [sales].[Payments] AS p\n    GROUP BY p.OrderId\n    HAVING COUNT(*) > 1\n) AS MultiPaymentOrders;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1897,
+      "llmMs": 1885,
+      "dbMs": 13,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1021,
+        "cachedPromptTokens": 0,
+        "completionTokens": 59,
+        "costUsd": 0.000132,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "OrdersPaidInMoreThanOnePayment"
+        ],
+        "rows": [
+          [
+            337
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q27",
+      "question": "What was net revenue from customers in Dubai for laptops in 2025?",
+      "tags": [
+        "multi-hop",
+        "value-mapping"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories cat ON cat.CategoryId = p.CategoryId WHERE c.City = 'Dubai' AND cat.CategoryName = 'Laptops' AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'",
+      "gold": {
+        "columns": [
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            156264
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    SUM(CAST(oi.Quantity AS decimal(18,4)) * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue\nFROM [sales].[Orders] AS o\nJOIN [sales].[Customers] AS c\n    ON c.CustomerId = o.CustomerId\nJOIN [sales].[OrderItems] AS oi\n    ON oi.OrderId = o.OrderId\nJOIN [catalog].[Products] AS p\n    ON p.ProductId = oi.ProductId\nWHERE c.City = 'Dubai'\n  AND p.ProductName LIKE '%Laptop%'\n  AND o.OrderDate >= '2025-01-01'\n  AND o.OrderDate < '2026-01-01';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 2185,
+      "llmMs": 2163,
+      "dbMs": 22,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1025,
+        "cachedPromptTokens": 0,
+        "completionTokens": 151,
+        "costUsd": 0.000178,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            156264
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q28",
+      "question": "What is the average net revenue per order for in-store orders?",
+      "tags": [
+        "view",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT AVG(NetRevenue) AS AvgOrderRevenue FROM sales.vOrderRevenue WHERE Channel = 'Store'",
+      "gold": {
+        "columns": [
+          "AvgOrderRevenue"
+        ],
+        "rows": [
+          [
+            1265.152388
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    AVG(CAST([v].[NetRevenue] AS decimal(18,4))) AS [AverageNetRevenuePerOrder]\nFROM [sales].[vOrderRevenue] AS [v]\nWHERE [v].[Channel] = 'Store';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1235,
+      "llmMs": 1213,
+      "dbMs": 21,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1023,
+        "cachedPromptTokens": 0,
+        "completionTokens": 56,
+        "costUsd": 0.00013,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "AverageNetRevenuePerOrder"
+        ],
+        "rows": [
+          [
+            1265.152388
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q29",
+      "question": "Who are our top 3 customers by lifetime net revenue? Show first name, last name and revenue.",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT TOP (3) WITH TIES c.FirstName, c.LastName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId GROUP BY c.CustomerId, c.FirstName, c.LastName ORDER BY NetRevenue DESC",
+      "gold": {
+        "columns": [
+          "FirstName",
+          "LastName",
+          "NetRevenue"
+        ],
+        "rows": [
+          [
+            "Imran",
+            "Rahman",
+            212843.8
+          ],
+          [
+            "Adam",
+            "Mueller",
+            212322.8
+          ],
+          [
+            "Karim",
+            "Shah",
+            208803.5
+          ]
+        ],
+        "rowCount": 3
+      },
+      "sql": "SELECT TOP (3) WITH TIES\n    c.FirstName,\n    c.LastName,\n    SUM(r.NetRevenue) AS LifetimeNetRevenue\nFROM [sales].[Customers] AS c\nJOIN [sales].[vOrderRevenue] AS r\n    ON r.CustomerId = c.CustomerId\nGROUP BY c.CustomerId, c.FirstName, c.LastName\nORDER BY SUM(r.NetRevenue) DESC;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1613,
+      "llmMs": 1587,
+      "dbMs": 25,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1031,
+        "cachedPromptTokens": 0,
+        "completionTokens": 90,
+        "costUsd": 0.000148,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "FirstName",
+          "LastName",
+          "LifetimeNetRevenue"
+        ],
+        "rows": [
+          [
+            "Imran",
+            "Rahman",
+            212843.8
+          ],
+          [
+            "Adam",
+            "Mueller",
+            212322.8
+          ],
+          [
+            "Karim",
+            "Shah",
+            208803.5
+          ]
+        ],
+        "rowCount": 3
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q30",
+      "question": "What is the gross margin for the Audio category, defined as net revenue minus product unit cost times quantity?",
+      "tags": [
+        "derived-metric",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) - p.UnitCost * oi.Quantity) AS GrossMargin FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId WHERE c.CategoryName = 'Audio'",
+      "gold": {
+        "columns": [
+          "GrossMargin"
+        ],
+        "rows": [
+          [
+            472695
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT\n    c.[CategoryName],\n    SUM(oi.[Quantity] * oi.[UnitPrice] * (1 - oi.[DiscountPct]))\n      - SUM(oi.[Quantity] * p.[UnitCost]) AS [GrossMargin]\nFROM [catalog].[Categories] AS c\nJOIN [catalog].[Products] AS p\n    ON p.[CategoryId] = c.[CategoryId]\nJOIN [sales].[OrderItems] AS oi\n    ON oi.[ProductId] = p.[ProductId]\nWHERE c.[CategoryName] = 'Audio'\nGROUP BY c.[CategoryName];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1644,
+      "llmMs": 1625,
+      "dbMs": 19,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1031,
+        "cachedPromptTokens": 0,
+        "completionTokens": 127,
+        "costUsd": 0.000167,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "CategoryName",
+          "GrossMargin"
+        ],
+        "rows": [
+          [
+            "Audio",
+            472695
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q31",
+      "question": "How many order lines had a 20% discount?",
+      "tags": [
+        "value-mapping",
+        "units"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Lines FROM sales.OrderItems WHERE DiscountPct = 0.20",
+      "gold": {
+        "columns": [
+          "Lines"
+        ],
+        "rows": [
+          [
+            800
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS OrderLineCount\nFROM [sales].[OrderItems] AS oi\nWHERE oi.[DiscountPct] = 0.20;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1304,
+      "llmMs": 1294,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1021,
+        "cachedPromptTokens": 0,
+        "completionTokens": 37,
+        "costUsd": 0.000121,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "OrderLineCount"
+        ],
+        "rows": [
+          [
+            800
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q32",
+      "question": "How many customers signed up in each year? Show the year and the count.",
+      "tags": [
+        "date",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT YEAR(SignupDate) AS SignupYear, COUNT(*) AS Customers FROM sales.Customers GROUP BY YEAR(SignupDate)",
+      "gold": {
+        "columns": [
+          "SignupYear",
+          "Customers"
+        ],
+        "rows": [
+          [
+            2022,
+            99
+          ],
+          [
+            2023,
+            162
+          ],
+          [
+            2024,
+            139
+          ]
+        ],
+        "rowCount": 3
+      },
+      "sql": "SELECT\n    YEAR(c.[SignupDate]) AS [SignupYear],\n    COUNT(*) AS [CustomerCount]\nFROM [sales].[Customers] AS c\nGROUP BY YEAR(c.[SignupDate])\nORDER BY [SignupYear];",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1411,
+      "llmMs": 1400,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1026,
+        "cachedPromptTokens": 0,
+        "completionTokens": 52,
+        "costUsd": 0.000129,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "SignupYear",
+          "CustomerCount"
+        ],
+        "rows": [
+          [
+            2022,
+            99
+          ],
+          [
+            2023,
+            162
+          ],
+          [
+            2024,
+            139
+          ]
+        ],
+        "rowCount": 3
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q33",
+      "question": "How many customers were referred by another customer?",
+      "tags": [
+        "null-handling",
+        "self-join"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE ReferredByCustomerId IS NOT NULL",
+      "gold": {
+        "columns": [
+          "Customers"
+        ],
+        "rows": [
+          [
+            78
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS ReferredCustomerCount\nFROM [sales].[Customers] AS c\nWHERE c.[ReferredByCustomerId] IS NOT NULL;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1275,
+      "llmMs": 1263,
+      "dbMs": 12,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1019,
+        "cachedPromptTokens": 0,
+        "completionTokens": 38,
+        "costUsd": 0.000121,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "ReferredCustomerCount"
+        ],
+        "rows": [
+          [
+            78
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q34",
+      "question": "Which customer referred the most other customers? Give their first name, last name and the number of referrals.",
+      "tags": [
+        "self-join",
+        "ranking",
+        "ties"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT TOP (1) WITH TIES r.FirstName, r.LastName, COUNT(*) AS Referrals FROM sales.Customers c JOIN sales.Customers r ON r.CustomerId = c.ReferredByCustomerId GROUP BY r.CustomerId, r.FirstName, r.LastName ORDER BY COUNT(*) DESC",
+      "gold": {
+        "columns": [
+          "FirstName",
+          "LastName",
+          "Referrals"
+        ],
+        "rows": [
+          [
+            "Leah",
+            "Shah",
+            8
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT TOP (1) WITH TIES\n    Referrer.FirstName,\n    Referrer.LastName,\n    COUNT(*) AS ReferralCount\nFROM [sales].[Customers] AS Referrer\nJOIN [sales].[Customers] AS Referred\n    ON Referred.ReferredByCustomerId = Referrer.CustomerId\nGROUP BY Referrer.CustomerId, Referrer.FirstName, Referrer.LastName\nORDER BY COUNT(*) DESC;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1567,
+      "llmMs": 1554,
+      "dbMs": 13,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1031,
+        "cachedPromptTokens": 0,
+        "completionTokens": 93,
+        "costUsd": 0.00015,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "FirstName",
+          "LastName",
+          "ReferralCount"
+        ],
+        "rows": [
+          [
+            "Leah",
+            "Shah",
+            8
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q35",
+      "question": "How many units of discontinued products were sold in 2025?",
+      "tags": [
+        "join",
+        "date"
+      ],
+      "difficulty": "medium",
+      "expect": "result",
+      "goldSql": "SELECT SUM(oi.Quantity) AS Units FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE p.IsDiscontinued = 1 AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'",
+      "gold": {
+        "columns": [
+          "Units"
+        ],
+        "rows": [
+          [
+            1353
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT SUM(oi.Quantity) AS UnitsSold\nFROM [sales].[OrderItems] AS oi\nJOIN [sales].[Orders] AS o\n    ON o.OrderId = oi.OrderId\nJOIN [catalog].[Products] AS p\n    ON p.ProductId = oi.ProductId\nWHERE p.IsDiscontinued = 1\n  AND o.OrderDate >= '2025-01-01'\n  AND o.OrderDate < '2026-01-01'\n  AND o.Status <> 'Cancelled';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1352,
+      "llmMs": 1334,
+      "dbMs": 18,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1023,
+        "cachedPromptTokens": 0,
+        "completionTokens": 110,
+        "costUsd": 0.000157,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "UnitsSold"
+        ],
+        "rows": [
+          [
+            1295
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "wrong",
+      "category": "wrong_columns",
+      "detail": "no column matches \"Units\""
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q36",
+      "question": "What share of 2025 net revenue came from each customer region? Give region name and percentage (0-100).",
+      "tags": [
+        "percentage",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "expect": "result",
+      "goldSql": "SELECT reg.RegionName, 100.0 * SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) / SUM(SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct))) OVER () AS SharePct FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN sales.Regions reg ON reg.RegionId = c.RegionId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY reg.RegionName",
+      "gold": {
+        "columns": [
+          "RegionName",
+          "SharePct"
+        ],
+        "rows": [
+          [
+            "North",
+            22.577049
+          ],
+          [
+            "East",
+            23.674057
+          ],
+          [
+            "South",
+            39.950426
+          ],
+          [
+            "West",
+            13.798466
+          ]
+        ],
+        "rowCount": 4
+      },
+      "sql": "WITH RegionRevenue AS (\n    SELECT\n        r.RegionId,\n        r.RegionName,\n        SUM(v.NetRevenue) AS NetRevenue\n    FROM [sales].[vOrderRevenue] AS v\n    INNER JOIN [sales].[Customers] AS c\n        ON c.CustomerId = v.CustomerId\n    INNER JOIN [sales].[Regions] AS r\n        ON r.RegionId = c.RegionId\n    WHERE v.OrderDate >= '2025-01-01'\n      AND v.OrderDate < '2026-01-01'\n    GROUP BY r.RegionId, r.RegionName\n)\nSELECT\n    RegionName,\n    CAST(100.0 * NetRevenue / NULLIF(SUM(NetRevenue) OVER (), 0) AS decimal(18,2)) AS RevenueSharePercent\nFROM RegionRevenue\nORDER BY RegionName;",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 2294,
+      "llmMs": 2266,
+      "dbMs": 28,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1034,
+        "cachedPromptTokens": 0,
+        "completionTokens": 178,
+        "costUsd": 0.000192,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "RegionName",
+          "RevenueSharePercent"
+        ],
+        "rows": [
+          [
+            "East",
+            23.67
+          ],
+          [
+            "North",
+            22.58
+          ],
+          [
+            "South",
+            39.95
+          ],
+          [
+            "West",
+            13.8
+          ]
+        ],
+        "rowCount": 4
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q37",
+      "question": "How many sales reps were hired before 2021?",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Reps FROM hr.Employees WHERE Title = 'Sales Rep' AND HireDate < '2021-01-01'",
+      "gold": {
+        "columns": [
+          "Reps"
+        ],
+        "rows": [
+          [
+            9
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS SalesRepCount\nFROM [hr].[Employees] AS e\nWHERE e.[Title] = 'Sales Rep'\n  AND e.[HireDate] < '2021-01-01';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1185,
+      "llmMs": 1175,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1021,
+        "cachedPromptTokens": 0,
+        "completionTokens": 50,
+        "costUsd": 0.000127,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "SalesRepCount"
+        ],
+        "rows": [
+          [
+            9
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q38",
+      "question": "How many orders are still pending?",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "expect": "result",
+      "goldSql": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Pending'",
+      "gold": {
+        "columns": [
+          "Orders"
+        ],
+        "rows": [
+          [
+            91
+          ]
+        ],
+        "rowCount": 1
+      },
+      "sql": "SELECT COUNT(*) AS PendingOrderCount\nFROM [sales].[Orders] AS o\nWHERE o.[Status] = 'Pending';",
+      "answer": null,
+      "attempts": 1,
+      "trace": {
+        "candidates": 1,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": false,
+        "examples": 0,
+        "agreement": 1
+      },
+      "latencyMs": 1092,
+      "llmMs": 1082,
+      "dbMs": 10,
+      "usage": {
+        "llmCalls": 1,
+        "promptTokens": 1017,
+        "cachedPromptTokens": 0,
+        "completionTokens": 33,
+        "costUsd": 0.000118,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "predicted": {
+        "columns": [
+          "PendingOrderCount"
+        ],
+        "rows": [
+          [
+            91
+          ]
+        ],
+        "rowCount": 1
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q39",
+      "question": "What is the average age of our customers?",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal",
+      "sql": null,
+      "answer": "I can't answer that from this database: The schema does not include customers' birth dates or ages.",
+      "attempts": 2,
+      "trace": {
+        "candidates": 2,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": true,
+        "examples": 0
+      },
+      "latencyMs": 2239,
+      "llmMs": 2239,
+      "dbMs": 0,
+      "usage": {
+        "llmCalls": 2,
+        "promptTokens": 2038,
+        "cachedPromptTokens": 0,
+        "completionTokens": 74,
+        "costUsd": 0.000241,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "verdict": "correct",
+      "category": "correct"
+    },
+    {
+      "variant": "default",
+      "repeat": 0,
+      "id": "q40",
+      "question": "Which supplier provides the most products?",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal",
+      "sql": null,
+      "answer": "I can't answer that from this database: No supplier table or supplier-to-product relationship is available in the schema.",
+      "attempts": 2,
+      "trace": {
+        "candidates": 2,
+        "repairs": 0,
+        "emptyRecheck": false,
+        "escalated": true,
+        "examples": 0
+      },
+      "latencyMs": 2535,
+      "llmMs": 2534,
+      "dbMs": 0,
+      "usage": {
+        "llmCalls": 2,
+        "promptTokens": 2034,
+        "cachedPromptTokens": 0,
+        "completionTokens": 70,
+        "costUsd": 0.000238,
+        "models": [
+          "openai:gpt-6-luna"
+        ]
+      },
+      "verdict": "correct",
+      "category": "correct"
+    }
+  ]
+}

@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "eval": "nest build && node --enable-source-maps dist/eval/cli.js"
   },
   "dependencies": {
     "@fastify/compress": "9.2.0",

@@ -116,6 +116,18 @@ describe('LlmService', () => {
     expect(openai.requests.map((r) => r.reasoning_effort)).toEqual(['low', 'none', 'none', 'low']);
   });
 
+  it('waits out a rate limit when there is no provider to fail over to', async () => {
+    let n = 0;
+    openai = new FakeOpenAI(() => (++n === 1 ? { status: 429 } : { content: 'after-retry' }));
+    const llm = new LlmService(
+      testConfig({ OPENAI_API_KEY: 'k1', OPENAI_BASE_URL: await openai.start(), LLM_PROVIDER: 'openai' }),
+      pricing,
+    );
+    const res = await llm.chat({ tier: 'fast', messages });
+    expect(res.message.content).toBe('after-retry');
+    expect(openai.requests).toHaveLength(2);
+  });
+
   it('maps other upstream 400s to a 502 with the provider message', async () => {
     openai = new FakeOpenAI(() => ({ status: 400, errorMessage: 'The model `gpt-x` does not exist' }));
     const llm = await service();
