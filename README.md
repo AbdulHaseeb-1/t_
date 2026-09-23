@@ -47,7 +47,7 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 
 | Method | Path | Purpose | LLM cost |
 |---|---|---|---|
-| POST | `/query/ask` | `{question, answer?=true, maxRows?, tier?='fast', noCache?}` → SQL, rows, answer, usage | 0–2 calls |
+| POST | `/query/ask` | `{question, context?: [{question, sql}] (≤4 earlier turns), answer?=true, maxRows?, tier?='fast', noCache?}` → SQL, rows, answer, usage | 0–2 calls |
 | POST | `/query/analyze` | `{question, tier?, maxSteps?}` → multi-step analysis with tool trace | bounded loop |
 | POST | `/query/sql` | `{sql, maxRows?}` → run read-only SQL directly | none |
 | GET | `/schema` | tables/views with row counts | none |
@@ -57,6 +57,7 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | GET | `/llm` | mode, models, breaker state, token + USD totals | none |
 | PUT | `/llm/mode` | `{mode: auto\|openai\|openrouter, fallbackOrder?}` at runtime | none |
 | GET/DELETE | `/query/cache` | cache stats / clear | none |
+| GET/POST/DELETE | `/query/examples` | verified question→SQL pairs (few-shot library; SQL must run) | none |
 | GET | `/health` | DB + LLM status (no API key needed) | none |
 
 Every `/query/ask` and `/query/analyze` response includes `usage` (calls, prompt/cached/completion tokens, `costUsd`, models) and `timings`.
@@ -80,17 +81,31 @@ Both providers use one OpenAI-compatible code path.
 6. **Zero-LLM paths.** `/query/sql` and scalar answers skip the model.
 7. **`answer: false`** returns data only, which halves calls when a UI renders the table itself.
 
-## Measured on `gpt-6-luna` (synthetic sample DB)
+## Accuracy (measured, not assumed)
 
-| Reasoning effort (fast tier) | Avg latency | Avg cost / question | Correct |
-|---|---|---|---|
-| provider default | 6.1 s | $0.000319 | 4/4 (one needed a repair loop) |
-| low | 3.8 s | $0.000183 | 4/4 |
-| **none** (shipped default) | **2.4 s** | **$0.000134** | **4/4** |
+`pnpm --filter server eval` runs the real pipeline against a 40-question dataset on a synthetic retail database. Each run is scored by **execution accuracy**: the generated SQL must return the same rows as a hand-verified gold query. See [apps/server/eval/README.md](apps/server/eval/README.md).
 
-That is about **7,500 new questions per $1**; repeats are free. Escalation reuses the same model with `medium` reasoning, and it is used only after failed attempts or a fast-tier refusal.
+Final ablation on `gpt-6-luna` (40 questions × 3 repeats per variant):
 
-The server adapts to model quirks at runtime. If a model rejects an optional parameter such as `temperature` on reasoning models, the server drops it for that model and retries. Tool calls use `reasoning_effort: none` when a model requires it.
+| Variant | Accuracy | First try | p50 / p95 | $ per correct answer |
+|---|---|---|---|---|
+| baseline (no accuracy features) | 90.8% ± 2.4 | 85.8% | 1.3 / 2.2 s | $0.000125 |
+| + schema value hints | 97.5% | 90.8% | 1.3 / 2.4 s | $0.000056 |
+| + empty-result recheck | 90.0% | 82.5% | 1.3 / 3.0 s | $0.000120 |
+| + few-shot examples | 92.5% | 87.5% | 1.2 / 2.2 s | $0.000091 |
+| + 3-candidate voting | 90.8% | 85.8% | 1.3 / 2.4 s | $0.000315 |
+| **default: hints + recheck** | **99.2% ± 1.2** | **94.2%** | **1.3 / 2.3 s** | **$0.000053** |
+
+Why the defaults are what they are:
+
+- **Value hints** are the largest single gain. They also cut cost by about 55%, because correct filters need no repair rounds.
+- The **empty-result recheck** does little alone, but fixes hierarchy and join-level mistakes on top of hints.
+- **Voting** tripled the cost for no measurable gain, so `ASK_SQL_CANDIDATES=1`.
+- **Few-shot** showed no significant gain here, so it is off by default. Enable it once you have curated examples, and confirm with the eval.
+
+Fast-tier reasoning effort (4-question pilot): `none` was about 2.5× faster and 2.4× cheaper than the model's default at equal accuracy, so it is the shipped setting. The recheck and escalations use the same model at `medium` reasoning.
+
+The server adapts to model quirks at runtime. When a model rejects an optional parameter (for example `temperature` on reasoning models), the server drops it for that model and retries. Tool calls use `reasoning_effort: none` when a model requires it. Without a fallback provider, rate limits are waited out using `retry-after`.
 
 ## Safety model (defence in depth)
 

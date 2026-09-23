@@ -4,8 +4,15 @@ const question = z.string().trim().min(3).max(2000);
 const maxRows = z.number().int().positive().max(100_000).optional();
 const tier = z.enum(['fast', 'smart']).default('fast');
 
+/** Earlier turns of the same conversation, oldest first, so follow-ups ("and for 2024?") resolve. */
+const context = z
+  .array(z.object({ question: z.string().trim().min(1).max(2000), sql: z.string().min(1).max(20_000) }))
+  .max(4)
+  .default([]);
+
 export const askSchema = z.object({
   question,
+  context,
   /** false = return SQL + rows only (one LLM call instead of two). */
   answer: z.boolean().default(true),
   maxRows,

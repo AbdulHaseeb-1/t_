@@ -101,8 +101,9 @@
   .variant-name { font: 600 14px var(--mono); }
   .variant-name.best::after { content: 'best'; margin-left: 8px; font: 500 10px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 6px; border-radius: 3px; background: var(--accent-soft); color: var(--accent); vertical-align: 2px; }
   .overrides { display: block; font: 400 12px var(--mono); color: var(--muted); white-space: normal; max-width: 34ch; margin-top: 2px; }
+  @media (max-width: 640px) { .overrides { display: none; } }
 
-  .acc { display: grid; grid-template-columns: 120px 64px; gap: 10px; align-items: center; justify-content: end; }
+  .acc { display: grid; grid-template-columns: 58px 110px; gap: 10px; align-items: center; justify-content: end; }
   .bar { height: 8px; background: var(--sunken); border-radius: 2px; overflow: hidden; position: relative; }
   .bar > span { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 2px; }
   .acc b { font: 600 14px var(--mono); }
@@ -281,7 +282,7 @@
       const ov = Object.entries(s.overrides).map(([k, v]) => `${k}=${v}`).join(' ');
       return `<tr>
         <td><span class="variant-name ${multi && s === best ? 'best' : ''}">${esc(s.variant)}</span>${ov ? `<span class="overrides">${esc(ov)}</span>` : ''}</td>
-        <td><div class="acc"><div class="bar" aria-hidden="true"><span style="width:${(s.accuracy * 100).toFixed(1)}%"></span></div><b class="num">${pct(s.accuracy)}</b></div>${s.repeats > 1 ? `<div class="sd">± ${(s.accuracyStdDev * 100).toFixed(1)} pts</div>` : ''}</td>
+        <td><div class="acc"><b class="num">${pct(s.accuracy)}</b><div class="bar" aria-hidden="true"><span style="width:${(s.accuracy * 100).toFixed(1)}%"></span></div></div>${s.repeats > 1 ? `<div class="sd">± ${(s.accuracyStdDev * 100).toFixed(1)} pts</div>` : ''}</td>
         <td class="num">${pct(s.firstTryAccuracy)}</td>
         <td class="num">${pct(s.passAtK)}</td>
         <td class="num">${pct(s.stability)}</td>

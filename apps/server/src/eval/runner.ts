@@ -100,7 +100,13 @@ export async function runCase(
   const started = performance.now();
   let res: AskResponse;
   try {
-    res = await pipeline.ask.ask({ question: c.question, answer: withAnswers, tier: 'fast', noCache: true });
+    res = await pipeline.ask.ask({
+      question: c.question,
+      context: [],
+      answer: withAnswers,
+      tier: 'fast',
+      noCache: true,
+    });
   } catch (err) {
     const e = errorCategory(err);
     return {

@@ -72,6 +72,7 @@ function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult, env: 
 
 const ask = (question: string, extra = {}) => ({
   question,
+  context: [],
   answer: true,
   tier: 'fast' as const,
   noCache: false,
@@ -228,5 +229,21 @@ describe('AskService', () => {
     expect(r.trace.examples).toBe(1);
     expect(calls[0].messages.map((m) => m.role)).toEqual(['system', 'system', 'system', 'user']);
     expect(String(calls[0].messages[2].content)).toContain('SELECT 42');
+  });
+
+  it('passes earlier turns as dialogue and keys the cache on them', async () => {
+    const reply = '```sql\nSELECT 1 AS OrderCount\n```';
+    const { service, calls } = setup([reply, reply], () => scalar);
+    const context = [{ question: 'Revenue by country in 2025', sql: 'SELECT 2025' }];
+    await service.ask(ask('and for 2024?', { context, answer: false }));
+    expect(calls[0].messages.slice(-3)).toEqual([
+      { role: 'user', content: 'Revenue by country in 2025' },
+      { role: 'assistant', content: '```sql\nSELECT 2025\n```' },
+      { role: 'user', content: 'and for 2024?' },
+    ]);
+    // Same words, different conversation: must not reuse the cached SQL.
+    const other = await service.ask(ask('and for 2024?', { answer: false }));
+    expect(other.cache).toBeNull();
+    expect(calls).toHaveLength(2);
   });
 });

@@ -41,6 +41,7 @@ export function sqlMessages(
   question: string,
   maxRows: number,
   examples: FewShot[] = [],
+  history: FewShot[] = [],
 ): ChatCompletionMessageParam[] {
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: SQL_RULES.replace('{maxRows}', String(maxRows)) },
@@ -57,6 +58,13 @@ export function sqlMessages(
         'Verified examples for this database (follow their conventions):\n\n' +
         examples.map((e) => `Q: ${e.question}\n\`\`\`sql\n${e.sql}\n\`\`\``).join('\n\n'),
     });
+  }
+  // Prior turns as real dialogue, so the model resolves references ("same but for 2024").
+  for (const turn of history) {
+    messages.push(
+      { role: 'user', content: turn.question },
+      { role: 'assistant', content: `\`\`\`sql\n${turn.sql}\n\`\`\`` },
+    );
   }
   messages.push({ role: 'user', content: question });
   return messages;

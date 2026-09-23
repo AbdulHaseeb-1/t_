@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { HttpException, Injectable, Logger } from '@nestjs/common';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { AppConfig } from '../config/app-config.js';
@@ -92,7 +93,11 @@ export class AskService {
     const maxRows = Math.min(input.maxRows ?? this.config.get('DB_MAX_ROWS'), this.config.get('DB_MAX_ROWS'));
 
     const schemaHash = await this.catalog.hash();
-    const qKey = `${schemaHash}:${normalizeQuestion(input.question)}`;
+    // A follow-up means something different in each conversation: key on the context too.
+    const contextKey = input.context.length
+      ? `:${createHash('sha1').update(JSON.stringify(input.context)).digest('hex').slice(0, 12)}`
+      : '';
+    const qKey = `${schemaHash}:${normalizeQuestion(input.question)}${contextKey}`;
     const answerKey = `${qKey}:${maxRows}:${input.answer}`;
     const trace: Trace = { candidates: 0, repairs: 0, emptyRecheck: false, escalated: false, examples: 0 };
 
@@ -129,7 +134,7 @@ export class AskService {
     const snapshot = await this.catalog.snapshot();
     const shots = this.examples.retrieve(input.question);
     trace.examples = shots.length;
-    const messages = sqlMessages(snapshot.database, ctx, input.question, maxRows, shots);
+    const messages = sqlMessages(snapshot.database, ctx, input.question, maxRows, shots, input.context);
     const cacheKey = `sql:${schemaHash}`;
 
     let maxAttempts = 1 + this.config.get('ASK_MAX_REPAIRS');
