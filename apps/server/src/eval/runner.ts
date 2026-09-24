@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import type { QueryResult } from '../database/database.types.js';
 import type { UsageSummary } from '../llm/llm.types.js';
 import type { AskResponse } from '../query/ask.service.js';
+import { detectLanguage } from '../query/language.js';
 import { compareResults } from '../query/result-compare.js';
 import type { EvalCase } from './dataset.js';
 import type { Pipeline } from './pipeline.js';
@@ -47,6 +48,8 @@ export interface CaseResult {
   llmMs: number;
   dbMs: number;
   usage?: UsageSummary;
+  /** Set when the case declares a language and answers were generated. */
+  answerLanguageOk?: boolean;
   gold?: Preview;
   predicted?: Preview;
 }
@@ -103,6 +106,7 @@ export async function runCase(
     res = await pipeline.ask.ask({
       question: c.question,
       context: [],
+      language: 'auto',
       answer: withAnswers,
       tier: 'fast',
       noCache: true,
@@ -136,6 +140,15 @@ export async function runCase(
     predicted: preview(res.result),
   };
   const refused = res.sql === null;
+  if (withAnswers && c.language && res.answer) {
+    // Judge the prose, not table rows (which are mostly data values like names and codes).
+    const prose = res.answer
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('|'))
+      .join('\n');
+    (common as CaseResult).answerLanguageOk =
+      detectLanguage(prose.trim() ? prose : res.answer) === c.language;
+  }
 
   if (c.expect === 'refusal') {
     return refused

@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton } from '../components/IconButton';
-import { ApiError, checkConnection, normalizeBaseUrl, type ServerConfig } from '../lib/api';
+import { checkConnection, normalizeBaseUrl, type ServerConfig } from '../lib/api';
+import { describeError } from '../lib/errors';
+import { row, scriptStyle, type UiLanguage, useI18n } from '../i18n';
 import { useSettings } from '../state/settings';
 import { fonts, type, usePalette } from '../theme';
 
@@ -17,8 +19,41 @@ export default function SettingsScreen() {
   return <SettingsForm initial={server} save={save} />;
 }
 
+function LanguageSwitch() {
+  const p = usePalette();
+  const { language, setLanguage } = useSettings();
+  const { t, rtl } = useI18n();
+  const options: { value: UiLanguage; label: string }[] = [
+    { value: 'ur', label: 'اردو' },
+    { value: 'en', label: 'English' },
+  ];
+  return (
+    <View style={styles.group}>
+      <Text style={[scriptStyle(t.language, type.meta), { color: p.muted }]}>{t.language}</Text>
+      <View style={[styles.segment, row(rtl), { borderColor: p.border }]} accessibilityRole="radiogroup">
+        {options.map((o) => {
+          const on = language === o.value;
+          return (
+            <Pressable
+              key={o.value}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              accessibilityLabel={o.label}
+              onPress={() => setLanguage(o.value)}
+              style={[styles.segmentItem, on && { backgroundColor: p.primary }]}
+            >
+              <Text style={[scriptStyle(o.label, type.label), { color: on ? p.onPrimary : p.text, textAlign: 'center' }]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: ServerConfig) => Promise<void> }) {
   const p = usePalette();
+  const { t, rtl } = useI18n();
   const [url, setUrl] = useState(initial.baseUrl);
   const [key, setKey] = useState(initial.apiKey ?? '');
   const [check, setCheck] = useState<Check>({ state: 'idle' });
@@ -29,12 +64,12 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
     setCheck({ state: 'checking' });
     try {
       const r = await checkConnection(draft);
-      if (!r.authorized) setCheck({ state: 'fail', message: 'Connected, but the API key was rejected.' });
-      else if (!r.db.ok) setCheck({ state: 'warn', message: `Connected, but the database is unreachable: ${r.db.error ?? 'unknown error'}` });
-      else if (!r.llm.configured) setCheck({ state: 'warn', message: 'Connected, but the server has no language model key configured.' });
-      else setCheck({ state: 'ok', message: `Connected. Database is up; model routing: ${r.llm.mode}.` });
+      if (!r.authorized) setCheck({ state: 'fail', message: t.connKey });
+      else if (!r.db.ok) setCheck({ state: 'warn', message: t.connDb(r.db.error ?? '?') });
+      else if (!r.llm.configured) setCheck({ state: 'warn', message: t.connLlm });
+      else setCheck({ state: 'ok', message: t.connOk(r.llm.mode) });
     } catch (err) {
-      setCheck({ state: 'fail', message: err instanceof ApiError ? err.message : 'Connection failed.' });
+      setCheck({ state: 'fail', message: describeError(err, t, draft.baseUrl) });
     }
   };
 
@@ -48,20 +83,21 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
-      <View style={styles.bar}>
-        <IconButton name="x" label="Close settings" onPress={() => router.back()} />
-        <Text style={[type.title, styles.title, { color: p.text }]} accessibilityRole="header">
-          Settings
+      <View style={[styles.bar, row(rtl)]}>
+        <IconButton name="x" label={t.closeSettings} onPress={() => router.back()} />
+        <Text style={[scriptStyle(t.settingsTitle, type.title), styles.title, { color: p.text, textAlign: 'center' }]} accessibilityRole="header">
+          {t.settingsTitle}
         </Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Save settings" onPress={done} hitSlop={8} style={styles.save}>
-          <Text style={[type.label, { color: p.text, fontFamily: fonts.sansSemibold }]}>Save</Text>
+          <Text style={[scriptStyle(t.save, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.text }]}>{t.save}</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <LanguageSwitch />
         <View style={styles.group}>
-          <Text style={[type.meta, { color: p.muted }]} nativeID="url-label">
-            Server address
+          <Text style={[scriptStyle(t.serverAddress, type.meta), { color: p.muted }]} nativeID="url-label">
+            {t.serverAddress}
           </Text>
           <TextInput
             value={url}
@@ -75,12 +111,12 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
             accessibilityLabel="Server address"
             style={field}
           />
-          <Text style={[type.meta, { color: p.faint }]}>{"On a phone, use your computer's network address, not localhost."}</Text>
+          <Text style={[scriptStyle(t.serverHint, type.meta), { color: p.faint }]}>{t.serverHint}</Text>
         </View>
 
         <View style={styles.group}>
-          <Text style={[type.meta, { color: p.muted }]} nativeID="key-label">
-            API key (if the server requires one)
+          <Text style={[scriptStyle(t.apiKey, type.meta), { color: p.muted }]} nativeID="key-label">
+            {t.apiKey}
           </Text>
           <TextInput
             value={key}
@@ -88,13 +124,13 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
-            placeholder="Optional"
+            placeholder={t.optional}
             placeholderTextColor={p.faint}
             accessibilityLabelledBy="key-label"
             accessibilityLabel="API key"
             style={field}
           />
-          <Text style={[type.meta, { color: p.faint }]}>Stored in the device keychain.</Text>
+          <Text style={[scriptStyle(t.keychain, type.meta), { color: p.faint }]}>{t.keychain}</Text>
         </View>
 
         <Pressable
@@ -104,10 +140,14 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
           disabled={check.state === 'checking'}
           style={({ pressed }) => [styles.test, { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
         >
-          {check.state === 'checking' ? <ActivityIndicator color={p.muted} /> : <Text style={[type.label, { color: p.text }]}>Test connection</Text>}
+          {check.state === 'checking' ? (
+            <ActivityIndicator color={p.muted} />
+          ) : (
+            <Text style={[scriptStyle(t.testConnection, type.label), { color: p.text }]}>{t.testConnection}</Text>
+          )}
         </Pressable>
         {'message' in check && (
-          <Text style={[type.meta, { color: tone }]} accessibilityLiveRegion="polite">
+          <Text style={[scriptStyle(check.message, type.meta), { color: tone }]} accessibilityLiveRegion="polite">
             {check.message}
           </Text>
         )}
@@ -124,5 +164,7 @@ const styles = StyleSheet.create({
   body: { padding: 20, gap: 22, maxWidth: 560, width: '100%', alignSelf: 'center' },
   group: { gap: 8 },
   input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  segment: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 3, gap: 3 },
+  segmentItem: { flex: 1, borderRadius: 9, paddingVertical: 6, alignItems: 'center' },
   test: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center' },
 });

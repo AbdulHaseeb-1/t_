@@ -17,13 +17,30 @@ export class FakeOpenAI {
   readonly requests: Record<string, unknown>[] = [];
   private server?: Server;
 
-  constructor(private readonly reply: (body: Record<string, unknown>, n: number) => FakeReply) {}
+  /** Multipart bodies received by /audio/transcriptions. */
+  readonly transcriptions: string[] = [];
+
+  constructor(
+    private readonly reply: (body: Record<string, unknown>, n: number) => FakeReply,
+    private readonly transcript: () => string = () => '',
+  ) {}
 
   async start(): Promise<string> {
     this.server = createServer((req, res) => {
       let raw = '';
-      req.on('data', (c: Buffer) => (raw += c.toString()));
+      req.on('data', (c: Buffer) => (raw += c.toString('latin1')));
       req.on('end', () => {
+        if (req.url?.endsWith('/audio/transcriptions')) {
+          this.transcriptions.push(raw);
+          res.setHeader('content-type', 'application/json');
+          res.end(
+            JSON.stringify({
+              text: this.transcript(),
+              usage: { type: 'tokens', input_tokens: 50, output_tokens: 12 },
+            }),
+          );
+          return;
+        }
         const body = JSON.parse(raw || '{}') as Record<string, unknown>;
         this.requests.push(body);
         const r = this.reply(body, this.requests.length);

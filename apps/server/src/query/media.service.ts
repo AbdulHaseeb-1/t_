@@ -1,0 +1,223 @@
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import OpenAI, { toFile } from 'openai';
+import { AppConfig } from '../config/app-config.js';
+import { LlmUnavailableError } from '../common/errors.js';
+import { LlmService } from '../llm/llm.service.js';
+import { UsageMeter, type UsageSummary } from '../llm/llm.types.js';
+import { AskService, type AskResponse } from './ask.service.js';
+import { detectLanguage, type Lang } from './language.js';
+import type { Turn } from './query.dto.js';
+
+export interface UploadedMedia {
+  buffer: Buffer;
+  filename: string;
+  mimetype: string;
+}
+
+export interface MediaAskInput {
+  question: string;
+  context: Turn[];
+  language: Lang | 'auto';
+  answer: boolean;
+  audio?: UploadedMedia;
+  image?: UploadedMedia;
+}
+
+export interface MediaAskResponse extends AskResponse {
+  /** What was heard in the voice message. */
+  transcript?: string;
+  /** What was read from the image: the question in English (used for SQL) and in the user's language. */
+  image?: { question: string; display: string; extracted: string };
+}
+
+export const AUDIO_TYPES = new Set([
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/webm',
+  'audio/ogg',
+  'video/mp4',
+  'video/webm',
+]);
+export const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+const VISION_SYSTEM = `You help people query their business database. The user sent an image, possibly with a message.
+1. Read everything in the image that matters for the request: text in any language (including Urdu), numbers, names, codes, dates, tables.
+2. Write ONE precise, self-contained English question for the database that fulfils the user's request, embedding the specific values read from the image. If the image itself contains the question, use it.
+Reply with JSON only:
+{"language": "en" | "ur" | "ur-Latn", "question": "<the English question>", "display": "<the same question in the user's language>", "extracted": "<one short sentence, in the user's language, saying what you read>"}
+"language" is the language the user wrote or spoke in; if there is no message, the language of any question in the image, else "en". Urdu means Urdu script.`;
+
+function mergeUsage(a: UsageSummary, b: UsageSummary): UsageSummary {
+  return {
+    llmCalls: a.llmCalls + b.llmCalls,
+    promptTokens: a.promptTokens + b.promptTokens,
+    cachedPromptTokens: a.cachedPromptTokens + b.cachedPromptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    costUsd: Number((a.costUsd + b.costUsd).toFixed(6)),
+    costComplete: a.costComplete && b.costComplete,
+    models: [...new Set([...a.models, ...b.models])],
+  };
+}
+
+/**
+ * Voice and image input. Both are turned into text first (transcript, or an
+ * English question read from the image), then the regular, evaluated ask
+ * pipeline answers - so media questions get the same accuracy work as typed ones.
+ */
+@Injectable()
+export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
+  private readonly openai?: OpenAI;
+
+  constructor(
+    private readonly config: AppConfig,
+    private readonly llm: LlmService,
+    private readonly asker: AskService,
+  ) {
+    const key = config.get('OPENAI_API_KEY');
+    if (key) {
+      this.openai = new OpenAI({
+        apiKey: key,
+        baseURL: config.get('OPENAI_BASE_URL'),
+        timeout: config.get('LLM_TIMEOUT_MS'),
+        maxRetries: config.get('LLM_MAX_RETRIES'),
+      });
+    }
+  }
+
+  async ask(input: MediaAskInput): Promise<MediaAskResponse> {
+    const started = performance.now();
+    const meter = new UsageMeter();
+
+    const transcript = input.audio ? await this.transcribe(input.audio, meter) : undefined;
+    const userText = [input.question.trim(), transcript].filter(Boolean).join('\n');
+    let lang: Lang | undefined =
+      input.language !== 'auto' ? input.language : userText ? detectLanguage(userText) : undefined;
+
+    let image: MediaAskResponse['image'];
+    if (input.image) {
+      const read = await this.readImage(input.image, userText, meter);
+      image = { question: read.question, display: read.display, extracted: read.extracted };
+      lang ??= read.language;
+    }
+
+    const res = await this.asker.ask(
+      {
+        question: userText || image!.display,
+        context: input.context,
+        language: lang ?? 'en',
+        answer: input.answer,
+        tier: 'fast',
+        noCache: !!input.image,
+      },
+      { englishQuestion: image?.question },
+    );
+
+    const mediaMs = Math.round(performance.now() - started) - res.timings.totalMs;
+    return {
+      ...res,
+      transcript,
+      image,
+      timings: { ...res.timings, totalMs: res.timings.totalMs + mediaMs, llmMs: res.timings.llmMs + mediaMs },
+      usage: mergeUsage(meter.summary(), res.usage),
+    };
+  }
+
+  private async transcribe(audio: UploadedMedia, meter: UsageMeter): Promise<string> {
+    if (!this.openai) {
+      throw new LlmUnavailableError(
+        'Voice messages need OPENAI_API_KEY: speech-to-text uses the OpenAI audio API.',
+      );
+    }
+    const model = this.config.get('TRANSCRIBE_MODEL');
+    const t0 = performance.now();
+    // No language hint: the model keeps Urdu in Urdu script and still handles English speech.
+    const res = await this.openai.audio.transcriptions.create({
+      file: await toFile(audio.buffer, audio.filename, { type: audio.mimetype }),
+      model,
+    });
+    const usage = (res as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+    meter.add({
+      provider: 'openai',
+      model,
+      promptTokens: usage?.input_tokens ?? 0,
+      cachedPromptTokens: 0,
+      completionTokens: usage?.output_tokens ?? 0,
+      costUsd: undefined,
+      latencyMs: Math.round(performance.now() - t0),
+    });
+    const text = res.text.trim();
+    if (!text)
+      throw new HttpException(
+        { message: "Couldn't hear a question in the recording.", code: 'EMPTY_AUDIO' },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    return text;
+  }
+
+  private async readImage(
+    image: UploadedMedia,
+    userText: string,
+    meter: UsageMeter,
+  ): Promise<{ question: string; display: string; extracted: string; language: Lang }> {
+    const res = await this.llm.chat(
+      {
+        tier: 'fast',
+        reasoningEffort: this.config.get('VISION_REASONING_EFFORT'),
+        maxTokens: 800,
+        messages: [
+          { role: 'system', content: VISION_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: userText ? `Message: ${userText}` : 'No message; use the image.' },
+              // High detail was required to read small Urdu text reliably.
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${image.mimetype};base64,${image.buffer.toString('base64')}`,
+                  detail: 'high',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      meter,
+    );
+    const text = res.message.content ?? '';
+    try {
+      const json = JSON.parse(/\{[\s\S]*\}/.exec(text)?.[0] ?? '') as {
+        question?: string;
+        display?: string;
+        extracted?: string;
+        language?: string;
+      };
+      if (!json.question?.trim()) throw new Error('no question');
+      const language: Lang = json.language === 'ur' || json.language === 'ur-Latn' ? json.language : 'en';
+      const question = json.question.trim();
+      return {
+        question,
+        display: json.display?.trim() || question,
+        extracted: json.extracted?.trim() ?? '',
+        language,
+      };
+    } catch {
+      this.logger.warn(`Unreadable vision reply: ${text.slice(0, 200)}`);
+      throw new HttpException(
+        {
+          message: "Couldn't work out a question from the image. Add a short message with it.",
+          code: 'IMAGE_UNCLEAR',
+        },
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+}

@@ -94,3 +94,32 @@ describe('contextFor', () => {
     expect(contextFor(s.chats.c1, 'a4').map((t) => t.sql)).toEqual(['SELECT 1', 'SELECT 2']);
   });
 });
+
+describe('voice and photo messages', () => {
+  const hydrated = chatReducer(initialState, { type: 'hydrate', chats: [] });
+
+  it('fills a voice message with what was heard and titles the chat from it', () => {
+    let s = chatReducer(hydrated, { type: 'ask', chatId: 'c1', userId: 'u1', assistantId: 'a1', question: '', now: 1, media: { audio: { durationMs: 4200 } } });
+    expect(s.chats.c1.title).toBe('');
+    s = chatReducer(s, { type: 'answer', chatId: 'c1', assistantId: 'a1', response: { ...response('SELECT 1'), transcript: 'کتنے آرڈر ہیں؟', language: 'ur' } });
+    expect(s.chats.c1.messages[0]).toMatchObject({ role: 'user', text: 'کتنے آرڈر ہیں؟', audio: { durationMs: 4200 } });
+    expect(s.chats.c1.messages[1]).toMatchObject({ question: 'کتنے آرڈر ہیں؟', language: 'ur' });
+    expect(s.chats.c1.title).toBe('کتنے آرڈر ہیں؟');
+    // Follow-ups use what was heard.
+    expect(contextFor(s.chats.c1)).toEqual([{ question: 'کتنے آرڈر ہیں؟', sql: 'SELECT 1' }]);
+  });
+
+  it('keeps what was read from a photo', () => {
+    let s = chatReducer(hydrated, { type: 'ask', chatId: 'c1', userId: 'u1', assistantId: 'a1', question: '', now: 1, media: { image: { thumb: 'data:x' } } });
+    s = chatReducer(s, {
+      type: 'answer',
+      chatId: 'c1',
+      assistantId: 'a1',
+      response: { ...response('SELECT 1'), image: { question: 'Units sold of Gizmo', display: 'گزمو کے کتنے یونٹ بکے؟', extracted: 'گزمو کا ڈبہ' } },
+    });
+    expect(s.chats.c1.messages[0]).toMatchObject({ image: { thumb: 'data:x' }, text: '' });
+    // The user's language is used for the title and for follow-up context.
+    expect(s.chats.c1.messages[1]).toMatchObject({ question: 'گزمو کے کتنے یونٹ بکے؟', imageNote: 'گزمو کا ڈبہ' });
+    expect(s.chats.c1.title).toBe('گزمو کے کتنے یونٹ بکے؟');
+  });
+});

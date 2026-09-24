@@ -8,6 +8,7 @@ import type { ChatRequest } from '../llm/llm.types.js';
 import { testConfig } from '../testing/fake-openai.js';
 import { AskService, formatScalar, humanizeColumn } from './ask.service.js';
 import { ExamplesService } from './examples.service.js';
+import { TranslatorService } from './translator.service.js';
 import { QueryCacheService } from './query-cache.service.js';
 
 const scalar: QueryResult = {
@@ -31,7 +32,12 @@ const table: QueryResult = {
   elapsedMs: 4,
 };
 
-function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult, env: Record<string, string> = {}) {
+function setup(
+  llmReplies: string[],
+  dbImpl: (sql: string) => QueryResult,
+  env: Record<string, string> = {},
+  schemaFits = true,
+) {
   const config = testConfig({ ASK_MAX_REPAIRS: '2', ...env });
   const calls: ChatRequest[] = [];
   const llm = {
@@ -58,21 +64,30 @@ function setup(llmReplies: string[], dbImpl: (sql: string) => QueryResult, env: 
   const catalog = {
     hash: async () => 'h1',
     snapshot: async () => ({ database: 'Shop', generatedAt: '', tables: [] }),
-    contextFor: async () => ({
+    contextFor: vi.fn(async () => ({
       text: 'dbo.Orders | Id int PK',
       tables: ['dbo.Orders'],
-      full: true,
+      full: schemaFits,
       schemaHash: 'h1',
-    }),
+    })),
   } as unknown as SchemaCatalogService;
   const examples = new ExamplesService(config);
-  const service = new AskService(config, db, catalog, llm, new QueryCacheService(config), examples);
-  return { service, calls, db, llm, examples };
+  const service = new AskService(
+    config,
+    db,
+    catalog,
+    llm,
+    new QueryCacheService(config),
+    examples,
+    new TranslatorService(llm),
+  );
+  return { service, calls, db, llm, examples, catalog };
 }
 
 const ask = (question: string, extra = {}) => ({
   question,
   context: [],
+  language: 'auto' as const,
   answer: true,
   tier: 'fast' as const,
   noCache: false,
@@ -254,5 +269,52 @@ describe('AskService', () => {
     expect(formatScalar(7525868.5)).toBe('7,525,868.5');
     expect(formatScalar(2.666666)).toBe('2.6667');
     expect(formatScalar(null)).toBe('no value');
+  });
+
+  it('answers Urdu in Urdu from the original question when the schema fits (no translation)', async () => {
+    const { service, calls } = setup(
+      ["```sql\nSELECT COUNT(*) AS n FROM c WHERE CountryCode = 'PK'\n```", 'پاکستان میں 42 گاہک ہیں۔'],
+      () => scalar,
+    );
+    const r = await service.ask(ask('پاکستان میں ہمارے کتنے گاہک ہیں؟'));
+    expect(r).toMatchObject({ language: 'ur', answer: 'پاکستان میں 42 گاہک ہیں۔' });
+    expect(r.translatedQuestion).toBeUndefined();
+    // 1) SQL from the Urdu original, 2) Urdu phrasing (no English scalar shortcut).
+    expect(calls).toHaveLength(2);
+    const sqlTurn = String(calls[0].messages.at(-1)?.content);
+    expect(sqlTurn.startsWith('پاکستان میں ہمارے کتنے گاہک ہیں؟')).toBe(true);
+    expect(sqlTurn).toContain('CANNOT_ANSWER reason in Urdu');
+    expect(String(calls[1].messages.at(-1)?.content)).toContain('Write the whole answer in Urdu script');
+  });
+
+  it('translates only to pick tables when the schema is too large to send whole', async () => {
+    const { service, calls, catalog } = setup(
+      ['How many customers are based in Pakistan?', '```sql\nSELECT 1 AS n\n```', 'پاکستان میں 42 گاہک ہیں۔'],
+      () => scalar,
+      {},
+      false,
+    );
+    const r = await service.ask(ask('پاکستان میں ہمارے کتنے گاہک ہیں؟'));
+    expect(r.translatedQuestion).toBe('How many customers are based in Pakistan?');
+    expect(catalog.contextFor).toHaveBeenLastCalledWith('How many customers are based in Pakistan?');
+    // The SQL model still sees the original Urdu question.
+    expect(String(calls[1].messages.at(-1)?.content).startsWith('پاکستان میں')).toBe(true);
+  });
+
+  it('refuses and reports empty results in the question language', async () => {
+    const refusal = '```sql\n-- CANNOT_ANSWER: عمر کا ڈیٹا موجود نہیں\n```';
+    const { service } = setup([refusal, refusal], () => scalar);
+    const r = await service.ask(ask('ہمارے گاہکوں کی اوسط عمر کیا ہے؟'));
+    expect(r.answer).toBe('اس ڈیٹا بیس سے اس سوال کا جواب نہیں دیا جا سکتا: عمر کا ڈیٹا موجود نہیں');
+  });
+
+  it('can skip translation (ablation switch) and honours an explicit language', async () => {
+    const { service, calls } = setup(['```sql\nSELECT 1 AS n\n```', 'Jawab: 42'], () => scalar, {
+      ASK_TRANSLATE_NON_ENGLISH: 'false',
+    });
+    const r = await service.ask(ask('Pakistan mein kitne customers hain?', { language: 'ur-Latn' }));
+    expect(r.language).toBe('ur-Latn');
+    expect(calls).toHaveLength(2);
+    expect(String(calls[1].messages.at(-1)?.content)).toContain('Roman Urdu');
   });
 });

@@ -83,8 +83,17 @@ export const envSchema = z.object({
   ASK_FEWSHOT_K: z.coerce.number().int().nonnegative().default(0),
   /** Parallel SQL candidates with result voting (self-consistency). 1 = off. */
   ASK_SQL_CANDIDATES: z.coerce.number().int().positive().max(7).default(1),
+  /** Translate Urdu / Roman Urdu questions to English before retrieval and SQL generation. */
+  ASK_TRANSLATE_NON_ENGLISH: bool(true),
   /** Re-examine text filters once when a query returns no rows. */
   ASK_EMPTY_RESULT_RECHECK: bool(true),
+
+  /** Speech-to-text model (OpenAI audio API). */
+  TRANSCRIBE_MODEL: z.string().default('gpt-4o-transcribe'),
+  /** Reading images: high detail + a little reasoning was needed to read small Urdu text reliably. */
+  VISION_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).default('low'),
+  MEDIA_MAX_AUDIO_MB: z.coerce.number().positive().default(10),
+  MEDIA_MAX_IMAGE_MB: z.coerce.number().positive().default(8),
 
   LLM_PROVIDER: z.enum(['auto', ...PROVIDERS]).default('auto'),
   /** Try order for `auto`. The first configured provider is primary. */

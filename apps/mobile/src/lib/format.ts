@@ -10,8 +10,10 @@ export function formatCell(v: unknown): string {
   return d ? d[1] : s;
 }
 
-export function formatDuration(ms: number): string {
-  return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+/** Seconds in the interface language (a Latin unit inside Urdu text reads backwards). */
+export function formatDuration(ms: number, lang: 'en' | 'ur' = 'en'): string {
+  const s = Math.max(0.1, ms / 1000).toFixed(1);
+  return lang === 'ur' ? `${s} سیکنڈ` : `${s} s`;
 }
 
 export function plural(n: number, word: string): string {

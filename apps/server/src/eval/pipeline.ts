@@ -7,6 +7,7 @@ import { ModelPricingService } from '../llm/model-pricing.service.js';
 import { AskService } from '../query/ask.service.js';
 import { ExamplesService } from '../query/examples.service.js';
 import { QueryCacheService } from '../query/query-cache.service.js';
+import { TranslatorService } from '../query/translator.service.js';
 
 export interface Pipeline {
   env: Env;
@@ -30,6 +31,14 @@ export function buildPipeline(raw: Record<string, string | undefined>): Pipeline
   const catalog = new SchemaCatalogService(config, db);
   const llm = new LlmService(config, new ModelPricingService(config));
   const examples = new ExamplesService(config);
-  const ask = new AskService(config, db, catalog, llm, new QueryCacheService(config), examples);
+  const ask = new AskService(
+    config,
+    db,
+    catalog,
+    llm,
+    new QueryCacheService(config),
+    examples,
+    new TranslatorService(llm),
+  );
   return { env, db, catalog, llm, examples, ask, close: () => db.onApplicationShutdown() };
 }

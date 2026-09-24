@@ -16,6 +16,8 @@ export interface ChatRequest {
   temperature?: number;
   /** Routes requests sharing a prompt prefix to the same cache shard (OpenAI). */
   cacheKey?: string;
+  /** Overrides the tier's configured reasoning effort for this call. */
+  reasoningEffort?: string;
 }
 
 export interface CallUsage {
@@ -46,19 +48,24 @@ export class UsageMeter {
     let promptTokens = 0;
     let cachedPromptTokens = 0;
     let completionTokens = 0;
-    let costUsd: number | undefined = 0;
+    let costUsd = 0;
+    let costComplete = true;
     for (const c of this.calls) {
       promptTokens += c.promptTokens;
       cachedPromptTokens += c.cachedPromptTokens;
       completionTokens += c.completionTokens;
-      costUsd = c.costUsd === undefined || costUsd === undefined ? undefined : costUsd + c.costUsd;
+      if (c.costUsd === undefined) costComplete = false;
+      else costUsd += c.costUsd;
     }
     return {
       llmCalls: this.calls.length,
       promptTokens,
       cachedPromptTokens,
       completionTokens,
-      costUsd: costUsd === undefined ? undefined : Number(costUsd.toFixed(6)),
+      /** Sum of known prices; see costComplete. */
+      costUsd: Number(costUsd.toFixed(6)),
+      /** False when some call (e.g. transcription) had no known price. */
+      costComplete,
       models: [...new Set(this.calls.map((c) => `${c.provider}:${c.model}`))],
     };
   }

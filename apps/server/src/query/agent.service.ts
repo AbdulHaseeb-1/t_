@@ -10,6 +10,7 @@ import { renderTables } from '../database/schema/schema-renderer.js';
 import { SchemaCatalogService } from '../database/schema/schema-catalog.service.js';
 import { LlmService } from '../llm/llm.service.js';
 import { UsageMeter, type UsageSummary } from '../llm/llm.types.js';
+import { detectLanguage, LANGUAGE_NAME, type Lang } from './language.js';
 import { AGENT_SYSTEM } from './prompts.js';
 import { normalizeQuestion, QueryCacheService } from './query-cache.service.js';
 import type { AnalyzeInput } from './query.dto.js';
@@ -99,12 +100,13 @@ export class AgentService {
     const started = performance.now();
     const meter = new UsageMeter();
     const schemaHash = await this.catalog.hash();
-    const key = `agent:${schemaHash}:${input.tier}:${normalizeQuestion(input.question)}`;
+    const key = `agent:${schemaHash}:${input.tier}:${input.language}:${normalizeQuestion(input.question)}`;
     if (!input.noCache) {
       const hit = this.cache.getAnswer<AnalyzeResponse>(key);
       if (hit) return { ...hit, cached: true, timings: { totalMs: 0 }, usage: meter.summary() };
     }
 
+    const lang: Lang = input.language !== 'auto' ? input.language : detectLanguage(input.question);
     const snapshot = await this.catalog.snapshot();
     const ctx = await this.catalog.contextFor(input.question);
     const messages: ChatCompletionMessageParam[] = [
@@ -113,7 +115,13 @@ export class AgentService {
         role: 'system',
         content: `Database: ${snapshot.database}\nSchema (schema.table ~rows | column type [PK] [->referenced column]):\n${ctx.text}`,
       },
-      { role: 'user', content: input.question },
+      {
+        role: 'user',
+        content:
+          lang === 'en'
+            ? input.question
+            : `${input.question}\n\nWrite the final answer in ${LANGUAGE_NAME[lang]}.`,
+      },
     ];
 
     const maxSteps = input.maxSteps ?? this.config.get('AGENT_MAX_STEPS');

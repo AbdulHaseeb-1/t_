@@ -230,7 +230,7 @@ export class LlmService {
   private async send(p: Provider, req: ChatRequest): Promise<ChatResult> {
     const model = p.models[req.tier];
     const maxTokens = req.maxTokens ?? this.config.get('LLM_MAX_OUTPUT_TOKENS');
-    const effort = p.reasoning[req.tier];
+    const effort = req.reasoningEffort ?? p.reasoning[req.tier];
 
     const body: ChatCompletionCreateParamsNonStreaming & Record<string, unknown> = {
       model,

@@ -13,6 +13,8 @@ const caseSchema = z
     ordered: z.boolean().default(false),
     tags: z.array(z.string()).default([]),
     difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+    /** Language of the question; with --answers the answer must be written in it. */
+    language: z.enum(['en', 'ur', 'ur-Latn']).optional(),
     /** Why this case exists / what it tests. */
     note: z.string().optional(),
   })

@@ -4,6 +4,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { Test } from '@nestjs/testing';
 import sql from 'mssql';
 import { FakeOpenAI } from '../src/testing/fake-openai.js';
+import { configureApp } from '../src/configure-app.js';
 
 /**
  * Full stack against a real SQL Server with a synthetic database.
@@ -17,6 +18,7 @@ const CACHE_FILE = '.cache/e2e-schema.json';
 describe.skipIf(!host)('server e2e (SQL Server)', () => {
   let app: NestFastifyApplication;
   let llm: FakeOpenAI;
+  let transcript = '';
   let script: (body: Record<string, unknown>) => {
     content?: string;
     toolCalls?: { id: string; name: string; arguments: string }[];
@@ -55,7 +57,10 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     await seed.close();
     await rm(CACHE_FILE, { force: true });
 
-    llm = new FakeOpenAI((body) => script(body));
+    llm = new FakeOpenAI(
+      (body) => script(body),
+      () => transcript,
+    );
     Object.assign(process.env, {
       NODE_ENV: 'test',
       LOG_LEVEL: 'warn',
@@ -71,11 +76,13 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       OPENAI_API_KEY: 'test',
       OPENAI_BASE_URL: await llm.start(),
       LLM_PROVIDER: 'openai',
+      MEDIA_MAX_AUDIO_MB: '1',
     });
 
     const { AppModule } = await import('../src/app.module.js');
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    await configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
@@ -241,5 +248,101 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     expect(res.status).toBe(400); // no OpenRouter key configured in this test
     const ok = await inject('PUT', '/llm/mode', { mode: 'auto' });
     expect(ok.body.mode).toBe('auto');
+  });
+
+  const upload = async (form: FormData) => {
+    const res = await app
+      .getHttpAdapter()
+      .getInstance()
+      .inject({ method: 'POST', url: '/query/ask/media', payload: form, headers: { 'x-api-key': 'secret' } });
+    return { status: res.statusCode, body: res.json() as Record<string, any> };
+  };
+  const role = (body: Record<string, unknown>) =>
+    String((body.messages as { content: unknown }[])[0].content);
+
+  it('answers a voice message in Urdu: transcribe -> SQL from the Urdu -> Urdu answer', async () => {
+    transcript = 'ہمارے کتنے آرڈر ہیں؟';
+    script = (body) => {
+      const sys = role(body);
+      if (sys.startsWith('You translate questions about a business database'))
+        return { content: 'How many orders do we have?' };
+      if (sys.startsWith('You are a precise data analyst')) return { content: 'ہمارے کل 500 آرڈر ہیں۔' };
+      return { content: '```sql\nSELECT COUNT(*) AS [Orders] FROM [dbo].[Orders]\n```' };
+    };
+    const form = new FormData();
+    form.append('context', '[]');
+    form.append('audio', new Blob([Buffer.from('ID3fake-mp3-bytes')], { type: 'audio/mpeg' }), 'voice.mp3');
+    const { status, body } = await upload(form);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      transcript: 'ہمارے کتنے آرڈر ہیں؟',
+      language: 'ur',
+      answer: 'ہمارے کل 500 آرڈر ہیں۔',
+      result: { rows: [[500]] },
+    });
+    expect(body.translatedQuestion).toBeUndefined(); // schema fits: the SQL model reads the Urdu directly
+    expect(body.usage.models).toContain('openai:gpt-4o-transcribe');
+    expect(body.usage.costComplete).toBe(false);
+    const sent = llm.transcriptions.at(-1)!;
+    expect(sent).toContain('name="model"');
+    expect(sent).toContain('gpt-4o-transcribe');
+    expect(sent).not.toContain('name="language"');
+  });
+
+  it('answers from an image: read -> English question -> SQL', async () => {
+    let visionRequest: Record<string, any> | undefined;
+    script = (body) => {
+      const sys = role(body);
+      if (sys.startsWith('You help people query')) {
+        visionRequest = body;
+        return {
+          content:
+            '{"language":"ur","question":"How many products do we sell?","display":"ہم کتنی مصنوعات بیچتے ہیں؟","extracted":"مصنوعات کے شیلف کی تصویر"}',
+        };
+      }
+      if (sys.startsWith('You are a precise data analyst')) return { content: 'We sell 5 products.' };
+      return { content: '```sql\nSELECT COUNT(*) AS [Products] FROM [dbo].[Products]\n```' };
+    };
+    const form = new FormData();
+    form.append('question', 'How many of these do we sell?');
+    form.append(
+      'image',
+      new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }),
+      'shelf.png',
+    );
+    const { status, body } = await upload(form);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({
+      image: {
+        question: 'How many products do we sell?',
+        display: 'ہم کتنی مصنوعات بیچتے ہیں؟',
+        extracted: 'مصنوعات کے شیلف کی تصویر',
+      },
+      result: { rows: [[5]] },
+      // The typed message was English, so the answer is English even though the image was Urdu.
+      language: 'en',
+    });
+    const parts = visionRequest!.messages[1].content;
+    expect(parts[1].image_url).toMatchObject({
+      detail: 'high',
+      url: expect.stringMatching(/^data:image\/png;base64,/),
+    });
+    expect(visionRequest!.reasoning_effort).toBe('low');
+  });
+
+  it('rejects empty, unsupported and oversized uploads', async () => {
+    const empty = new FormData();
+    empty.append('question', '');
+    expect((await upload(empty)).status).toBe(400);
+
+    const wrongType = new FormData();
+    wrongType.append('audio', new Blob(['hello'], { type: 'text/plain' }), 'a.txt');
+    expect((await upload(wrongType)).status).toBe(415);
+
+    const big = new FormData();
+    big.append('audio', new Blob([Buffer.alloc(1_200_000)], { type: 'audio/mpeg' }), 'long.mp3');
+    const res = await upload(big);
+    expect(res.status).toBe(413);
+    expect(res.body.message).toMatch(/too large/);
   });
 });

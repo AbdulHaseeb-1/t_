@@ -6,8 +6,9 @@ import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
 import { Header } from '../components/Header';
 import { MessageRow } from '../components/MessageRow';
+import { scriptStyle, useI18n } from '../i18n';
 import type { Message } from '../state/chat-reducer';
-import { useActiveChat, useChatActions, useChatState } from '../state/chats';
+import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
 import { fonts, type, usePalette } from '../theme';
 
 const EMPTY: Message[] = [];
@@ -17,6 +18,7 @@ const Gap = () => <View style={styles.gap} />;
 
 export default function ChatScreen() {
   const p = usePalette();
+  const { t } = useI18n();
   const state = useChatState();
   const actions = useChatActions();
   const chat = useActiveChat();
@@ -30,8 +32,8 @@ export default function ChatScreen() {
   const chats = useMemo(() => state.order.map((id) => state.chats[id]), [state.order, state.chats]);
 
   const send = useCallback(
-    (text: string) => {
-      actions.send(text);
+    (out: Outgoing) => {
+      actions.send(out);
       list.current?.scrollToOffset({ offset: 0, animated: true });
     },
     [actions],
@@ -57,14 +59,12 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Header title={chat?.title ?? 'New chat'} onMenu={openDrawer} onNewChat={newChat} canStartNew={!!chat} />
+        <Header title={chat ? chat.title || t.voiceMessage : t.appNewChat} onMenu={openDrawer} onNewChat={newChat} canStartNew={!!chat} />
         <View style={styles.fill}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={[styles.greeting, { color: p.text }]}>What would you like to know?</Text>
-              <Text style={[type.meta, { color: p.muted, textAlign: 'center' }]}>
-                Ask a question about your database in plain language.
-              </Text>
+              <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
+              <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
             </View>
           ) : (
             <FlatList

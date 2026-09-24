@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
+import { row, useI18n } from '../i18n';
 import { usePalette } from '../theme';
 
 /** Three softly pulsing dots; static when the user prefers reduced motion. */
 export function Thinking() {
   const p = usePalette();
+  const { t: strings, rtl } = useI18n();
   const [t] = useState(() => new Animated.Value(0));
   const [reduce, setReduce] = useState(false);
 
@@ -22,7 +24,7 @@ export function Thinking() {
   }, [reduce, t]);
 
   return (
-    <View style={styles.row} accessibilityLabel="Working on it" accessibilityRole="progressbar">
+    <View style={[styles.row, row(rtl)]} accessibilityLabel={strings.working} accessibilityRole="progressbar">
       {[0, 1, 2].map((i) => {
         const opacity = reduce
           ? 0.6
@@ -38,6 +40,6 @@ export function Thinking() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6, paddingVertical: 10 },
+  row: { gap: 6, paddingVertical: 10 },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
 });

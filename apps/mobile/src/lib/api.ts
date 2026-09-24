@@ -1,4 +1,5 @@
-/** Typed client for the db-intelligence server. Pure fetch: runs in the app, Jest and Node. */
+/** Typed client for the db-intelligence server. Pure fetch plus FormData: runs in the app and Jest. */
+import { Platform } from 'react-native';
 
 export interface ResultColumn {
   name: string;
@@ -15,6 +16,12 @@ export interface QueryResult {
 
 export interface AskResponse {
   question: string;
+  /** Language the answer is written in: en, ur (Urdu script) or ur-Latn (Roman Urdu). */
+  language?: 'en' | 'ur' | 'ur-Latn';
+  /** Voice messages: what the server heard. */
+  transcript?: string;
+  /** Image questions: the question read from the photo (English for SQL, `display` in the user's language). */
+  image?: { question: string; display?: string; extracted: string };
   sql: string | null;
   answer: string | null;
   result: QueryResult | null;
@@ -87,7 +94,8 @@ async function request<T>(
       ...init,
       headers: {
         Accept: 'application/json',
-        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        // FormData sets its own multipart boundary.
+        ...(init.body && typeof init.body === 'string' ? { 'Content-Type': 'application/json' } : {}),
         ...(cfg.apiKey ? { 'x-api-key': cfg.apiKey } : {}),
       },
       signal: controller.signal,
@@ -113,6 +121,37 @@ export function ask(cfg: ServerConfig, question: string, context: Turn[], signal
     { method: 'POST', body: JSON.stringify({ question, context: context.slice(-4), answer: true }) },
     signal,
   );
+}
+
+export interface MediaFile {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+/**
+ * Voice and/or image question. Native platforms stream the file from its URI;
+ * the web build reads it into a Blob first.
+ */
+export async function askMedia(
+  cfg: ServerConfig,
+  input: { question: string; context: Turn[]; audio?: MediaFile; image?: MediaFile },
+  signal?: AbortSignal,
+): Promise<AskResponse> {
+  const form = new FormData();
+  form.append('question', input.question);
+  form.append('context', JSON.stringify(input.context.slice(-4)));
+  form.append('answer', 'true');
+  for (const [field, file] of [['audio', input.audio], ['image', input.image]] as const) {
+    if (!file) continue;
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(file.uri)).blob();
+      form.append(field, new Blob([blob], { type: file.type }), file.name);
+    } else {
+      form.append(field, file as unknown as Blob);
+    }
+  }
+  return request<AskResponse>(cfg, '/query/ask/media', { method: 'POST', body: form, timeoutMs: 120_000 }, signal);
 }
 
 export interface Health {

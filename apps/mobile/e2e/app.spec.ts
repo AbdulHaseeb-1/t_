@@ -5,6 +5,12 @@ import { expect, type Page, test } from '@playwright/test';
  * Expected numbers are ground truth from the Eval_Retail fixture database.
  */
 
+/** Every run exercises real model round trips: clear the server's answer cache first. */
+const API = process.env.E2E_API_URL ?? 'http://localhost:3000';
+test.beforeAll(async ({ request }) => {
+  await request.delete(`${API}/query/cache`);
+});
+
 const SHOTS = process.env.E2E_SHOTS_DIR ?? 'test-results/shots';
 
 function watchErrors(page: Page): string[] {
@@ -28,7 +34,11 @@ async function lastAnswerDone(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    // This suite asserts English labels; Urdu (the default) has its own suite.
+    localStorage.setItem('settings.language', JSON.stringify('en'));
+  });
   await page.goto('/');
   await expect(page.getByText('What would you like to know?')).toBeVisible();
 });
@@ -116,6 +126,8 @@ test('renders tables in dark mode', async ({ browser }) => {
   const ctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('settings.language', JSON.stringify('en')));
+  await page.goto('/');
   await ask(page, 'For each sales channel, what percentage of its orders were cancelled (0-100)? Show a table.');
   await lastAnswerDone(page);
   await expect(page.getByText(/Store/).first()).toBeVisible();
@@ -131,11 +143,12 @@ test('performance: fast start, fonts loaded, long chats render quickly, typing s
   const t0 = Date.now();
   await page.goto('/');
   await expect(page.getByText('What would you like to know?')).toBeVisible();
+  // Includes Nastaliq now: Urdu is the default interface language.
   const startMs = Date.now() - t0;
   const fonts = await page.evaluate(() =>
-    ['SourceSerif4_400Regular', 'DMSans_400Regular'].map((f) => document.fonts.check(`16px ${f}`)),
+    ['SourceSerif4_400Regular', 'DMSans_400Regular', 'NotoNastaliqUrdu_400Regular'].map((f) => document.fonts.check(`16px ${f}`)),
   );
-  expect(fonts).toEqual([true, true]);
+  expect(fonts).toEqual([true, true, true]);
 
   // A 240-message conversation, seeded directly into storage.
   await page.evaluate(() => {

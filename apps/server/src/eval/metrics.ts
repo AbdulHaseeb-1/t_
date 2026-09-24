@@ -23,6 +23,8 @@ export interface VariantSummary {
   /** Share of cases whose verdict was identical across repeats. */
   stability: number;
   firstTryAccuracy: number;
+  /** Answers written in the question's language (only when answers were generated). */
+  answerLanguage?: Rate;
   byTag: Record<string, Rate>;
   byDifficulty: Record<string, Rate>;
   categories: Partial<Record<Category, number>>;
@@ -103,6 +105,12 @@ export function summarize(
     passAtK: pct(groups.filter((g) => g.some((r) => r.verdict === 'correct')).length, groups.length),
     passAllK: pct(groups.filter((g) => g.every((r) => r.verdict === 'correct')).length, groups.length),
     stability: pct(groups.filter((g) => new Set(g.map((r) => r.verdict)).size === 1).length, groups.length),
+    answerLanguage: (() => {
+      const checked = results.filter((r) => r.answerLanguageOk !== undefined);
+      if (!checked.length) return undefined;
+      const correct = checked.filter((r) => r.answerLanguageOk).length;
+      return { correct, total: checked.length, accuracy: pct(correct, checked.length) };
+    })(),
     firstTryAccuracy: pct(
       ok.filter((r) => r.attempts <= 1 && !r.trace?.emptyRecheck && !r.trace?.escalated).length,
       results.length,

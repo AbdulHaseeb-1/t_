@@ -1,13 +1,12 @@
 import { flips, summarize } from './metrics.js';
-import { renderHtml } from './report-html.js';
-import { renderMarkdown, type RunInfo } from './report-markdown.js';
+import { renderText, type RunInfo } from './report-text.js';
 import type { CaseResult } from './runner.js';
 
 const result = (variant: string, id: string, ok: boolean, sql = 'SELECT 1'): CaseResult => ({
   variant,
   repeat: 0,
   id,
-  question: `Question ${id} | with pipe`,
+  question: `Question ${id}`,
   tags: ['join'],
   difficulty: 'medium',
   expect: 'result',
@@ -27,23 +26,21 @@ const result = (variant: string, id: string, ok: boolean, sql = 'SELECT 1'): Cas
     cachedPromptTokens: 0,
     completionTokens: 40,
     costUsd: 0.0001,
+    costComplete: true,
     models: ['openai:m'],
   },
-  gold: { columns: ['a'], rows: [[1]], rowCount: 1 },
-  predicted: { columns: ['a'], rows: [[2]], rowCount: 1 },
 });
 
 const results = [
   result('baseline', 'q1', false),
   result('baseline', 'q2', true),
-  result('tuned', 'q1', true, "SELECT '</script><script>alert(1)</script>'"),
+  result('tuned', 'q1', true),
   result('tuned', 'q2', true),
 ];
 const summaries = [
   summarize('baseline', {}, results.slice(0, 2)),
   summarize('tuned', { ASK_FEWSHOT_K: '3' }, results.slice(2)),
 ];
-const flipList = flips('baseline', 'tuned', results);
 const info: RunInfo = {
   dataset: 'retail',
   database: 'Eval_Retail',
@@ -55,26 +52,26 @@ const info: RunInfo = {
   withAnswers: false,
 };
 
-describe('renderMarkdown', () => {
-  const md = renderMarkdown(info, summaries, flipList, results);
+describe('renderText', () => {
+  const text = renderText(info, summaries, flips('baseline', 'tuned', results), results);
 
-  it('includes the comparison, settings, flips and escaped failures', () => {
-    expect(md).toContain('| **baseline** | 50.0%');
-    expect(md).toContain('| **tuned** | 100.0%');
-    expect(md).toContain('`ASK_FEWSHOT_K=3`');
-    expect(md).toContain('✅ fixed in **tuned**: `q1`');
-    expect(md).toContain('Question q1 \\| with pipe');
+  it('renders aligned plain-text tables', () => {
+    const lines = text.split('\n');
+    const header = lines.find((l) => l.startsWith('variant '))!;
+    const base = lines.find((l) => l.startsWith('baseline '))!;
+    const tuned = lines.find((l) => l.startsWith('tuned '))!;
+    expect(base).toContain('50.0%');
+    expect(tuned).toContain('100.0%');
+    // Right-aligned numeric columns end at the same position as their header.
+    expect(base.indexOf('50.0%') + 5).toBe(header.indexOf('accuracy') + 'accuracy'.length);
+    expect(tuned.length).toBe(base.length);
   });
-});
 
-describe('renderHtml', () => {
-  it('embeds data safely and names the page', async () => {
-    const html = await renderHtml(info, summaries, flipList, results);
-    expect(html).toContain('<title>Retail accuracy scorecard</title>');
-    expect(html).not.toContain('__DATA__');
-    // The only literal </script> tags are the page's own two script elements.
-    expect(html.match(/<\/script>/g)).toHaveLength(2);
-    const json = /<script type="application\/json" id="eval-data">([\s\S]*?)<\/script>/.exec(html)![1];
-    expect(JSON.parse(json).results[2].sql).toContain('</script>');
+  it('lists settings, changes and failures with the SQL', () => {
+    expect(text).toContain('tuned: ASK_FEWSHOT_K=3');
+    expect(text).toContain('fixed   tuned  q1  Question q1');
+    expect(text).toContain('baseline  q1  wrong_values: columns match individually but rows differ');
+    expect(text).toContain('    SQL  SELECT 1');
+    expect(text).not.toMatch(/<[a-z]/i);
   });
 });

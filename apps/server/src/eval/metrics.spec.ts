@@ -23,6 +23,7 @@ const r = (id: string, repeat: number, ok: boolean, extra: Partial<CaseResult> =
     cachedPromptTokens: 0,
     completionTokens: 5,
     costUsd: 0.001,
+    costComplete: true,
     models: [],
   },
   ...extra,

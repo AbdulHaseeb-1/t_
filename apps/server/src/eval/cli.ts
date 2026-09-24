@@ -7,8 +7,7 @@ import type { QueryResult } from '../database/database.types.js';
 import { type Dataset, type EvalCase, loadDataset } from './dataset.js';
 import { flips, summarize, type Flip, type VariantSummary } from './metrics.js';
 import { buildPipeline } from './pipeline.js';
-import { renderHtml } from './report-html.js';
-import { renderMarkdown, type RunInfo } from './report-markdown.js';
+import { renderText, type RunInfo } from './report-text.js';
 import { type CaseResult, mapLimit, runCase } from './runner.js';
 
 const HELP = `Text-to-SQL evaluation harness
@@ -250,14 +249,14 @@ async function main(): Promise<void> {
   const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const dir = join(values.out!, `${stamp}-${dataset.name}`);
   await mkdir(dir, { recursive: true });
-  const markdown = renderMarkdown(info, summaries, flipList, results);
+  const report = renderText(info, summaries, flipList, results);
   await writeFile(
     join(dir, 'results.json'),
     JSON.stringify({ info, summaries, flips: flipList, results }, null, 2),
   );
-  await writeFile(join(dir, 'report.md'), markdown);
-  await writeFile(join(dir, 'report.html'), await renderHtml(info, summaries, flipList, results));
-  console.log(`\nReports: ${dir}/report.html  report.md  results.json`);
+  await writeFile(join(dir, 'report.txt'), report);
+  console.log(`\n\n${report}`);
+  console.log(`Saved: ${dir}/report.txt and results.json`);
 }
 
 main().catch((err: unknown) => {

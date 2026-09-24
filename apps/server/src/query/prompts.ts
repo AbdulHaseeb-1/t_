@@ -1,5 +1,6 @@
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { SchemaContext } from '../database/schema/schema.types.js';
+import { LANGUAGE_NAME, type Lang } from './language.js';
 
 /**
  * Message order is deliberate: static rules, then schema, then the question.
@@ -13,6 +14,7 @@ Rules:
 - Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE/MERGE, INTO, DECLARE, SET, EXEC, temp tables, or multiple statements.
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
+- Questions may come from Urdu or Roman Urdu speakers (with an English translation). Map Urdu words for places, statuses and categories to the stored values (e.g. پاکستان -> 'PK', منسوخ -> 'Cancelled').
 - Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled').
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
 - Apply exactly the filters the question states. Do not silently exclude rows (e.g. cancelled orders, inactive customers) unless asked.
@@ -74,16 +76,39 @@ export const EMPTY_RESULT_RECHECK = `That query ran but returned no rows. Re-che
 
 export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's question using ONLY the SQL result provided.
 - Lead with the direct answer in one sentence, then the key figures.
+- Questions may be in Urdu or Roman Urdu; the user turn says which language to answer in (default English).
 - Use a compact markdown table only when several rows matter.
 - If several rows tie for first place, name all of them.
 - If the result was sampled or capped, say so. Never invent or extrapolate numbers.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
-export function answerMessages(question: string, sql: string, table: string): ChatCompletionMessageParam[] {
+const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).
+Always start with at least one complete Urdu sentence, even when a table follows or the answer is a single number.
+Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.
+Translate table headings into Urdu.`;
+
+const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu (Urdu in Latin letters, as Pakistanis type it), clear and polite.
+Always start with at least one complete Roman Urdu sentence, even when a table or list follows.
+Keep numbers, names, codes and IDs from the data exactly as they appear.`;
+
+/** Language instruction goes in the user turn, so the system prompt stays identical (cacheable) for every language. */
+export function answerMessages(
+  question: string,
+  sql: string,
+  table: string,
+  lang: Lang = 'en',
+): ChatCompletionMessageParam[] {
+  const style = lang === 'ur' ? `\n\n${URDU_STYLE}` : lang === 'ur-Latn' ? `\n\n${ROMAN_URDU_STYLE}` : '';
   return [
     { role: 'system', content: ANSWER_SYSTEM },
-    { role: 'user', content: `Question: ${question}\n\nSQL:\n${sql}\n\nResult (TSV):\n${table}` },
+    { role: 'user', content: `Question: ${question}\n\nSQL:\n${sql}\n\nResult (TSV):\n${table}${style}` },
   ];
+}
+
+/** The question as the SQL model sees it, plus the language to refuse in. */
+export function sqlQuestion(question: string, lang: Lang): string {
+  if (lang === 'en') return question;
+  return `${question}\n\n(If you must refuse, write the CANNOT_ANSWER reason in ${LANGUAGE_NAME[lang]}.)`;
 }
 
 export const AGENT_SYSTEM = `You are a senior data analyst with read-only access to a Microsoft SQL Server database.

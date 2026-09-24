@@ -2,6 +2,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import * as theme from '../src/theme';
 
+// Native recorder and picker are replaced at the app's own seams (useVoice, media).
+jest.mock('../src/lib/useVoice', () => {
+  const React = require('react');
+  return {
+    useVoice: (onFinished: (f: unknown) => void) => {
+      const [state, setState] = React.useState('idle');
+      return {
+        state,
+        durationMs: state === 'recording' ? 4200 : 0,
+        start: async () => setState('recording'),
+        cancel: async () => setState('idle'),
+        finish: async () => {
+          setState('idle');
+          onFinished({ uri: 'file:///voice.m4a', name: 'voice.m4a', type: 'audio/m4a', durationMs: 4200 });
+        },
+        dismissDenied: () => setState('idle'),
+      };
+    },
+  };
+});
+jest.mock('../src/lib/media', () => ({
+  pickImage: async () => ({ uri: 'file:///photo.jpg', name: 'photo.jpg', type: 'image/jpeg', thumb: 'data:image/jpeg;base64,AAAA' }),
+}));
+
 jest.mock('../src/theme', () => {
   const actual = jest.requireActual('../src/theme');
   return { ...actual, usePalette: jest.fn(actual.usePalette) };
@@ -14,7 +38,10 @@ import SettingsScreen from '../src/app/settings';
 const routes = { _layout: RootLayout, index: ChatScreen, settings: SettingsScreen };
 
 interface Pending {
+  url: string;
   body: { question: string; context: { question: string; sql: string }[] };
+  /** Multipart parts for /query/ask/media, as [name, value]. */
+  parts?: [string, unknown][];
   resolve: (status: number, json: unknown) => void;
   signal: AbortSignal;
 }
@@ -37,12 +64,19 @@ function answer(sql: string, text: string, rows: unknown[][] = [[500]]) {
 beforeEach(async () => {
   requests = [];
   await AsyncStorage.clear();
-  jest.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+  // Most flows below are asserted with English labels; Urdu has its own tests.
+  await AsyncStorage.setItem('settings.language', JSON.stringify('en'));
+  jest.spyOn(globalThis, 'fetch').mockImplementation((url, init) => {
     const signal = (init as RequestInit).signal!;
+    const raw = (init as RequestInit).body;
+    const form = raw as unknown as { _parts?: [string, unknown][]; entries?: () => Iterable<[string, unknown]> };
+    const parts = typeof raw === 'string' ? undefined : (form._parts ?? Array.from(form.entries!()));
     return new Promise((resolve, reject) => {
       signal.addEventListener('abort', () => reject(new Error('aborted')));
       requests.push({
-        body: JSON.parse(String((init as RequestInit).body)),
+        url: String(url),
+        parts,
+        body: parts ? Object.fromEntries(parts.filter(([, v]) => typeof v === 'string')) : JSON.parse(String(raw)),
         signal,
         resolve: (status, json) => resolve({ ok: status < 400, status, json: async () => json } as Response),
       });
@@ -61,7 +95,9 @@ async function ask(text: string) {
 it('asks, shows progress, renders the answer and the evidence', async () => {
   renderRouter(routes, { initialUrl: '/' });
   expect(await screen.findByText('What would you like to know?')).toBeTruthy();
-  expect(screen.getByLabelText('Send')).toBeDisabled();
+  // Empty composer offers the microphone; Send appears once there is text.
+  expect(screen.getByLabelText('Record voice message')).toBeTruthy();
+  expect(screen.queryByLabelText('Send')).toBeNull();
 
   await ask('How many orders are there?');
   // Once as the message, once as the new chat's title.
@@ -156,6 +192,128 @@ it('typing re-renders only the composer, never the conversation', async () => {
   const usePalette = theme.usePalette as jest.Mock;
   usePalette.mockClear();
   for (const t of ['H', 'He', 'Hel', 'Hell', 'Hello']) fireEvent.changeText(screen.getByLabelText('Message'), t);
-  // One palette read per keystroke = the Composer alone re-rendered.
-  expect(usePalette).toHaveBeenCalledTimes(5);
+  // Two palette reads per keystroke: the Composer and its attach button - nothing in the conversation.
+  expect(usePalette).toHaveBeenCalledTimes(10);
+});
+
+/** Nearest ancestor's flattened style that sets a writing direction (spans inherit from their paragraph). */
+function paragraphStyle(el: { props: { style?: unknown }; parent: unknown }): Record<string, unknown> {
+  for (let n: any = el; n; n = n.parent) {
+    const style = Object.assign({}, ...[n.props?.style].flat(Infinity).filter(Boolean));
+    if (style.writingDirection) return style;
+  }
+  return {};
+}
+
+function answerWith(extra: Record<string, unknown>, columns: string[] = ['Orders'], rows: unknown[][] = [[500]]) {
+  return {
+    ...answer('SELECT 1', 'ok', rows),
+    result: { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 },
+    ...extra,
+  };
+}
+
+it('sends a voice message and shows what was heard', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  fireEvent.press(screen.getByLabelText('Record voice message'));
+  expect(await screen.findByText('Recording')).toBeTruthy();
+  expect(screen.getByText('0:04')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Send voice message'));
+  await waitFor(() => expect(requests).toHaveLength(1));
+
+  expect(requests[0].url).toMatch(/\/query\/ask\/media$/);
+  const audio = requests[0].parts!.find(([k]) => k === 'audio')![1];
+  // Native builds stream the file by URI (Jest's FormData may stringify the descriptor).
+  expect(typeof audio === 'string' ? audio : JSON.stringify(audio)).toMatch(/voice\.m4a|object/);
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'audio']);
+  expect(screen.getByLabelText('Voice message 0:04')).toBeTruthy();
+
+  await act(async () =>
+    requests[0].resolve(200, answerWith({ transcript: 'ہمارے کتنے آرڈر ہیں؟', language: 'ur', answer: 'ہمارے کل 500 آرڈر ہیں۔' })),
+  );
+  // Heard text fills the bubble and becomes the chat title; the answer renders right-to-left in Nastaliq.
+  expect(await screen.findAllByText('ہمارے کتنے آرڈر ہیں؟')).toHaveLength(2);
+  const urduAnswer = await screen.findByText('ہمارے کل 500 آرڈر ہیں۔');
+  expect(paragraphStyle(urduAnswer)).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular', writingDirection: 'rtl', textAlign: 'right' });
+});
+
+it('sends a photo with a question and shows what was read', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  fireEvent.press(screen.getByLabelText('Add photo'));
+  fireEvent.press(await screen.findByLabelText('Photo library'));
+  expect(await screen.findByLabelText('Remove photo')).toBeTruthy();
+
+  fireEvent.changeText(screen.getByLabelText('Message'), 'How many of these did we sell?');
+  fireEvent.press(screen.getByLabelText('Send'));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests[0].body.question).toBe('How many of these did we sell?');
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'image']);
+  expect(screen.queryByLabelText('Remove photo')).toBeNull();
+
+  await act(async () =>
+    requests[0].resolve(200, answerWith({ answer: 'We sold 12.', image: { question: 'Units sold of Gizmo', extracted: 'Gizmo box, SKU 17' } })),
+  );
+  expect(await screen.findByText('From the photo: Gizmo box, SKU 17')).toBeTruthy();
+});
+
+it('draws grouped results as a chart', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Revenue by country');
+  await act(async () =>
+    requests[0].resolve(200, answerWith({ answer: 'PK leads.' }, ['Country', 'Revenue'], [['PK', 300], ['AE', 120], ['GB', 90]])),
+  );
+  await screen.findByText('PK leads.');
+  // Charts size themselves to their container: simulate the layout pass.
+  fireEvent(screen.getByTestId('chart'), 'layout', { nativeEvent: { layout: { width: 320, height: 0, x: 0, y: 0 } } });
+  expect(await screen.findByLabelText('Bar chart')).toBeTruthy();
+});
+
+describe('in Urdu (the default)', () => {
+  beforeEach(async () => {
+    await AsyncStorage.removeItem('settings.language');
+  });
+
+  it('shows an Urdu, right-to-left interface out of the box', async () => {
+    renderRouter(routes, { initialUrl: '/' });
+    const greeting = await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
+    expect(Object.assign({}, ...[greeting.props.style].flat(Infinity).filter(Boolean))).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular' });
+    expect(screen.getByLabelText('آواز کا پیغام ریکارڈ کریں')).toBeTruthy();
+    // Header mirrors: the menu sits on the right.
+    const bar = screen.getByTestId('header');
+    expect(Object.assign({}, ...[bar.props.style].flat(Infinity).filter(Boolean)).flexDirection).toBe('row-reverse');
+  });
+
+  it('asks in Urdu and answers in Urdu', async () => {
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
+    fireEvent.changeText(screen.getByLabelText('Message'), 'پاکستان میں کتنے گاہک ہیں؟');
+    fireEvent.press(screen.getByLabelText('بھیجیں'));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.question).toBe('پاکستان میں کتنے گاہک ہیں؟');
+    await act(async () => requests[0].resolve(200, answerWith({ answer: 'پاکستان میں **115** گاہک ہیں۔', language: 'ur' })));
+    expect(await screen.findByText('115')).toBeTruthy();
+    expect(screen.getByLabelText('کوئری اور ڈیٹا دکھائیں')).toBeTruthy();
+  });
+
+  it('shows errors in Urdu', async () => {
+    (globalThis.fetch as jest.Mock).mockImplementationOnce(() => Promise.reject(new TypeError('Network request failed')));
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
+    fireEvent.changeText(screen.getByLabelText('Message'), 'کتنے آرڈر ہیں؟');
+    fireEvent.press(screen.getByLabelText('بھیجیں'));
+    expect(await screen.findByText(/سرور http:\/\/localhost:3000 تک رسائی نہیں ہو سکی/)).toBeTruthy();
+  });
+
+  it('switches to English instantly from Settings', async () => {
+    renderRouter(routes, { initialUrl: '/' });
+    await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
+    fireEvent.press(screen.getByLabelText('گفتگوئیں کھولیں'));
+    fireEvent.press(await screen.findByLabelText('سیٹنگز'));
+    fireEvent.press(await screen.findByLabelText('English'));
+    expect(await screen.findByText('Language')).toBeTruthy();
+    expect(await AsyncStorage.getItem('settings.language')).toBe(JSON.stringify('en'));
+  });
 });

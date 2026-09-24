@@ -48,6 +48,8 @@ export const fonts = {
   serif: 'SourceSerif4_400Regular',
   serifItalic: 'SourceSerif4_400Regular_Italic',
   serifSemibold: 'SourceSerif4_600SemiBold',
+  urdu: 'NotoNastaliqUrdu_400Regular',
+  urduBold: 'NotoNastaliqUrdu_700Bold',
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }),
 } as const;
 

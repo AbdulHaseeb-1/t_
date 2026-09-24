@@ -10,7 +10,9 @@ import {
   useReducer,
   useRef,
 } from 'react';
-import { ApiError, ask } from '../lib/api';
+import { useI18n } from '../i18n';
+import { ApiError, ask, askMedia, type MediaFile } from '../lib/api';
+import { describeError } from '../lib/errors';
 import { newId } from '../lib/id';
 import { storage } from '../lib/storage';
 import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState } from './chat-reducer';
@@ -19,8 +21,14 @@ import { useSettings } from './settings';
 const STORAGE_KEY = 'chats.v1';
 const SAVE_DEBOUNCE_MS = 400;
 
+export interface Outgoing {
+  text: string;
+  audio?: MediaFile & { durationMs: number };
+  image?: MediaFile & { thumb?: string };
+}
+
 interface ChatActions {
-  send(question: string): void;
+  send(input: Outgoing | string): void;
   retry(assistantId: string): void;
   stop(): void;
   newChat(): void;
@@ -34,6 +42,10 @@ const ActionsContext = createContext<ChatActions | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { server } = useSettings();
+  const { t } = useI18n();
+  const tRef = useRef(t);
+  /** Voice/photo payloads by assistant message, so Retry can resend them this session. */
+  const media = useRef(new Map<string, Pick<Outgoing, 'audio' | 'image'>>());
   const inflight = useRef(new Map<string, { chatId: string; controller: AbortController }>());
   // Event handlers read the latest committed state and settings through refs, so the
   // actions object stays stable and never re-renders its consumers.
@@ -42,7 +54,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     stateRef.current = state;
     serverRef.current = server;
-  }, [state, server]);
+    tRef.current = t;
+  }, [state, server, t]);
 
   useEffect(() => {
     void storage.get<Chat[]>(STORAGE_KEY).then((chats) => dispatch({ type: 'hydrate', chats: chats ?? [] }));
@@ -59,26 +72,44 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
     inflight.current.set(assistantId, { chatId, controller });
     const context = contextFor(stateRef.current.chats[chatId], assistantId);
-    ask(serverRef.current, question, context, controller.signal)
+    const files = media.current.get(assistantId);
+    const request =
+      files?.audio || files?.image
+        ? askMedia(serverRef.current, { question, context, audio: files.audio, image: files.image }, controller.signal)
+        : ask(serverRef.current, question, context, controller.signal);
+    request
       .then((response) => dispatchFn({ type: 'answer', chatId, assistantId, response }))
       .catch((err: unknown) => {
         const stopped = err instanceof ApiError && err.kind === 'aborted';
-        const message = err instanceof Error ? err.message : 'Something went wrong.';
-        dispatchFn({ type: 'fail', chatId, assistantId, error: stopped ? 'Stopped.' : message, stopped });
+        const message = describeError(err, tRef.current, serverRef.current.baseUrl);
+        dispatchFn({ type: 'fail', chatId, assistantId, error: message, stopped });
       })
       .finally(() => inflight.current.delete(assistantId));
   }, []);
 
   const actions = useMemo<ChatActions>(
     () => ({
-      send(question) {
-        const q = question.trim();
-        if (!q) return;
+      send(input) {
+        const out: Outgoing = typeof input === 'string' ? { text: input } : input;
+        const q = out.text.trim();
+        if (!q && !out.audio && !out.image) return;
         const chatId = stateRef.current.activeId ?? newId();
         const assistantId = newId();
+        if (out.audio || out.image) media.current.set(assistantId, { audio: out.audio, image: out.image });
         // Follow-up context = turns that already exist, so read it before dispatching.
         run(chatId, assistantId, q, dispatch);
-        dispatch({ type: 'ask', chatId, userId: newId(), assistantId, question: q, now: Date.now() });
+        dispatch({
+          type: 'ask',
+          chatId,
+          userId: newId(),
+          assistantId,
+          question: q,
+          now: Date.now(),
+          media: {
+            ...(out.audio && { audio: { durationMs: out.audio.durationMs } }),
+            ...(out.image && { image: { thumb: out.image.thumb } }),
+          },
+        });
       },
       retry(assistantId) {
         const chatId = stateRef.current.activeId;

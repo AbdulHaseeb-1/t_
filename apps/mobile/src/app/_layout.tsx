@@ -2,6 +2,8 @@
 import { DMSans_400Regular } from '@expo-google-fonts/dm-sans/400Regular';
 import { DMSans_500Medium } from '@expo-google-fonts/dm-sans/500Medium';
 import { DMSans_600SemiBold } from '@expo-google-fonts/dm-sans/600SemiBold';
+import { NotoNastaliqUrdu_400Regular } from '@expo-google-fonts/noto-nastaliq-urdu/400Regular';
+import { NotoNastaliqUrdu_700Bold } from '@expo-google-fonts/noto-nastaliq-urdu/700Bold';
 import { SourceSerif4_400Regular } from '@expo-google-fonts/source-serif-4/400Regular';
 import { SourceSerif4_400Regular_Italic } from '@expo-google-fonts/source-serif-4/400Regular_Italic';
 import { SourceSerif4_600SemiBold } from '@expo-google-fonts/source-serif-4/600SemiBold';
@@ -10,7 +12,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatProvider } from '../state/chats';
-import { SettingsProvider } from '../state/settings';
+import { I18nProvider, SettingsProvider } from '../state/settings';
 import { usePalette } from '../theme';
 
 export default function RootLayout() {
@@ -22,6 +24,8 @@ export default function RootLayout() {
     SourceSerif4_400Regular,
     SourceSerif4_400Regular_Italic,
     SourceSerif4_600SemiBold,
+    NotoNastaliqUrdu_400Regular,
+    NotoNastaliqUrdu_700Bold,
   });
   // Fonts ship inside the bundle, so this is a few frames; on failure, fall back to system fonts.
   if (!loaded && !error) return null;
@@ -29,13 +33,15 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SettingsProvider>
-        <ChatProvider>
+        <I18nProvider>
+          <ChatProvider>
           <StatusBar style="auto" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
           </Stack>
-        </ChatProvider>
+          </ChatProvider>
+        </I18nProvider>
       </SettingsProvider>
     </SafeAreaProvider>
   );

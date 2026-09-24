@@ -10,20 +10,34 @@ import type { SchemaContext } from '../database/schema/schema.types.js';
 import { LlmService } from '../llm/llm.service.js';
 import { type Tier, UsageMeter, type UsageSummary } from '../llm/llm.types.js';
 import { ExamplesService } from './examples.service.js';
+import { detectLanguage, type Lang, PHRASES } from './language.js';
 import {
   answerMessages,
   cannotAnswerReason,
   EMPTY_RESULT_RECHECK,
   extractSql,
   sqlMessages,
+  sqlQuestion,
 } from './prompts.js';
 import { normalizeQuestion, QueryCacheService } from './query-cache.service.js';
 import type { AskInput } from './query.dto.js';
 import { resultFingerprint } from './result-compare.js';
 import { toPromptTable } from './result-format.js';
+import { TranslatorService } from './translator.service.js';
+
+export interface AskOptions {
+  /** Already-English form of the question (e.g. derived from an image), skipping translation. */
+  englishQuestion?: string;
+  /** Language to answer in when it cannot be inferred from `question` (e.g. image-only input). */
+  language?: Lang;
+}
 
 export interface AskResponse {
   question: string;
+  /** Language the answer is written in. */
+  language: Lang;
+  /** English form used for reasoning, when the question was not in English. */
+  translatedQuestion?: string;
   sql: string | null;
   answer: string | null;
   result: QueryResult | null;
@@ -101,11 +115,14 @@ export class AskService {
     private readonly llm: LlmService,
     private readonly cache: QueryCacheService,
     private readonly examples: ExamplesService,
+    private readonly translator: TranslatorService,
   ) {}
 
-  async ask(input: AskInput): Promise<AskResponse> {
+  async ask(input: AskInput, options: AskOptions = {}): Promise<AskResponse> {
     const started = performance.now();
     const meter = new UsageMeter();
+    const lang: Lang =
+      input.language !== 'auto' ? input.language : (options.language ?? detectLanguage(input.question));
     const timings: Timings = { llmMs: 0, dbMs: 0 };
     const maxRows = Math.min(input.maxRows ?? this.config.get('DB_MAX_ROWS'), this.config.get('DB_MAX_ROWS'));
 
@@ -115,7 +132,7 @@ export class AskService {
       ? `:${createHash('sha1').update(JSON.stringify(input.context)).digest('hex').slice(0, 12)}`
       : '';
     const qKey = `${schemaHash}:${normalizeQuestion(input.question)}${contextKey}`;
-    const answerKey = `${qKey}:${maxRows}:${input.answer}`;
+    const answerKey = `${qKey}:${maxRows}:${input.answer}:${lang}`;
     const trace: Trace = { candidates: 0, repairs: 0, emptyRecheck: false, escalated: false, examples: 0 };
 
     if (!input.noCache) {
@@ -130,9 +147,25 @@ export class AskService {
       }
     }
 
-    const ctx = await this.catalog.contextFor(input.question);
+    // Measured on the Urdu eval: the SQL model is more accurate on the original Urdu than on a
+    // translation (97.9% vs 95.8%). Translation is only used to pick tables when the schema is
+    // too large to send whole, because keyword matching needs English words.
+    let ctx = await this.catalog.contextFor(options.englishQuestion ?? input.question);
+    let english = options.englishQuestion;
+    if (!ctx.full && !english && lang !== 'en' && this.config.get('ASK_TRANSLATE_NON_ENGLISH')) {
+      english = await this.timed(timings, 'llmMs', () =>
+        this.translator.toEnglish(input.question, lang, meter),
+      );
+      ctx = await this.catalog.contextFor(english);
+    }
+    const translatedQuestion = english && english !== input.question ? english : undefined;
+    const sqlText = options.englishQuestion ?? input.question;
     const done = (r: Pick<AskResponse, 'sql' | 'answer' | 'result' | 'cache' | 'attempts'>) =>
-      this.finish(input, answerKey, started, timings, meter, trace, ctx, r);
+      this.finish(input, answerKey, started, timings, meter, trace, ctx, {
+        ...r,
+        language: lang,
+        translatedQuestion,
+      });
 
     // SQL cache: live data, zero tokens.
     const cachedSql = input.noCache ? undefined : this.cache.getSql(qKey);
@@ -149,9 +182,16 @@ export class AskService {
     }
 
     const snapshot = await this.catalog.snapshot();
-    const shots = this.examples.retrieve(input.question);
+    const shots = this.examples.retrieve(english ?? input.question);
     trace.examples = shots.length;
-    const messages = sqlMessages(snapshot.database, ctx, input.question, maxRows, shots, input.context);
+    const messages = sqlMessages(
+      snapshot.database,
+      ctx,
+      sqlQuestion(sqlText, lang),
+      maxRows,
+      shots,
+      input.context,
+    );
     const cacheKey = `sql:${schemaHash}`;
 
     let maxAttempts = 1 + this.config.get('ASK_MAX_REPAIRS');
@@ -186,7 +226,7 @@ export class AskService {
         }
         return done({
           sql: null,
-          answer: `I can't answer that from this database: ${round.refusal}`,
+          answer: `${PHRASES[lang].cannotAnswer} ${round.refusal}`,
           result: null,
           cache: null,
           attempts,
@@ -223,7 +263,7 @@ export class AskService {
 
     this.cache.setSql(qKey, chosen.sql);
     const answer = input.answer
-      ? await this.phrase(input.question, chosen.sql, chosen.result!, meter, timings)
+      ? await this.phrase(input.question, chosen.sql, chosen.result!, meter, timings, lang)
       : null;
     return done({ sql: chosen.sql, answer, result: chosen.result!, cache: null, attempts });
   }
@@ -295,16 +335,22 @@ export class AskService {
     result: QueryResult,
     meter: UsageMeter,
     timings: Timings,
+    lang: Lang = 'en',
   ): Promise<string> {
-    if (result.rowCount === 0) return 'The query returned no rows.';
-    // A single value needs no language model.
-    if (result.rowCount === 1 && result.columns.length === 1) {
+    if (result.rowCount === 0) return PHRASES[lang].noRows;
+    // A single value needs no language model (English only: Urdu needs a natural label).
+    if (lang === 'en' && result.rowCount === 1 && result.columns.length === 1) {
       return `${humanizeColumn(result.columns[0].name)}: **${formatScalar(result.rows[0][0])}**`;
     }
     const table = toPromptTable(result, this.config.get('ASK_ANSWER_MAX_ROWS'));
     const res = await this.timed(timings, 'llmMs', () =>
       this.llm.chat(
-        { tier: 'fast', messages: answerMessages(question, sql, table), temperature: 0.2, maxTokens: 700 },
+        {
+          tier: 'fast',
+          messages: answerMessages(question, sql, table, lang),
+          temperature: 0.2,
+          maxTokens: 900,
+        },
         meter,
       ),
     );
@@ -319,7 +365,10 @@ export class AskService {
     meter: UsageMeter,
     trace: Trace,
     ctx: SchemaContext,
-    r: Pick<AskResponse, 'sql' | 'answer' | 'result' | 'cache' | 'attempts'>,
+    r: Pick<
+      AskResponse,
+      'sql' | 'answer' | 'result' | 'cache' | 'attempts' | 'language' | 'translatedQuestion'
+    >,
   ): AskResponse {
     const response: AskResponse = {
       question: input.question,
