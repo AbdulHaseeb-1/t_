@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { ApiKeyGuard } from './common/api-key.guard.js';
 import { AppConfig } from './config/app-config.js';
+import { BenchModule } from './bench/bench.module.js';
 import { AppConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
@@ -35,6 +36,7 @@ import { QueryModule } from './query/query.module.js';
     LlmModule,
     DatabaseModule,
     QueryModule,
+    BenchModule,
   ],
   controllers: [HealthController],
   providers: [

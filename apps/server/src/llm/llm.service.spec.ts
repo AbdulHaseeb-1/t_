@@ -96,6 +96,31 @@ describe('LlmService', () => {
     expect(openai.requests[2]).not.toHaveProperty('temperature');
   });
 
+  it('drops reasoning_effort for non-reasoning models that reject it without naming a param', async () => {
+    // gpt-4.1 / gpt-4o: 400 with param null and the argument named only in the message.
+    openai = new FakeOpenAI((body) =>
+      'reasoning_effort' in body
+        ? { status: 400, errorMessage: 'Unrecognized request argument supplied: reasoning_effort' }
+        : { content: 'ok' },
+    );
+    const llm = await service({ OPENAI_MODEL_FAST: 'gpt-4.1-nano', LLM_REASONING_EFFORT_FAST: 'none' });
+    const r = await llm.chat({ tier: 'fast', messages });
+    expect(r.message.content).toBe('ok');
+    expect(openai.requests).toHaveLength(2);
+    expect(openai.requests[1]).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('recovers every parallel call when a model rejects a parameter (none gives up because another learned first)', async () => {
+    openai = new FakeOpenAI((body) =>
+      'reasoning_effort' in body
+        ? { status: 400, errorMessage: 'Unrecognized request argument supplied: reasoning_effort' }
+        : { content: 'ok' },
+    );
+    const llm = await service({ OPENAI_MODEL_FAST: 'gpt-4.1-mini', LLM_REASONING_EFFORT_FAST: 'none' });
+    const results = await Promise.all(Array.from({ length: 6 }, () => llm.chat({ tier: 'fast', messages })));
+    expect(results.map((r) => r.message.content)).toEqual(Array(6).fill('ok'));
+  });
+
   it('disables reasoning for tool calls when the model requires it, without affecting plain calls', async () => {
     openai = new FakeOpenAI((body) =>
       body.tools && body.reasoning_effort !== 'none'

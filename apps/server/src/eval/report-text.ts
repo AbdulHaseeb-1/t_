@@ -10,6 +10,10 @@ export interface RunInfo {
   cases: number;
   models: string[];
   withAnswers: boolean;
+  /** Database engine the run used (older reports: unset = mssql). */
+  engine?: 'mssql' | 'duckdb';
+  /** Where the run was started from. */
+  source?: 'cli' | 'web';
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;

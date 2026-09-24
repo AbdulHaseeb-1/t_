@@ -6,7 +6,7 @@ Ask questions of a SQL Server database in plain language and get correct numbers
 apps/
   server/   NestJS 12 + Fastify API: question -> SQL -> answer, voice and photo input
   mobile/   Ask Data: Expo SDK 57 app (Android APK, iOS, web), Urdu-first
-  web/      placeholder for a separate web frontend (the mobile app also builds for web)
+  web/      Model Bench: web tool to benchmark models on your database (served at /bench)
 infra/
   docker-compose.yml               SQL Server 2022 (+ optional API container)
   mssql/attach.sh                  attaches MDS_EPD_SQL16.mdf and creates a read-only login
@@ -86,6 +86,29 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | GET | `/health` | DB + LLM status (no API key needed) | none |
 
 Every `/query/ask` and `/query/analyze` response includes `usage` (prompt/cached/completion tokens, `costUsd`, models, and a per-call breakdown tagged `sql`, `answer`, `recheck`, `translate`, `transcribe`, `vision` or `agent`) and `timings` (`llmMs`, `dbMs`, `mediaMs`). `/query/ask` also reports the `schema` context sent (whole schema or retrieved tables, with its token size) and the conversation `context` (earlier turns, engine).
+
+## Model benchmark (web)
+
+`/bench` is a browser tool for choosing the model behind the app. Enable it with `BENCH_ENABLED=true`, after `pnpm --filter web build`. It runs a question set with verified gold SQL through up to six models from your OpenAI account or OpenRouter's catalog, using the production pipeline, and compares them:
+
+- accuracy with 95% confidence intervals
+- first-try rate and stability
+- median and p95 time
+- cost per question and per correct answer
+- an accuracy-vs-cost frontier
+- accuracy by topic and difficulty
+- failure types
+- a case-by-case drill-down: gold vs each model's SQL and rows
+
+Its **Playground** asks one question of several models side by side and reports which ones returned the same data. Runs are saved next to CLI eval reports. See [apps/web/README.md](apps/web/README.md).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/bench/api/config`, `/models`, `/datasets`, `/datasets/:file` | engine, keys, model catalog with prices, question sets |
+| POST | `/bench/api/runs` | `{dataset, models: [{provider, model, reasoningEffort?}], repeats, concurrency, caseIds?, features?}` → starts a run |
+| GET | `/bench/api/runs`, `/runs/:id?since=n` | history; live progress (only results after index n) |
+| POST / DELETE | `/bench/api/runs/:id/cancel`, `/runs/:id` | cancel a run, delete a saved report |
+| POST | `/bench/api/compare` | `{question, models}` → each model's SQL, rows, time, cost, and which agree |
 
 ## Speech to text
 

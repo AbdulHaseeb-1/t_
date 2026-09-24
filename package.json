@@ -7,15 +7,16 @@
   },
   "scripts": {
     "dev": "pnpm --filter server start:dev",
-    "build": "pnpm --filter server build",
+    "build": "pnpm --filter server build && pnpm --filter web build",
     "start": "pnpm --filter server start:prod",
-    "test": "pnpm --filter server test && pnpm --filter mobile test",
+    "test": "pnpm --filter server test && pnpm --filter mobile test && pnpm --filter web test",
     "test:e2e": "pnpm --filter server test:e2e",
-    "lint": "pnpm --filter server lint && pnpm --filter mobile lint",
-    "typecheck": "pnpm --filter server typecheck && pnpm --filter mobile typecheck",
+    "lint": "pnpm --filter server lint && pnpm --filter mobile lint && pnpm --filter web lint",
+    "typecheck": "pnpm --filter server typecheck && pnpm --filter mobile typecheck && pnpm --filter web typecheck",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.yml down",
     "mobile": "pnpm --filter mobile start",
-    "mobile:web": "pnpm --filter mobile web"
+    "mobile:web": "pnpm --filter mobile web",
+    "bench": "pnpm --filter web dev"
   }
 }

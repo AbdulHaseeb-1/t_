@@ -167,6 +167,18 @@ export const envSchema = z.object({
   /** Question -> full answer. Short-lived because data changes. */
   CACHE_ANSWER_TTL_S: z.coerce.number().int().nonnegative().default(120),
 
+  /**
+   * Web model benchmark at /bench (runs the eval harness from the browser and
+   * spends API credits), off by default. Protected by API_KEY like every route.
+   */
+  BENCH_ENABLED: bool(false),
+  BENCH_DATASETS_DIR: z.string().default('eval/datasets'),
+  BENCH_REPORTS_DIR: z.string().default('eval/reports'),
+  /** Built web UI (apps/web/dist), served at /bench when present. */
+  BENCH_UI_DIR: z.string().default('../web/dist'),
+  /** Upper bound on cases x repeats x models per run, to cap spend. */
+  BENCH_MAX_CASE_RUNS: z.coerce.number().int().positive().default(2000),
+
   ASK_MAX_REPAIRS: z.coerce.number().int().nonnegative().default(2),
   ASK_ANSWER_MAX_ROWS: z.coerce.number().int().positive().default(60),
   AGENT_MAX_STEPS: z.coerce.number().int().positive().default(8),

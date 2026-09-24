@@ -24,3 +24,7 @@ infra/mssql/data/*
 *.duckdb
 *.duckdb.wal
 *.duckdb.tmp-*
+
+# Playwright output
+test-results/
+playwright-report/

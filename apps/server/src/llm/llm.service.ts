@@ -37,7 +37,8 @@ const DROPPABLE_PARAMS = new Set([
 /** Returns the rejected optional parameter, if the error is an "unsupported parameter/value" 400. */
 export function rejectedParam(err: unknown): string | undefined {
   if (!(err instanceof APIError) || err.status !== 400) return undefined;
-  const candidate = err.param ?? /'(\w+)'/.exec(err.message)?.[1];
+  // OpenAI phrases it several ways: param field set, 'quoted' name, or "Unrecognized request argument supplied: reasoning_effort".
+  const candidate = err.param ?? /'(\w+)'/.exec(err.message)?.[1] ?? /argument supplied:\s*(\w+)/i.exec(err.message)?.[1];
   if (!candidate || !DROPPABLE_PARAMS.has(candidate)) return undefined;
   return /unsupported|not supported|does not support|unrecognized|unknown/i.test(err.message)
     ? candidate
@@ -219,17 +220,24 @@ export class LlmService {
       try {
         return await this.send(p, req);
       } catch (err) {
-        if (req.tools?.length && toolsNeedNoReasoning(err) && !this.noReasoningWithTools.has(key)) {
-          this.noReasoningWithTools.add(key);
-          this.logger.warn(`${key} needs reasoning_effort=none with tools; applying from now on`);
+        // A parallel call may have learned the fix while this one was in flight: retry either way.
+        // The next attempt omits what was learned, so the same error cannot repeat forever.
+        if (attempt >= DROPPABLE_PARAMS.size) throw err;
+        if (req.tools?.length && toolsNeedNoReasoning(err)) {
+          if (!this.noReasoningWithTools.has(key)) {
+            this.noReasoningWithTools.add(key);
+            this.logger.warn(`${key} needs reasoning_effort=none with tools; applying from now on`);
+          }
           continue;
         }
         const param = rejectedParam(err);
+        if (!param) throw err;
         const known = this.unsupported.get(key) ?? new Set<string>();
-        if (!param || known.has(param) || attempt >= DROPPABLE_PARAMS.size) throw err;
-        known.add(param);
-        this.unsupported.set(key, known);
-        this.logger.warn(`${key} rejects "${param}"; omitting it from now on`);
+        if (!known.has(param)) {
+          known.add(param);
+          this.unsupported.set(key, known);
+          this.logger.warn(`${key} rejects "${param}"; omitting it from now on`);
+        }
       }
     }
   }
@@ -281,7 +289,8 @@ export class LlmService {
         ? u.cost
         : await this.pricing.estimate(
             p.name,
-            res.model ?? model,
+            // Priced by the model we asked for: the response may name a dated snapshot the catalog lacks.
+            model,
             promptTokens,
             cachedPromptTokens,
             completionTokens,
