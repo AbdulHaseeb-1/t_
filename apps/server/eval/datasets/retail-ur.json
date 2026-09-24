@@ -1,0 +1,539 @@
+{
+  "name": "retail-ur",
+  "database": "Eval_Retail",
+  "description": "The retail questions in Urdu script (40) and Roman Urdu (8), scored against the same gold SQL as the English set.",
+  "fixture": "../fixtures/retail.sql",
+  "cases": [
+    {
+      "id": "ur-q01",
+      "question": "ہمارے کتنے گاہک ہیں؟",
+      "language": "ur",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers"
+    },
+    {
+      "id": "ur-q02",
+      "question": "پاکستان میں ہمارے کتنے گاہک ہیں؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE CountryCode = 'PK'"
+    },
+    {
+      "id": "ur-q03",
+      "question": "کتنے فعال کارپوریٹ گاہک ہیں؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE Segment = 'Corporate' AND IsActive = 1"
+    },
+    {
+      "id": "ur-q04",
+      "question": "2025 میں کتنے آرڈر منسوخ ہوئے؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Cancelled' AND OrderDate >= '2025-01-01' AND OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "ur-q05",
+      "question": "تمام آرڈر آئٹمز کی کل مجموعی فروخت کتنی ہے، یعنی کسی بھی رعایت سے پہلے مقدار ضرب یونٹ قیمت؟",
+      "language": "ur",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(Quantity * UnitPrice) AS GrossSales FROM sales.OrderItems"
+    },
+    {
+      "id": "ur-q06",
+      "question": "2024 میں دیے گئے جو آرڈر ڈیلیور ہو چکے ہیں، ان سے کل خالص آمدنی (مقدار × یونٹ قیمت × (1 − رعایت)) کتنی تھی؟",
+      "language": "ur",
+      "tags": [
+        "join",
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.Status = 'Delivered' AND o.OrderDate >= '2024-01-01' AND o.OrderDate < '2025-01-01'"
+    },
+    {
+      "id": "ur-q07",
+      "question": "2025 میں گاہک کے ملک کوڈ کے لحاظ سے خالص آمدنی کتنی رہی؟",
+      "language": "ur",
+      "tags": [
+        "join",
+        "aggregation",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT c.CountryCode, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY c.CountryCode"
+    },
+    {
+      "id": "ur-q08",
+      "question": "کن 5 مصنوعات نے مجموعی طور پر سب سے زیادہ خالص آمدنی دی؟ مصنوعات کا نام اور خالص آمدنی دکھائیں، سب سے زیادہ والی پہلے۔",
+      "language": "ur",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (5) WITH TIES p.ProductName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId GROUP BY p.ProductName ORDER BY NetRevenue DESC",
+      "ordered": true
+    },
+    {
+      "id": "ur-q09",
+      "question": "2024 کے کس مہینے میں سب سے زیادہ آرڈر آئے؟ مہینے کا نمبر اور آرڈرز کی تعداد بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "ranking",
+        "ties",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (1) WITH TIES MONTH(OrderDate) AS MonthNumber, COUNT(*) AS Orders FROM sales.Orders WHERE OrderDate >= '2024-01-01' AND OrderDate < '2025-01-01' GROUP BY MONTH(OrderDate) ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "ur-q10",
+      "question": "فی آرڈر لائن اوسط مقدار کتنی ہے؟",
+      "language": "ur",
+      "tags": [
+        "integer-division",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT AVG(CAST(Quantity AS decimal(18,4))) AS AvgQuantity FROM sales.OrderItems"
+    },
+    {
+      "id": "ur-q11",
+      "question": "کل آرڈرز میں سے کتنے فیصد ویب چینل کے ذریعے دیے گئے؟ جواب 0 سے 100 کے درمیان عدد میں دیں۔",
+      "language": "ur",
+      "tags": [
+        "percentage",
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT 100.0 * SUM(CASE WHEN Channel = 'Web' THEN 1 ELSE 0 END) / COUNT(*) AS WebPct FROM sales.Orders"
+    },
+    {
+      "id": "ur-q12",
+      "question": "ہر سیلز چینل کے لیے بتائیں کہ اس کے کتنے فیصد آرڈر منسوخ ہوئے (0 سے 100)؟",
+      "language": "ur",
+      "tags": [
+        "percentage",
+        "aggregation"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT Channel, 100.0 * SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) / COUNT(*) AS CancelledPct FROM sales.Orders GROUP BY Channel"
+    },
+    {
+      "id": "ur-q13",
+      "question": "کتنے گاہکوں نے کبھی کوئی آرڈر نہیں دیا؟",
+      "language": "ur",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers c WHERE NOT EXISTS (SELECT 1 FROM sales.Orders o WHERE o.CustomerId = c.CustomerId)"
+    },
+    {
+      "id": "ur-q14",
+      "question": "ان مصنوعات کے نام بتائیں جو کبھی فروخت نہیں ہوئیں۔",
+      "language": "ur",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT p.ProductName FROM catalog.Products p WHERE NOT EXISTS (SELECT 1 FROM sales.OrderItems oi WHERE oi.ProductId = p.ProductId)"
+    },
+    {
+      "id": "ur-q15",
+      "question": "ہر سیلز ریپ کا پورا نام اس کے مینیجر کے پورے نام کے ساتھ دکھائیں۔",
+      "language": "ur",
+      "tags": [
+        "self-join",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT e.FullName AS SalesRep, m.FullName AS Manager FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId WHERE e.Title = 'Sales Rep'"
+    },
+    {
+      "id": "ur-q16",
+      "question": "کس مینیجر کے براہِ راست ماتحت سب سے زیادہ ہیں؟ مینیجر کا نام اور ماتحتوں کی تعداد بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "self-join",
+        "ties",
+        "ranking"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP (1) WITH TIES m.FullName, COUNT(*) AS DirectReports FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId GROUP BY m.EmployeeId, m.FullName ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "ur-q17",
+      "question": "ہر اعلیٰ سطح کی پروڈکٹ کیٹیگری (یعنی جن کی کوئی پیرنٹ کیٹیگری نہیں) کی کل خالص آمدنی کتنی ہے؟",
+      "language": "ur",
+      "tags": [
+        "hierarchy",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName"
+    },
+    {
+      "id": "ur-q18",
+      "question": "کن گاہکوں نے 40 سے زیادہ آرڈر دیے؟ گاہک کی آئی ڈی اور آرڈرز کی تعداد بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT CustomerId, COUNT(*) AS Orders FROM sales.Orders GROUP BY CustomerId HAVING COUNT(*) > 40"
+    },
+    {
+      "id": "ur-q19",
+      "question": "ہر ریجن میں کس سیلز ریپ نے سب سے زیادہ خالص آمدنی حاصل کی؟ ریجن کا نام، ریپ کا نام اور خالص آمدنی دکھائیں۔",
+      "language": "ur",
+      "tags": [
+        "top-n-per-group",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "WITH r AS (SELECT reg.RegionName, e.FullName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue, RANK() OVER (PARTITION BY reg.RegionName ORDER BY SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) DESC) AS rk FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN hr.Employees e ON e.EmployeeId = o.SalesRepId JOIN sales.Regions reg ON reg.RegionId = e.RegionId GROUP BY reg.RegionName, e.EmployeeId, e.FullName) SELECT RegionName, FullName, NetRevenue FROM r WHERE rk = 1"
+    },
+    {
+      "id": "ur-q20",
+      "question": "2025 کی ماہانہ خالص آمدنی رننگ ٹوٹل کے ساتھ دکھائیں: مہینے کا نمبر، آمدنی اور مجموعی آمدنی، مہینوں کی ترتیب سے۔",
+      "language": "ur",
+      "tags": [
+        "window",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "gold": "WITH m AS (SELECT MONTH(o.OrderDate) AS MonthNumber, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY MONTH(o.OrderDate)) SELECT MonthNumber, NetRevenue, SUM(NetRevenue) OVER (ORDER BY MonthNumber ROWS UNBOUNDED PRECEDING) AS CumulativeRevenue FROM m",
+      "ordered": true
+    },
+    {
+      "id": "ur-q21",
+      "question": "ہر چینل کے لیے 2024 اور 2025 کی خالص آمدنی کا موازنہ کریں: چینل، 2024 کی آمدنی اور 2025 کی آمدنی دکھائیں۔",
+      "language": "ur",
+      "tags": [
+        "pivot",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT o.Channel, SUM(CASE WHEN o.OrderDate < '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2024, SUM(CASE WHEN o.OrderDate >= '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2025 FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2024-01-01' AND o.OrderDate < '2026-01-01' GROUP BY o.Channel"
+    },
+    {
+      "id": "ur-q22",
+      "question": "دسمبر 2025 میں کتنی مختلف مصنوعات فروخت ہوئیں؟",
+      "language": "ur",
+      "tags": [
+        "distinct",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(DISTINCT oi.ProductId) AS Products FROM sales.OrderItems oi JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE o.OrderDate >= '2025-12-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "ur-q23",
+      "question": "کتنے آرڈرز کے ساتھ کوئی سیلز ریپ منسلک نہیں ہے؟",
+      "language": "ur",
+      "tags": [
+        "null-handling"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE SalesRepId IS NULL"
+    },
+    {
+      "id": "ur-q24",
+      "question": "کتنے آرڈرز کو بھیجنے میں 3 دن سے زیادہ لگے، آرڈر کی تاریخ سے شپمنٹ کی تاریخ تک دن گن کر؟",
+      "language": "ur",
+      "tags": [
+        "date",
+        "null-handling"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE ShippedDate IS NOT NULL AND DATEDIFF(day, CAST(OrderDate AS date), ShippedDate) > 3"
+    },
+    {
+      "id": "ur-q25",
+      "question": "ڈیجیٹل والٹ کے ذریعے کل کتنی رقم ادا کی گئی؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(Amount) AS Paid FROM sales.Payments WHERE Method = 'Wallet'"
+    },
+    {
+      "id": "ur-q26",
+      "question": "کتنے آرڈرز کی ادائیگی ایک سے زیادہ ادائیگیوں میں ہوئی؟",
+      "language": "ur",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Orders FROM (SELECT OrderId FROM sales.Payments GROUP BY OrderId HAVING COUNT(*) > 1) x"
+    },
+    {
+      "id": "ur-q27",
+      "question": "2025 میں دبئی کے گاہکوں سے لیپ ٹاپس کی خالص آمدنی کتنی تھی؟",
+      "language": "ur",
+      "tags": [
+        "multi-hop",
+        "value-mapping"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories cat ON cat.CategoryId = p.CategoryId WHERE c.City = 'Dubai' AND cat.CategoryName = 'Laptops' AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "ur-q28",
+      "question": "اسٹور میں دیے گئے آرڈرز کی فی آرڈر اوسط خالص آمدنی کتنی ہے؟",
+      "language": "ur",
+      "tags": [
+        "view",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT AVG(NetRevenue) AS AvgOrderRevenue FROM sales.vOrderRevenue WHERE Channel = 'Store'"
+    },
+    {
+      "id": "ur-q29",
+      "question": "لائف ٹائم خالص آمدنی کے لحاظ سے ہمارے سرفہرست 3 گاہک کون ہیں؟ پہلا نام، آخری نام اور آمدنی دکھائیں۔",
+      "language": "ur",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (3) WITH TIES c.FirstName, c.LastName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId GROUP BY c.CustomerId, c.FirstName, c.LastName ORDER BY NetRevenue DESC"
+    },
+    {
+      "id": "ur-q30",
+      "question": "آڈیو کیٹیگری کا گراس مارجن کتنا ہے، یعنی خالص آمدنی میں سے پروڈکٹ کی یونٹ لاگت ضرب مقدار نکال کر؟",
+      "language": "ur",
+      "tags": [
+        "derived-metric",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) - p.UnitCost * oi.Quantity) AS GrossMargin FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId WHERE c.CategoryName = 'Audio'"
+    },
+    {
+      "id": "ur-q31",
+      "question": "کتنی آرڈر لائنوں پر 20 فیصد رعایت تھی؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping",
+        "units"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Lines FROM sales.OrderItems WHERE DiscountPct = 0.20"
+    },
+    {
+      "id": "ur-q32",
+      "question": "ہر سال کتنے گاہکوں نے سائن اپ کیا؟ سال اور تعداد دکھائیں۔",
+      "language": "ur",
+      "tags": [
+        "date",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT YEAR(SignupDate) AS SignupYear, COUNT(*) AS Customers FROM sales.Customers GROUP BY YEAR(SignupDate)"
+    },
+    {
+      "id": "ur-q33",
+      "question": "کتنے گاہک کسی دوسرے گاہک کے ریفرنس سے آئے؟",
+      "language": "ur",
+      "tags": [
+        "null-handling",
+        "self-join"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE ReferredByCustomerId IS NOT NULL"
+    },
+    {
+      "id": "ur-q34",
+      "question": "کس گاہک نے سب سے زیادہ دوسرے گاہکوں کو ریفر کیا؟ ان کا پہلا نام، آخری نام اور ریفرلز کی تعداد بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "self-join",
+        "ranking",
+        "ties"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP (1) WITH TIES r.FirstName, r.LastName, COUNT(*) AS Referrals FROM sales.Customers c JOIN sales.Customers r ON r.CustomerId = c.ReferredByCustomerId GROUP BY r.CustomerId, r.FirstName, r.LastName ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "ur-q35",
+      "question": "بند (ڈسکنٹینیو) مصنوعات کے کتنے یونٹ سال 2025 کے دوران فروخت ہوئے؟ ہر آرڈر لائن گنیں، چاہے آرڈر کی حیثیت کچھ بھی ہو۔",
+      "language": "ur",
+      "tags": [
+        "join",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(oi.Quantity) AS Units FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE p.IsDiscontinued = 1 AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "ur-q36",
+      "question": "2025 کی خالص آمدنی میں ہر گاہک ریجن کا حصہ کتنا تھا؟ ریجن کا نام اور فیصد (0 سے 100) بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "percentage",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT reg.RegionName, 100.0 * SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) / SUM(SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct))) OVER () AS SharePct FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN sales.Regions reg ON reg.RegionId = c.RegionId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY reg.RegionName"
+    },
+    {
+      "id": "ur-q37",
+      "question": "2021 سے پہلے کتنے سیلز ریپ بھرتی کیے گئے؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Reps FROM hr.Employees WHERE Title = 'Sales Rep' AND HireDate < '2021-01-01'"
+    },
+    {
+      "id": "ur-q38",
+      "question": "کتنے آرڈر ابھی تک زیرِ التوا ہیں؟",
+      "language": "ur",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Pending'"
+    },
+    {
+      "id": "ur-q39",
+      "question": "ہمارے گاہکوں کی اوسط عمر کیا ہے؟",
+      "language": "ur",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal"
+    },
+    {
+      "id": "ur-q40",
+      "question": "کون سا سپلائر سب سے زیادہ مصنوعات فراہم کرتا ہے؟",
+      "language": "ur",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal"
+    },
+    {
+      "id": "r02",
+      "question": "Pakistan mein hamare kitne customers hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "value-mapping",
+        "filter",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE CountryCode = 'PK'"
+    },
+    {
+      "id": "r04",
+      "question": "2025 mein kitne orders cancel hue?",
+      "language": "ur-Latn",
+      "tags": [
+        "value-mapping",
+        "date",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Cancelled' AND OrderDate >= '2025-01-01' AND OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "r11",
+      "question": "Kul orders mein se kitne percent web channel se aaye? Jawab 0 se 100 ke darmiyan number mein dein.",
+      "language": "ur-Latn",
+      "tags": [
+        "percentage",
+        "value-mapping",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT 100.0 * SUM(CASE WHEN Channel = 'Web' THEN 1 ELSE 0 END) / COUNT(*) AS WebPct FROM sales.Orders"
+    },
+    {
+      "id": "r14",
+      "question": "Wo products ke naam batao jo kabhi nahi bike.",
+      "language": "ur-Latn",
+      "tags": [
+        "anti-join",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT p.ProductName FROM catalog.Products p WHERE NOT EXISTS (SELECT 1 FROM sales.OrderItems oi WHERE oi.ProductId = p.ProductId)"
+    },
+    {
+      "id": "r19",
+      "question": "Har region mein sab se zyada net revenue kis sales rep ne kamaya? Region ka naam, rep ka naam aur net revenue dikhayein.",
+      "language": "ur-Latn",
+      "tags": [
+        "top-n-per-group",
+        "window",
+        "multi-hop",
+        "roman-urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "WITH r AS (SELECT reg.RegionName, e.FullName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue, RANK() OVER (PARTITION BY reg.RegionName ORDER BY SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) DESC) AS rk FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN hr.Employees e ON e.EmployeeId = o.SalesRepId JOIN sales.Regions reg ON reg.RegionId = e.RegionId GROUP BY reg.RegionName, e.EmployeeId, e.FullName) SELECT RegionName, FullName, NetRevenue FROM r WHERE rk = 1"
+    },
+    {
+      "id": "r25",
+      "question": "Digital wallet se kul kitni payment hui?",
+      "language": "ur-Latn",
+      "tags": [
+        "value-mapping",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(Amount) AS Paid FROM sales.Payments WHERE Method = 'Wallet'"
+    },
+    {
+      "id": "r38",
+      "question": "Kitne orders abhi tak pending hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "value-mapping",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Pending'"
+    },
+    {
+      "id": "r39",
+      "question": "Hamare customers ki average age kya hai?",
+      "language": "ur-Latn",
+      "tags": [
+        "unanswerable",
+        "roman-urdu"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal"
+    }
+  ]
+}

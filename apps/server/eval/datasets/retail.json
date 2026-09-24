@@ -1,0 +1,406 @@
+{
+  "name": "retail",
+  "database": "Eval_Retail",
+  "description": "Synthetic retail database: 3 schemas, 9 tables, 1 view. Tests value mapping, joins, self-joins, anti-joins, windows, ties, integer division, units, NULLs and refusals.",
+  "fixture": "../fixtures/retail.sql",
+  "cases": [
+    {
+      "id": "q01",
+      "question": "How many customers do we have?",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers"
+    },
+    {
+      "id": "q02",
+      "question": "How many customers are based in Pakistan?",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE CountryCode = 'PK'"
+    },
+    {
+      "id": "q03",
+      "question": "How many active corporate customers are there?",
+      "tags": [
+        "value-mapping",
+        "filter"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE Segment = 'Corporate' AND IsActive = 1"
+    },
+    {
+      "id": "q04",
+      "question": "How many orders were cancelled in 2025?",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Cancelled' AND OrderDate >= '2025-01-01' AND OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "q05",
+      "question": "What is the total gross sales across all order items, i.e. quantity times unit price before any discount?",
+      "tags": [
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(Quantity * UnitPrice) AS GrossSales FROM sales.OrderItems"
+    },
+    {
+      "id": "q06",
+      "question": "What was total net revenue (quantity \u00d7 unit price \u00d7 (1 \u2212 discount)) from delivered orders placed in 2024?",
+      "tags": [
+        "join",
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.Status = 'Delivered' AND o.OrderDate >= '2024-01-01' AND o.OrderDate < '2025-01-01'"
+    },
+    {
+      "id": "q07",
+      "question": "What was net revenue by customer country code in 2025?",
+      "tags": [
+        "join",
+        "aggregation",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT c.CountryCode, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY c.CountryCode"
+    },
+    {
+      "id": "q08",
+      "question": "Which 5 products generated the most net revenue overall? Show product name and net revenue, highest first.",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (5) WITH TIES p.ProductName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId GROUP BY p.ProductName ORDER BY NetRevenue DESC",
+      "ordered": true
+    },
+    {
+      "id": "q09",
+      "question": "Which month of 2024 had the most orders? Give the month number and order count.",
+      "tags": [
+        "ranking",
+        "ties",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (1) WITH TIES MONTH(OrderDate) AS MonthNumber, COUNT(*) AS Orders FROM sales.Orders WHERE OrderDate >= '2024-01-01' AND OrderDate < '2025-01-01' GROUP BY MONTH(OrderDate) ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "q10",
+      "question": "What is the average quantity per order line?",
+      "tags": [
+        "integer-division",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT AVG(CAST(Quantity AS decimal(18,4))) AS AvgQuantity FROM sales.OrderItems"
+    },
+    {
+      "id": "q11",
+      "question": "What percentage of all orders were placed through the web channel? Answer as a number between 0 and 100.",
+      "tags": [
+        "percentage",
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT 100.0 * SUM(CASE WHEN Channel = 'Web' THEN 1 ELSE 0 END) / COUNT(*) AS WebPct FROM sales.Orders"
+    },
+    {
+      "id": "q12",
+      "question": "For each sales channel, what percentage of its orders were cancelled (0-100)?",
+      "tags": [
+        "percentage",
+        "aggregation"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT Channel, 100.0 * SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) / COUNT(*) AS CancelledPct FROM sales.Orders GROUP BY Channel"
+    },
+    {
+      "id": "q13",
+      "question": "How many customers have never placed an order?",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers c WHERE NOT EXISTS (SELECT 1 FROM sales.Orders o WHERE o.CustomerId = c.CustomerId)"
+    },
+    {
+      "id": "q14",
+      "question": "List the names of products that have never been sold.",
+      "tags": [
+        "anti-join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT p.ProductName FROM catalog.Products p WHERE NOT EXISTS (SELECT 1 FROM sales.OrderItems oi WHERE oi.ProductId = p.ProductId)"
+    },
+    {
+      "id": "q15",
+      "question": "List every sales rep's full name together with their manager's full name.",
+      "tags": [
+        "self-join",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT e.FullName AS SalesRep, m.FullName AS Manager FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId WHERE e.Title = 'Sales Rep'"
+    },
+    {
+      "id": "q16",
+      "question": "Which manager has the most direct reports? Give the manager's name and the number of direct reports.",
+      "tags": [
+        "self-join",
+        "ties",
+        "ranking"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP (1) WITH TIES m.FullName, COUNT(*) AS DirectReports FROM hr.Employees e JOIN hr.Employees m ON m.EmployeeId = e.ManagerId GROUP BY m.EmployeeId, m.FullName ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "q17",
+      "question": "What is total net revenue for each top-level product category (the categories that have no parent)?",
+      "tags": [
+        "hierarchy",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT parent.CategoryName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId JOIN catalog.Categories parent ON parent.CategoryId = c.ParentCategoryId GROUP BY parent.CategoryName"
+    },
+    {
+      "id": "q18",
+      "question": "Which customers placed more than 40 orders? Give customer id and number of orders.",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT CustomerId, COUNT(*) AS Orders FROM sales.Orders GROUP BY CustomerId HAVING COUNT(*) > 40"
+    },
+    {
+      "id": "q19",
+      "question": "For each region, which sales rep generated the highest net revenue? Show region name, rep name and net revenue.",
+      "tags": [
+        "top-n-per-group",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "WITH r AS (SELECT reg.RegionName, e.FullName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue, RANK() OVER (PARTITION BY reg.RegionName ORDER BY SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) DESC) AS rk FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN hr.Employees e ON e.EmployeeId = o.SalesRepId JOIN sales.Regions reg ON reg.RegionId = e.RegionId GROUP BY reg.RegionName, e.EmployeeId, e.FullName) SELECT RegionName, FullName, NetRevenue FROM r WHERE rk = 1"
+    },
+    {
+      "id": "q20",
+      "question": "Show monthly net revenue for 2025 with a running total: month number, revenue and cumulative revenue, in month order.",
+      "tags": [
+        "window",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "gold": "WITH m AS (SELECT MONTH(o.OrderDate) AS MonthNumber, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY MONTH(o.OrderDate)) SELECT MonthNumber, NetRevenue, SUM(NetRevenue) OVER (ORDER BY MonthNumber ROWS UNBOUNDED PRECEDING) AS CumulativeRevenue FROM m",
+      "ordered": true
+    },
+    {
+      "id": "q21",
+      "question": "Compare net revenue in 2024 and 2025 for each channel: show channel, 2024 revenue and 2025 revenue.",
+      "tags": [
+        "pivot",
+        "time-series"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT o.Channel, SUM(CASE WHEN o.OrderDate < '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2024, SUM(CASE WHEN o.OrderDate >= '2025-01-01' THEN oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) ELSE 0 END) AS Revenue2025 FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId WHERE o.OrderDate >= '2024-01-01' AND o.OrderDate < '2026-01-01' GROUP BY o.Channel"
+    },
+    {
+      "id": "q22",
+      "question": "How many distinct products were sold in December 2025?",
+      "tags": [
+        "distinct",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(DISTINCT oi.ProductId) AS Products FROM sales.OrderItems oi JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE o.OrderDate >= '2025-12-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "q23",
+      "question": "How many orders have no sales rep assigned?",
+      "tags": [
+        "null-handling"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE SalesRepId IS NULL"
+    },
+    {
+      "id": "q24",
+      "question": "How many orders took more than 3 days to ship, counting days from the order date to the shipped date?",
+      "tags": [
+        "date",
+        "null-handling"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE ShippedDate IS NOT NULL AND DATEDIFF(day, CAST(OrderDate AS date), ShippedDate) > 3"
+    },
+    {
+      "id": "q25",
+      "question": "What is the total amount paid using digital wallets?",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(Amount) AS Paid FROM sales.Payments WHERE Method = 'Wallet'"
+    },
+    {
+      "id": "q26",
+      "question": "How many orders were paid in more than one payment?",
+      "tags": [
+        "having"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Orders FROM (SELECT OrderId FROM sales.Payments GROUP BY OrderId HAVING COUNT(*) > 1) x"
+    },
+    {
+      "id": "q27",
+      "question": "What was net revenue from customers in Dubai for laptops in 2025?",
+      "tags": [
+        "multi-hop",
+        "value-mapping"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories cat ON cat.CategoryId = p.CategoryId WHERE c.City = 'Dubai' AND cat.CategoryName = 'Laptops' AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "q28",
+      "question": "What is the average net revenue per order for in-store orders?",
+      "tags": [
+        "view",
+        "value-mapping"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT AVG(NetRevenue) AS AvgOrderRevenue FROM sales.vOrderRevenue WHERE Channel = 'Store'"
+    },
+    {
+      "id": "q29",
+      "question": "Who are our top 3 customers by lifetime net revenue? Show first name, last name and revenue.",
+      "tags": [
+        "ranking",
+        "join"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP (3) WITH TIES c.FirstName, c.LastName, SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) AS NetRevenue FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId GROUP BY c.CustomerId, c.FirstName, c.LastName ORDER BY NetRevenue DESC"
+    },
+    {
+      "id": "q30",
+      "question": "What is the gross margin for the Audio category, defined as net revenue minus product unit cost times quantity?",
+      "tags": [
+        "derived-metric",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct) - p.UnitCost * oi.Quantity) AS GrossMargin FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN catalog.Categories c ON c.CategoryId = p.CategoryId WHERE c.CategoryName = 'Audio'"
+    },
+    {
+      "id": "q31",
+      "question": "How many order lines had a 20% discount?",
+      "tags": [
+        "value-mapping",
+        "units"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Lines FROM sales.OrderItems WHERE DiscountPct = 0.20"
+    },
+    {
+      "id": "q32",
+      "question": "How many customers signed up in each year? Show the year and the count.",
+      "tags": [
+        "date",
+        "aggregation"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT YEAR(SignupDate) AS SignupYear, COUNT(*) AS Customers FROM sales.Customers GROUP BY YEAR(SignupDate)"
+    },
+    {
+      "id": "q33",
+      "question": "How many customers were referred by another customer?",
+      "tags": [
+        "null-handling",
+        "self-join"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM sales.Customers WHERE ReferredByCustomerId IS NOT NULL"
+    },
+    {
+      "id": "q34",
+      "question": "Which customer referred the most other customers? Give their first name, last name and the number of referrals.",
+      "tags": [
+        "self-join",
+        "ranking",
+        "ties"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP (1) WITH TIES r.FirstName, r.LastName, COUNT(*) AS Referrals FROM sales.Customers c JOIN sales.Customers r ON r.CustomerId = c.ReferredByCustomerId GROUP BY r.CustomerId, r.FirstName, r.LastName ORDER BY COUNT(*) DESC"
+    },
+    {
+      "id": "q35",
+      "question": "How many units of discontinued products were sold in 2025, counting every order line regardless of order status?",
+      "tags": [
+        "join",
+        "date"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(oi.Quantity) AS Units FROM sales.OrderItems oi JOIN catalog.Products p ON p.ProductId = oi.ProductId JOIN sales.Orders o ON o.OrderId = oi.OrderId WHERE p.IsDiscontinued = 1 AND o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01'"
+    },
+    {
+      "id": "q36",
+      "question": "What share of 2025 net revenue came from each customer region? Give region name and percentage (0-100).",
+      "tags": [
+        "percentage",
+        "window",
+        "multi-hop"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT reg.RegionName, 100.0 * SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct)) / SUM(SUM(oi.Quantity * oi.UnitPrice * (1 - oi.DiscountPct))) OVER () AS SharePct FROM sales.Orders o JOIN sales.OrderItems oi ON oi.OrderId = o.OrderId JOIN sales.Customers c ON c.CustomerId = o.CustomerId JOIN sales.Regions reg ON reg.RegionId = c.RegionId WHERE o.OrderDate >= '2025-01-01' AND o.OrderDate < '2026-01-01' GROUP BY reg.RegionName"
+    },
+    {
+      "id": "q37",
+      "question": "How many sales reps were hired before 2021?",
+      "tags": [
+        "value-mapping",
+        "date"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Reps FROM hr.Employees WHERE Title = 'Sales Rep' AND HireDate < '2021-01-01'"
+    },
+    {
+      "id": "q38",
+      "question": "How many orders are still pending?",
+      "tags": [
+        "value-mapping"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Orders FROM sales.Orders WHERE Status = 'Pending'"
+    },
+    {
+      "id": "q39",
+      "question": "What is the average age of our customers?",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal"
+    },
+    {
+      "id": "q40",
+      "question": "Which supplier provides the most products?",
+      "tags": [
+        "unanswerable"
+      ],
+      "difficulty": "easy",
+      "expect": "refusal"
+    }
+  ]
+}

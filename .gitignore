@@ -1,17 +1,21 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-pytest-cache-files-*/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
-build/
+node_modules/
 dist/
-*.egg-info/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.cache/
+*.log
 
-# Generated research artifacts and market data are kept locally, not in Git.
-data/
-reports/
+# Database files never belong in Git (size + data sensitivity).
+*.mdf
+*.ldf
+*.bak
+*.bacpac
+infra/mssql/data/*
+!infra/mssql/data/.gitkeep
+**/eval/reports/
+
+# built app binaries (delivered separately, never committed)
+/release/
