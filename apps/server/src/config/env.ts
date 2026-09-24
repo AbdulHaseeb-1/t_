@@ -37,6 +37,16 @@ export const envSchema = z.object({
   CORS_ORIGINS: csv,
   THROTTLE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
 
+  /**
+   * mssql: query a live SQL Server. duckdb: query a read-only DuckDB file
+   * converted from an .mdf by the built-in MDF reader (no SQL Server needed).
+   */
+  DB_ENGINE: z.enum(['mssql', 'duckdb']).default('mssql'),
+  DUCKDB_FILE: z.string().default('data/database.duckdb'),
+  /** duckdb engine: convert this .mdf at startup when DUCKDB_FILE is missing or older. (MDF_FILE is the Docker attach script's.) */
+  MDF_IMPORT_PATH: z.string().default(''),
+  /** schema.table globs left out of the conversion entirely (audit trails, settings, users). */
+  MDF_IMPORT_EXCLUDE: csv,
   DB_HOST: z.string().default('localhost'),
   DB_PORT: z.coerce.number().int().positive().default(1433),
   DB_NAME: z.string().default('MDS_EPD'),

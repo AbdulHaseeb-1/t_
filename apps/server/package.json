@@ -20,9 +20,11 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "eval": "nest build && node --enable-source-maps dist/eval/cli.js"
+    "eval": "nest build && node --enable-source-maps dist/eval/cli.js",
+    "mdf": "nest build && node --enable-source-maps dist/mdf/cli.js"
   },
   "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.5",
     "@fastify/compress": "9.2.0",
     "@fastify/helmet": "13.1.1",
     "@fastify/multipart": "10.1.2",

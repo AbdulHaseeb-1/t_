@@ -19,6 +19,23 @@ docs/
 
 **Connecting the app to your database:** see [docs/CONNECT-DATABASE.md](docs/CONNECT-DATABASE.md).
 
+## Two ways to reach the data
+
+| `DB_ENGINE` | Source | How |
+|---|---|---|
+| `mssql` (default) | Live SQL Server | read-only login, rolled-back transactions |
+| `duckdb` | A copy of the `.mdf` file, **no SQL Server needed** | built-in MDF reader -> read-only DuckDB file |
+
+```
+database.mdf --> MDF reader (apps/server/src/mdf) --> DuckDB (read-only) --> AI writes SELECT --> guard --> results --> answer
+```
+
+The MDF reader parses SQL Server's on-disk format directly. It walks the boot page and system catalog, follows IAM allocation maps, decodes records and reassembles off-row LOB data. It recovers tables, primary and foreign keys and the physical column map (dropped columns, metadata-only defaults), and recomputes non-persisted computed columns in exact decimal arithmetic. Supported: SQL Server 2016+ single-file databases without table compression, and all common column types.
+
+**Verification.** On MDS_EPD, all 81 tables and 376,124 rows are byte-identical to SQL Server's own output. A torture-test database (`infra/mssql/mdf-fixture.sql`: every type and edge value, 1 MB LOBs, row overflow, forwarded heap rows, dropped/added columns) is committed as a 470 KB fixture with SQL Server's rendering as golden output. `pnpm test` checks the reader against it with no SQL Server required.
+
+**Read-only by construction.** The `.mdf` is opened `O_RDONLY` (its hash is unchanged after conversion). DuckDB runs with `access_mode=READ_ONLY`, `enable_external_access=false` and locked configuration. The SQL guard additionally rejects file, network, extension and dynamic-SQL functions. Engine-level refusals are tested with the guard removed.
+
 ## How a question is answered
 
 ```
@@ -61,7 +78,7 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | GET | `/schema` | tables/views with row counts | none |
 | GET | `/schema/tables/:id` | columns, keys, descriptions for `schema.table` | none |
 | GET | `/schema/context?q=` | exactly what the LLM would see for a question | none |
-| POST | `/schema/refresh` | re-introspect after DDL changes | none |
+| POST | `/schema/refresh` | re-introspect after DDL changes; `duckdb`: re-convert a newer `.mdf` and swap without restart | none |
 | GET | `/llm` | mode, models, breaker state, token + USD totals | none |
 | PUT | `/llm/mode` | `{mode: auto\|openai\|openrouter, fallbackOrder?}` at runtime | none |
 | GET/DELETE | `/query/cache` | cache stats / clear | none |

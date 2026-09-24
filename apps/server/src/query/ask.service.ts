@@ -191,6 +191,7 @@ export class AskService {
       maxRows,
       shots,
       input.context,
+      this.db.dialect,
     );
     const cacheKey = `sql:${schemaHash}`;
 

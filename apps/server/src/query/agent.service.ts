@@ -11,7 +11,7 @@ import { SchemaCatalogService } from '../database/schema/schema-catalog.service.
 import { LlmService } from '../llm/llm.service.js';
 import { UsageMeter, type UsageSummary } from '../llm/llm.types.js';
 import { detectLanguage, LANGUAGE_NAME, type Lang } from './language.js';
-import { AGENT_SYSTEM } from './prompts.js';
+import { agentSystem } from './prompts.js';
 import { normalizeQuestion, QueryCacheService } from './query-cache.service.js';
 import type { AnalyzeInput } from './query.dto.js';
 import { toPromptTable } from './result-format.js';
@@ -21,7 +21,7 @@ const TOOLS: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'run_sql',
-      description: 'Run one read-only T-SQL SELECT and get the result as TSV (sampled if large).',
+      description: 'Run one read-only SELECT (in the database\'s SQL dialect) and get the result as TSV (sampled if large).',
       parameters: {
         type: 'object',
         properties: {
@@ -110,7 +110,7 @@ export class AgentService {
     const snapshot = await this.catalog.snapshot();
     const ctx = await this.catalog.contextFor(input.question);
     const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: AGENT_SYSTEM },
+      { role: 'system', content: agentSystem(this.db.dialect) },
       {
         role: 'system',
         content: `Database: ${snapshot.database}\nSchema (schema.table ~rows | column type [PK] [->referenced column]):\n${ctx.text}`,

@@ -19,3 +19,8 @@ infra/mssql/data/*
 
 # built app binaries (delivered separately, never committed)
 /release/
+
+# converted query databases (built from an .mdf; may contain business data)
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp-*

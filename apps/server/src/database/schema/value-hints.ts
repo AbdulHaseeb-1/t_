@@ -1,3 +1,4 @@
+import type { SqlDialect } from '../sql-guard.js';
 import { tokenize } from './schema-retriever.js';
 import type { ColumnInfo, TableInfo } from './schema.types.js';
 
@@ -47,7 +48,15 @@ export function hintCandidates(
 }
 
 /** Top (maxDistinct + 1) values by frequency; more than maxDistinct means "not categorical". */
-export function valueHintSql(table: TableInfo, column: ColumnInfo, maxDistinct: number): string {
+export function valueHintSql(table: TableInfo, column: ColumnInfo, maxDistinct: number, dialect: SqlDialect = 'tsql'): string {
+  if (dialect === 'duckdb') {
+    const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    const c = q(column.name);
+    return (
+      `SELECT CAST(${c} AS VARCHAR) AS v FROM ${q(table.schema)}.${q(table.name)} WHERE ${c} IS NOT NULL ` +
+      `GROUP BY ${c} ORDER BY count(*) DESC, 1 LIMIT ${maxDistinct + 1}`
+    );
+  }
   const col = quote(column.name);
   return (
     `SELECT TOP (${maxDistinct + 1}) CAST(${col} AS nvarchar(${MAX_VALUE_CHARS + 1})) AS v ` +

@@ -1,5 +1,6 @@
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { SchemaContext } from '../database/schema/schema.types.js';
+import type { SqlDialect } from '../database/sql-guard.js';
 import { LANGUAGE_NAME, type Lang } from './language.js';
 
 /**
@@ -34,6 +35,37 @@ Rules:
 -- CANNOT_ANSWER: <short reason>
 \`\`\``;
 
+/** The same rules for a DuckDB file converted from an .mdf (DB_ENGINE=duckdb). */
+export const DUCKDB_SQL_RULES = `You translate questions into ONE DuckDB SQL query.
+Output format: a single \`\`\`sql fenced block and nothing else.
+Rules:
+- Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE, CREATE, COPY, ATTACH, PRAGMA, SET, INSTALL/LOAD, file functions (read_csv, read_parquet, glob) or multiple statements.
+- Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
+- Use only objects and columns listed in the schema. Schema-qualify tables (dbo.Orders) and alias them. Double-quote a column whose name is a reserved word ("limit", "order", "group").
+- Join along the "->" foreign keys.
+- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line. Follow any table or column notes (-- or "quoted").
+- Questions may come from Urdu or Roman Urdu speakers (with an English translation). Map Urdu words for places, statuses and categories to the stored values (e.g. پاکستان -> 'PK', منسوخ -> 'Cancelled').
+- Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled'). Text comparison is case-insensitive.
+- Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
+- Apply exactly the filters the question states. Do not silently exclude rows (e.g. cancelled orders, inactive customers) unless asked.
+- / is true division (no integer truncation). Use round(x, 2) for money shown to the user.
+- Count entities with COUNT(DISTINCT key) whenever joins can repeat rows. PK(a, b) marks a composite key: a single one of its columns is not unique, so count the table's own rows with COUNT(*).
+- For "never", "without", "no ..." use NOT EXISTS (NOT IN breaks on NULLs).
+- For an overall "top", "most", "least", "highest" keep ties: QUALIFY rank() OVER (ORDER BY measure DESC) <= n, then ORDER BY the measure. Do not use LIMIT for rankings (it hides ties).
+- For the top item(s) per group ("for each region, the best rep") use QUALIFY rank() OVER (PARTITION BY group ORDER BY measure DESC) <= n.
+- Never return more than {maxRows} rows.
+- Return a readable identifier (e.g. the name) next to each measure, not only an id.
+- Filter dates with half-open ranges (col >= DATE '2024-01-01' AND col < DATE '2025-01-01'). Group with year(col), month(col), date_trunc('month', col); today is current_date.
+- Use NULLIF to avoid division by zero. Give computed columns readable aliases.
+- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
+- Only if no reasonable query exists, output: \`\`\`sql
+-- CANNOT_ANSWER: <short reason>
+\`\`\``;
+
+export function sqlRules(dialect: SqlDialect): string {
+  return dialect === 'duckdb' ? DUCKDB_SQL_RULES : SQL_RULES;
+}
+
 export interface FewShot {
   question: string;
   sql: string;
@@ -46,9 +78,10 @@ export function sqlMessages(
   maxRows: number,
   examples: FewShot[] = [],
   history: FewShot[] = [],
+  dialect: SqlDialect = 'tsql',
 ): ChatCompletionMessageParam[] {
   const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: SQL_RULES.replace('{maxRows}', String(maxRows)) },
+    { role: 'system', content: sqlRules(dialect).replace('{maxRows}', String(maxRows)) },
     {
       role: 'system',
       content: `Database: ${database}\nSchema (schema.table ~rows | column type [PK] [->referenced column] [{stored values}] [, PK(composite key columns)]):\n${ctx.text}`,
@@ -115,12 +148,24 @@ export function sqlQuestion(question: string, lang: Lang): string {
   return `${question}\n\n(If you must refuse, write the CANNOT_ANSWER reason in ${LANGUAGE_NAME[lang]}.)`;
 }
 
-export const AGENT_SYSTEM = `You are a senior data analyst with read-only access to a Microsoft SQL Server database.
+export function agentSystem(dialect: SqlDialect = 'tsql'): string {
+  const engine =
+    dialect === 'duckdb'
+      ? 'a DuckDB database (converted from SQL Server)'
+      : 'a Microsoft SQL Server database';
+  const sqlStyle =
+    dialect === 'duckdb'
+      ? '- DuckDB SQL only, SELECT/WITH only, schema-qualified tables, QUALIFY rank() OVER (...) <= n for rankings, no file functions.'
+      : '- T-SQL only, SELECT/WITH only, bracketed schema-qualified identifiers, TOP (n) WITH TIES for rankings.';
+  return `You are a senior data analyst with read-only access to ${engine}.
 Work efficiently: every tool call costs time and money.
 - The schema excerpt below is usually enough. Only call search_schema/describe_tables when a needed table or column is missing.
 - Prefer one well-aggregated query over many small ones. Run independent queries in parallel tool calls.
-- T-SQL only, SELECT/WITH only, bracketed schema-qualified identifiers, TOP (n) WITH TIES for rankings.
+${sqlStyle}
 - When you have enough evidence, stop calling tools and write the final answer: direct answer first, then supporting figures, then brief caveats. Use markdown. Never invent numbers.`;
+}
+
+export const AGENT_SYSTEM = agentSystem('tsql');
 
 export function extractSql(text: string): string {
   const fenced = /```(?:sql|tsql)?\s*([\s\S]*?)```/i.exec(text);

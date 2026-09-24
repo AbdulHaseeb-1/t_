@@ -16,7 +16,19 @@ This guide takes you from the APK to asking questions of your own SQL Server dat
 
 > Correction to an earlier assumption: `MDS_EPD` is **not** Microsoft Master Data Services. It is an ERP with 81 tables and 23 views in `dbo`, covering invoices, customers, products, companies, stock, receipts and ledgers. Everything below reflects the real schema.
 
-## 2. Create a read-only login in SQL Server (5 minutes)
+## 1b. Choose how the server reads your data
+
+| | **Option A: live SQL Server** (sections 2–3) | **Option B: read the .mdf directly** (section 2B) |
+|---|---|---|
+| Needs SQL Server installed | Yes | **No** |
+| Data freshness | Live, every query | As fresh as the last .mdf copy (e.g. nightly) |
+| Setup | Login, TCP/IP, firewall | Point the server at a copy of the .mdf |
+| Speed on analytics | Good | Faster (column store); your DB shrinks to ~17 MB |
+| Read-only guarantee | Read-only login + SQL guard + rolled-back transaction | File opened read-only + DuckDB read-only + external access off + SQL guard |
+
+Pick A when answers must reflect the last minute. Pick B to run without SQL Server on the server machine, or to keep the query load off the ERP's database.
+
+## 2. Option A: create a read-only login in SQL Server (5 minutes)
 
 Run this in SSMS as an administrator, with your own strong password:
 
@@ -46,6 +58,51 @@ The server must be able to reach SQL Server over TCP:
 
 The database has no MDF yet? `infra/mssql/attach.sh` attaches `MDS_EPD_SQL16.mdf` into a SQL Server 2022 container and creates the same login automatically (Docker required).
 
+## 2B. Option B: no SQL Server, read the .mdf file directly
+
+The server includes its own reader for SQL Server data files. It reads the pages of the `.mdf`, rebuilds every table (including keys, relationships and computed columns such as `InvoiceDetail.total_net`) and writes a read-only [DuckDB](https://duckdb.org) file that the AI queries.
+
+```
+MDS_EPD_SQL16.mdf  --(built-in MDF reader, read-only)-->  mds.duckdb  --(read-only)-->  AI-generated SELECT  -->  answer
+```
+
+**1. Get a consistent copy of the .mdf.** SQL Server keeps attached databases' files locked, and a copy of a running file can be inconsistent. Use one of:
+- The ERP's SQL Server Management Studio: right-click the database → *Tasks → Take Offline*, copy the `.mdf`, then *Bring Online*. This takes a few seconds.
+- A backup restored on another machine, then that restored database's `.mdf`.
+- A file already detached, such as the one you shared.
+
+Only the `.mdf` is needed (no `.ldf`). The reader supports SQL Server 2016 and newer data files, single-file databases (no `.ndf`), without table compression.
+
+**2. Configure the server** (in `.env`, see `infra/mssql/mds-epd.env.example`):
+
+```
+DB_ENGINE=duckdb
+MDF_IMPORT_PATH=D:\erp-copy\MDS_EPD_SQL16.mdf      # the copy from step 1
+DUCKDB_FILE=data/mds.duckdb                           # created automatically
+MDF_IMPORT_EXCLUDE=dbo.AuditTrail*,dbo.Users,dbo.UserGroup,dbo.UserSession,dbo.Organization,dbo.ErrorLog,dbo.BackupHistory
+```
+
+On start, the server converts the file (about 11 seconds for your 364 MB database) and serves questions from `data/mds.duckdb`. Password, token and CNIC columns (`DB_DENY_COLUMNS`) are never copied. Excluded tables are not copied at all.
+
+**3. Refresh with new data.** Replace the `.mdf` copy (for example with a nightly scheduled task), then call:
+
+```bash
+curl -X POST http://localhost:3000/schema/refresh -H "x-api-key: <API_KEY>"
+```
+
+The server converts the newer file and switches to it without a restart. Queries in progress finish on the previous data.
+
+**Manual conversion and checking** (optional):
+
+```bash
+pnpm --filter server mdf inspect path/to/file.mdf                 # tables, keys, relationships
+pnpm --filter server mdf import path/to/file.mdf data/mds.duckdb   # convert
+# if the same database is also attached to a SQL Server, compare every value:
+pnpm --filter server mdf import file.mdf data/mds.duckdb --verify-db MDS_EPD
+```
+
+How it was verified on your database: all 81 tables and 376,124 rows were compared cell by cell with SQL Server and are byte-identical, including off-row text, recomputed columns and tables with dropped columns. The 40 reference questions return identical results on both engines, and AI accuracy on the DuckDB engine was 99.2% (40 questions × 3 runs). The one miss answered "August" where the reference expects month number 8.
+
 ## 3. Install and configure the server
 
 On the machine that will run the server (Windows, macOS or Linux):
@@ -54,7 +111,7 @@ On the machine that will run the server (Windows, macOS or Linux):
 # prerequisites: Node.js 22 LTS, pnpm 10 (npm i -g pnpm), git
 git clone <this repository> ask-data && cd ask-data
 pnpm install
-cp infra/mssql/mds-epd.env.example .env      # tuned settings for MDS_EPD
+cp infra/mssql/mds-epd.env.example .env      # tuned settings for MDS_EPD (Option A or B inside)
 ```
 
 Edit `.env` and fill in:

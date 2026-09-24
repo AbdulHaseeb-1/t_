@@ -7,6 +7,8 @@ const caseSchema = z
     question: z.string().min(3),
     /** Reference query. Its result, not its text, is the ground truth. */
     gold: z.string().optional(),
+    /** The same reference query in DuckDB SQL, used when DB_ENGINE=duckdb (defaults to `gold`). */
+    goldDuckdb: z.string().optional(),
     /** `refusal`: the correct behaviour is to say the database cannot answer. */
     expect: z.enum(['result', 'refusal']).default('result'),
     /** Row order is part of the answer (question asks for a sorted list). */
