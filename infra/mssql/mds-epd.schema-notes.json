@@ -1,0 +1,31 @@
+{
+  "$comment": "Curated notes for the MDS_EPD pharmacy distribution ERP. Loaded with SCHEMA_NOTES_FILE. Keep each note one short sentence; they are sent to the model.",
+
+  "dbo.InvoiceLine": "Sales invoice header: one row per invoice. Sales totals come from here: SUM(net_amt) (after discount) or SUM(gross_amt) (before).",
+  "dbo.InvoiceLine.net_amt": "Invoice total after discount, PKR.",
+  "dbo.InvoiceLine.bId": "Booking man (salesman) who booked the invoice; name is dbo.BookingMan.bName.",
+  "dbo.InvoiceLine.bkman_name": "Free-text copy of the booking man name; prefer joining dbo.BookingMan.",
+  "dbo.InvoiceLine.inv_src": "Where the invoice was created: MDS (this system) or QB (imported).",
+  "dbo.InvoiceDetail": "Sales invoice lines: one row per product per invoice. Product-level sales: SUM(total_net) or SUM(sale_qty).",
+  "dbo.InvoiceDetail.total_net": "Line amount after discount and tax, PKR.",
+  "dbo.InvoiceDetail.sale_qty": "Units sold on this line (bonus units are in bonus_qty).",
+  "dbo.Customer": "Customers (pharmacies, clinics, distributors). One row per customer; del = 1 means deleted.",
+  "dbo.Customer.catagory": "Customer category code (R is by far the most common, used for retail).",
+  "dbo.Customer.cust_rec_balance": "Amount the customer currently owes (receivable), PKR.",
+  "dbo.Product": "Products. Key is (comp_id, group_id, prod_id): prod_id alone is not unique, always join on all three.",
+  "dbo.Product.stock": "Units currently in stock.",
+  "dbo.Company": "Pharmaceutical companies (principals/suppliers) whose products are sold.",
+  "dbo.TblTown": "Towns within areas. Key is (area_id, town_id): town_id alone is not unique; count towns with COUNT(*).",
+  "dbo.TblArea": "Sales areas (routes).",
+  "dbo.BookingMan": "Booking men (salesmen).",
+  "dbo.CashRecieved": "Cash received from customers: one row per receipt; amt in PKR.",
+  "dbo.PurchaseLine": "Purchase invoice header from companies: one row per purchase; netamount in PKR.",
+  "dbo.SalesReturnLine": "Sales return header: one row per return; netamount in PKR.",
+  "dbo.StockDetail": "Stock by batch: qty on hand and expdate (expiry) per product batch.",
+  "dbo.CusLedger": "Customer ledger entries (dr = debit, cr = credit).",
+
+  "dbo.uvSaleInvoice": "Report view with one row per invoice LINE; header amounts (net_amt) repeat on every line. Never SUM header amounts here; use dbo.InvoiceLine.",
+  "dbo.InvoiceView": "Print view with one row per invoice LINE; header amounts repeat on every line. Use dbo.InvoiceLine / dbo.InvoiceDetail for totals.",
+  "dbo.QuoteView": "Quotation print view, one row per line. Not sales.",
+  "dbo.uvSale": "Report view with one row per invoice line (quantities S, Sb, Sr, Srb). Prefer dbo.InvoiceDetail."
+}

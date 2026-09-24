@@ -4,12 +4,20 @@ Ask questions of a SQL Server database in plain language and get correct numbers
 
 ```
 apps/
-  server/   NestJS 12 + Fastify API (this is the product today)
-  web/      frontend placeholder (intentionally empty)
+  server/   NestJS 12 + Fastify API: question -> SQL -> answer, voice and photo input
+  mobile/   Ask Data: Expo SDK 57 app (Android APK, iOS, web), Urdu-first
+  web/      placeholder for a separate web frontend (the mobile app also builds for web)
 infra/
-  docker-compose.yml     SQL Server 2022 (+ optional API container)
-  mssql/attach.sh        attaches MDS_EPD_SQL16.mdf and creates a read-only login
+  docker-compose.yml               SQL Server 2022 (+ optional API container)
+  mssql/attach.sh                  attaches MDS_EPD_SQL16.mdf and creates a read-only login
+  mssql/harden.sql                 denies credential columns to that login
+  mssql/mds-epd.env.example        tuned server settings for MDS_EPD
+  mssql/mds-epd.schema-notes.json  curated table/column notes for MDS_EPD
+docs/
+  CONNECT-DATABASE.md              phone -> server -> your SQL Server, step by step
 ```
+
+**Connecting the app to your database:** see [docs/CONNECT-DATABASE.md](docs/CONNECT-DATABASE.md).
 
 ## How a question is answered
 
@@ -81,6 +89,21 @@ Both providers use one OpenAI-compatible code path.
 6. **Zero-LLM paths.** `/query/sql` and scalar answers skip the model.
 7. **`answer: false`** returns data only, which halves calls when a UI renders the table itself.
 
+## Accuracy on the real database (MDS_EPD)
+
+40 questions in English, Urdu and Roman Urdu, with hand-verified gold SQL (`eval/datasets/mds-epd.json`), scored as execution accuracy with 3 runs each:
+
+| Stage | Accuracy | Fix |
+|---|---|---|
+| first run | 95.6% | none |
+| reasoning-token headroom | 97.1% | escalated calls no longer spend the whole output budget thinking and return empty SQL |
+| composite keys + named-table retrieval | 98.0% | `PK(area_id, town_id)` rendered explicitly; a table named in the question is always retrieved |
+| schema notes + report views hidden | **100%** | `SCHEMA_NOTES_FILE` explains grain ("one row per invoice line"); `uv*` report views that repeat header totals are excluded |
+
+Cost is about $0.00012 per question. Schema notes are the cheapest accuracy lever for any legacy database: one sentence per misunderstood table.
+
+Regression check after these changes on the synthetic retail sets: English 98.3% ± 1.2 (3 runs), Urdu 97.9% (2 runs). Both are within noise of the ablation below. One broader rule tried along the way ("prefer base tables over views") cost 3 points on retail, where a curated per-order view is the correct source, so it was narrowed to the grain rule that holds everywhere.
+
 ## Accuracy (measured, not assumed)
 
 `pnpm --filter server eval` runs the real pipeline against a 40-question dataset on a synthetic retail database. Each run is scored by **execution accuracy**: the generated SQL must return the same rows as a hand-verified gold query. See [apps/server/eval/README.md](apps/server/eval/README.md).
@@ -109,10 +132,11 @@ The server adapts to model quirks at runtime. When a model rejects an optional p
 
 ## Safety model (defence in depth)
 
-1. Connect as a `db_datareader` login (created by `attach.sh`), so writes are refused by SQL Server itself.
-2. SQL guard: one statement, `SELECT`/`WITH` only, T-SQL-aware deny-list applied after removing strings and comments.
-3. Execution inside a transaction that is always rolled back, with `SET ROWCOUNT` cap and request timeout.
-4. `API_KEY` header auth, rate limiting (stricter on `/query/analyze`), helmet, and secrets redacted from logs.
+1. Connect as a `db_datareader` login (created by `attach.sh`), so writes are refused by SQL Server itself. `harden.sql` also denies credential columns to it.
+2. SQL guard: one statement, `SELECT`/`WITH` only, T-SQL-aware deny-list applied after removing strings and comments. Sensitive columns (`DB_DENY_COLUMNS`: passwords, tokens, CNIC/SSN) are hidden from the model and rejected by name, and `SELECT *` is refused so they cannot leak through a wildcard.
+3. Value hints only sample categorical code columns. Name-like columns and values that look like phones, e-mails or coordinates are never sent to the model.
+4. Execution inside a transaction that is always rolled back, with `SET ROWCOUNT` cap and request timeout.
+5. `API_KEY` header auth, rate limiting (stricter on `/query/analyze`), helmet, and secrets redacted from logs.
 
 ## Development
 

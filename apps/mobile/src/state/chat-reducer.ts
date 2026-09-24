@@ -20,6 +20,8 @@ export interface AssistantMessage {
   sql?: string | null;
   result?: QueryResult | null;
   error?: string;
+  /** The error is fixed in Settings (server address or API key). */
+  fixInSettings?: boolean;
   meta?: { totalMs: number; costUsd?: number; cached: boolean };
   language?: 'en' | 'ur' | 'ur-Latn';
   /** What was read from an attached photo. */
@@ -61,7 +63,7 @@ export type ChatAction =
     }
   | { type: 'retry'; chatId: string; assistantId: string }
   | { type: 'answer'; chatId: string; assistantId: string; response: AskResponse }
-  | { type: 'fail'; chatId: string; assistantId: string; error: string; stopped?: boolean };
+  | { type: 'fail'; chatId: string; assistantId: string; error: string; stopped?: boolean; fixInSettings?: boolean };
 
 /** Stored results keep enough rows to render the preview; the full result is always re-askable. */
 export const STORED_ROWS = 100;
@@ -167,6 +169,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         sql: r.sql,
         result: r.result ? { ...r.result, rows: r.result.rows.slice(0, STORED_ROWS) } : null,
         error: undefined,
+        fixInSettings: undefined,
         meta: { totalMs: r.timings.totalMs, costUsd: r.usage.costUsd, cached: r.cache !== null },
         language: r.language,
         imageNote: r.image?.extracted || undefined,
@@ -188,6 +191,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             ...m,
             status: action.stopped ? 'stopped' : 'error',
             error: action.error,
+            fixInSettings: action.fixInSettings || undefined,
           })),
         },
       };

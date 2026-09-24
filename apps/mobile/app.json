@@ -12,14 +12,25 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FAF9F5",
+        "backgroundColor": "#C96442",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "dev.dbintelligence.askdata"
+      "package": "dev.dbintelligence.askdata",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.VIBRATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -33,7 +44,9 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone for voice questions."
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone for voice questions.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       [
@@ -42,7 +55,33 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to use photos you choose in questions.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to take photos for your questions."
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FAF9F5",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#262624"
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ]
+          }
+        }
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "scheme": "askdata"
   }

@@ -16,3 +16,6 @@ coverage/
 infra/mssql/data/*
 !infra/mssql/data/.gitkeep
 **/eval/reports/
+
+# built app binaries (delivered separately, never committed)
+/release/

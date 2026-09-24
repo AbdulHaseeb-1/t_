@@ -73,13 +73,20 @@ export class SchemaRetriever {
           if (t.descTokens.has(w)) score += 1;
         }
         if (score > 0 && t.table.rowCount) score += Math.log10(t.table.rowCount + 1) * 0.05;
-        return { t: t.table, score };
+        // Every word of the table's name is in the question ("companies" -> Company):
+        // the strongest signal there is, so wide tables with many column hits can't crowd it out.
+        const named = t.nameTokens.size > 0 && [...t.nameTokens].every((n) => q.includes(n));
+        return { t: t.table, score, named };
       })
       .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score);
 
     const picked = new Map<string, TableInfo>();
-    for (const { t } of scored.slice(0, limit)) picked.set(t.id, t);
+    for (const { t } of scored.filter((s) => s.named).slice(0, limit)) picked.set(t.id, t);
+    for (const { t } of scored) {
+      if (picked.size >= limit) break;
+      picked.set(t.id, t);
+    }
 
     // Pull in FK targets of the strongest matches so joins are writable.
     for (const { t } of scored.slice(0, 3)) {

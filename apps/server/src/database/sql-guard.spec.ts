@@ -1,4 +1,4 @@
-import { assertReadOnlySql, stripTsql } from './sql-guard.js';
+import { assertNoDeniedColumns, assertNoStarProjection, assertReadOnlySql, globToRegExp, referencedIdentifiers, stripTsql } from './sql-guard.js';
 
 describe('assertReadOnlySql', () => {
   it.each([
@@ -41,4 +41,37 @@ describe('assertReadOnlySql', () => {
     expect(stripTsql("SELECT 'it''s; drop' AS x")).not.toContain('drop');
     expect(() => assertReadOnlySql('SELECT [a]]; drop] FROM t')).not.toThrow();
   });
+});
+
+describe('denied columns', () => {
+  const denied = ['*password*', '*pwd*', '*cnic*'].map(globToRegExp);
+
+  it.each([
+    'SELECT user_password FROM dbo.Users',
+    'SELECT u.[user_password] FROM dbo.Users u',
+    'SELECT "eml_pwd" FROM dbo.Organization',
+    'SELECT c.Cust_CNIC FROM dbo.Customer c',
+    'SELECT COUNT(*) FROM dbo.Customer WHERE cust_cnic IS NOT NULL',
+  ])('rejects %s', (sql) => {
+    expect(() => assertNoDeniedColumns(sql, denied)).toThrow(/is not available/);
+  });
+
+  it('allows text that merely mentions the words', () => {
+    expect(() => assertNoDeniedColumns("SELECT 'password reset' AS note, cust_name FROM dbo.Customer -- cnic", denied)).not.toThrow();
+  });
+
+  it('extracts bare and quoted identifiers', () => {
+    expect([...referencedIdentifiers('SELECT [Weird ]] Name], "q" FROM t')]).toEqual(expect.arrayContaining(['weird ] name', 'q', 't', 'select']));
+  });
+});
+
+describe('assertNoStarProjection', () => {
+  it.each(['SELECT * FROM t', 'SELECT TOP (5) * FROM t', 'SELECT c.* FROM t c', 'SELECT a, [t].* FROM t', 'SELECT DISTINCT * FROM t', 'WITH x AS (SELECT * FROM t) SELECT a FROM x'])(
+    'rejects %s',
+    (sql) => expect(() => assertNoStarProjection(sql)).toThrow(/instead of \*/),
+  );
+  it.each(['SELECT COUNT(*) FROM t', 'SELECT COUNT_BIG(*) AS n FROM t', 'SELECT qty * price AS v FROM t', 'SELECT (a + b) * c FROM t', "SELECT '*' AS s FROM t"])(
+    'allows %s',
+    (sql) => expect(() => assertNoStarProjection(sql)).not.toThrow(),
+  );
 });

@@ -12,7 +12,8 @@ import {
 } from 'react';
 import { useI18n } from '../i18n';
 import { ApiError, ask, askMedia, type MediaFile } from '../lib/api';
-import { describeError } from '../lib/errors';
+import { describeError, needsSettings } from '../lib/errors';
+import { cue } from '../lib/feedback';
 import { newId } from '../lib/id';
 import { storage } from '../lib/storage';
 import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState } from './chat-reducer';
@@ -41,7 +42,7 @@ const ActionsContext = createContext<ChatActions | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
-  const { server } = useSettings();
+  const { server, replyLanguage } = useSettings();
   const { t } = useI18n();
   const tRef = useRef(t);
   /** Voice/photo payloads by assistant message, so Retry can resend them this session. */
@@ -51,11 +52,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // actions object stays stable and never re-renders its consumers.
   const stateRef = useRef(state);
   const serverRef = useRef(server);
+  const replyRef = useRef(replyLanguage);
   useLayoutEffect(() => {
     stateRef.current = state;
     serverRef.current = server;
+    replyRef.current = replyLanguage;
     tRef.current = t;
-  }, [state, server, t]);
+  }, [state, server, replyLanguage, t]);
 
   useEffect(() => {
     void storage.get<Chat[]>(STORAGE_KEY).then((chats) => dispatch({ type: 'hydrate', chats: chats ?? [] }));
@@ -75,14 +78,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const files = media.current.get(assistantId);
     const request =
       files?.audio || files?.image
-        ? askMedia(serverRef.current, { question, context, audio: files.audio, image: files.image }, controller.signal)
-        : ask(serverRef.current, question, context, controller.signal);
+        ? askMedia(
+            serverRef.current,
+            { question, context, audio: files.audio, image: files.image, language: replyRef.current },
+            controller.signal,
+          )
+        : ask(serverRef.current, question, context, controller.signal, replyRef.current);
     request
-      .then((response) => dispatchFn({ type: 'answer', chatId, assistantId, response }))
+      .then((response) => {
+        cue('answer');
+        dispatchFn({ type: 'answer', chatId, assistantId, response });
+      })
       .catch((err: unknown) => {
         const stopped = err instanceof ApiError && err.kind === 'aborted';
         const message = describeError(err, tRef.current, serverRef.current.baseUrl);
-        dispatchFn({ type: 'fail', chatId, assistantId, error: message, stopped });
+        dispatchFn({ type: 'fail', chatId, assistantId, error: message, stopped, fixInSettings: needsSettings(err) });
       })
       .finally(() => inflight.current.delete(assistantId));
   }, []);

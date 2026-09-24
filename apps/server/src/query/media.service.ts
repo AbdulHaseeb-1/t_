@@ -49,9 +49,11 @@ export const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'im
 
 const VISION_SYSTEM = `You help people query their business database. The user sent an image, possibly with a message.
 1. Read everything in the image that matters for the request: text in any language (including Urdu), numbers, names, codes, dates, tables.
-2. Write ONE precise, self-contained English question for the database that fulfils the user's request, embedding the specific values read from the image. If the image itself contains the question, use it.
+2. Write ONE precise, self-contained English question for the database that fulfils the user's request, embedding the specific values read from the image.
+   - If the image itself contains a written question, translate THAT question faithfully. Do not add conditions from other content in the image (tables, lists, totals) unless the question refers to them ("these products", "this list").
+   - If the user's message refers to the image ("how many of these did we sell?"), combine the message with the values read from the image.
 Reply with JSON only:
-{"language": "en" | "ur" | "ur-Latn", "question": "<the English question>", "display": "<the same question in the user's language>", "extracted": "<one short sentence, in the user's language, saying what you read>"}
+{"language": "en" | "ur" | "ur-Latn", "written_question": "<a question written in the image, copied exactly in its original language and script, or null>", "question": "<the English question>", "display": "<the same question in the user's language>", "extracted": "<one short sentence, in the user's language, saying what you read>"}
 "language" is the language the user wrote or spoke in; if there is no message, the language of any question in the image, else "en". Urdu means Urdu script.`;
 
 function mergeUsage(a: UsageSummary, b: UsageSummary): UsageSummary {
@@ -102,22 +104,27 @@ export class MediaService {
       input.language !== 'auto' ? input.language : userText ? detectLanguage(userText) : undefined;
 
     let image: MediaAskResponse['image'];
+    /** A question written in the image, used verbatim when the user sent nothing else. */
+    let written: string | undefined;
     if (input.image) {
       const read = await this.readImage(input.image, userText, meter);
-      image = { question: read.question, display: read.display, extracted: read.extracted };
-      lang ??= read.language;
+      written = userText ? undefined : read.written;
+      image = { question: read.question, display: written ?? read.display, extracted: read.extracted };
+      lang ??= written ? detectLanguage(written) : read.language;
     }
 
+    // A transcribed written question goes through the regular text pipeline unparaphrased:
+    // the vision model otherwise tends to fold unrelated image content (tables) into it.
     const res = await this.asker.ask(
       {
-        question: userText || image!.display,
+        question: written ?? (userText || image!.display),
         context: input.context,
         language: lang ?? 'en',
         answer: input.answer,
         tier: 'fast',
-        noCache: !!input.image,
+        noCache: !!input.image && !written,
       },
-      { englishQuestion: image?.question },
+      written ? {} : { englishQuestion: image?.question },
     );
 
     const mediaMs = Math.round(performance.now() - started) - res.timings.totalMs;
@@ -166,7 +173,7 @@ export class MediaService {
     image: UploadedMedia,
     userText: string,
     meter: UsageMeter,
-  ): Promise<{ question: string; display: string; extracted: string; language: Lang }> {
+  ): Promise<{ question: string; display: string; extracted: string; language: Lang; written?: string }> {
     const res = await this.llm.chat(
       {
         tier: 'fast',
@@ -199,6 +206,7 @@ export class MediaService {
         display?: string;
         extracted?: string;
         language?: string;
+        written_question?: string | null;
       };
       if (!json.question?.trim()) throw new Error('no question');
       const language: Lang = json.language === 'ur' || json.language === 'ur-Latn' ? json.language : 'en';
@@ -208,6 +216,7 @@ export class MediaService {
         display: json.display?.trim() || question,
         extracted: json.extracted?.trim() ?? '',
         language,
+        written: typeof json.written_question === 'string' ? json.written_question.trim() || undefined : undefined,
       };
     } catch {
       this.logger.warn(`Unreadable vision reply: ${text.slice(0, 200)}`);

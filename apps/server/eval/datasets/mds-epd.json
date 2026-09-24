@@ -1,0 +1,432 @@
+{
+  "name": "mds-epd",
+  "database": "MDS_EPD",
+  "description": "Real questions against the MDS_EPD pharmacy distribution ERP in English, Urdu and Roman Urdu. 'natural' cases are phrased the way users talk, with no column hints. Gold SQL verified by hand; dates are absolute.",
+  "cases": [
+    {
+      "id": "en-cust",
+      "question": "How many customers do we have?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) AS Customers FROM dbo.Customer"
+    },
+    {
+      "id": "en-custdel",
+      "question": "How many customers are marked as deleted?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) FROM dbo.Customer WHERE del = 1"
+    },
+    {
+      "id": "en-retail",
+      "question": "How many customers are in the retail category (code R)?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) FROM dbo.Customer WHERE catagory = 'R'"
+    },
+    {
+      "id": "en-inv2026",
+      "question": "How many invoices were made in 2026?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01'"
+    },
+    {
+      "id": "en-salesyear",
+      "question": "Total net invoice amount (net_amt) per year.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT YEAR(inv_date) AS Yr, SUM(net_amt) AS NetSales FROM dbo.InvoiceLine GROUP BY YEAR(inv_date)"
+    },
+    {
+      "id": "en-month2026",
+      "question": "Net sales (sum of invoice net_amt) for each month of 2026, as month number and amount.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT MONTH(inv_date) AS Mon, SUM(net_amt) AS NetSales FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date)"
+    },
+    {
+      "id": "en-bestmonth",
+      "question": "Which month number of 2026 had the highest net sales (invoice net_amt)?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+    },
+    {
+      "id": "en-topcomp",
+      "question": "Top 5 companies by net sales, using invoice detail total_net.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC"
+    },
+    {
+      "id": "en-topbook",
+      "question": "Top 3 booking men by total invoice net amount.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+    },
+    {
+      "id": "en-area",
+      "question": "Which 5 areas have the most customers? Give area name and customer count.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC"
+    },
+    {
+      "id": "en-prod",
+      "question": "How many products are there?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) FROM dbo.Product"
+    },
+    {
+      "id": "en-zero",
+      "question": "How many products have zero stock?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT COUNT(*) FROM dbo.Product WHERE stock = 0"
+    },
+    {
+      "id": "en-cash",
+      "question": "Total cash received from customers (sum of amt).",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(amt) FROM dbo.CashRecieved"
+    },
+    {
+      "id": "en-purch",
+      "question": "Total net purchase amount across all purchase invoices.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(netamount) FROM dbo.PurchaseLine"
+    },
+    {
+      "id": "en-ret",
+      "question": "Total net amount of sales returns.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT SUM(netamount) FROM dbo.SalesReturnLine"
+    },
+    {
+      "id": "en-topprod",
+      "question": "Top 5 products by quantity sold (sale_qty), with product name.",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC"
+    },
+    {
+      "id": "en-avginv",
+      "question": "What is the average invoice net amount?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT AVG(net_amt) FROM dbo.InvoiceLine"
+    },
+    {
+      "id": "en-expiry",
+      "question": "How many stock batches that still have quantity expire before 1 October 2026?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.StockDetail WHERE qty > 0 AND expdate < '2026-10-01'"
+    },
+    {
+      "id": "en-nocust",
+      "question": "How many customers have never been invoiced?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT COUNT(*) FROM dbo.Customer c WHERE NOT EXISTS (SELECT 1 FROM dbo.InvoiceLine i WHERE i.cust_id = c.cust_id)"
+    },
+    {
+      "id": "en-src",
+      "question": "How many invoices come from each invoice source?",
+      "language": "en",
+      "tags": [
+        "mds"
+      ],
+      "difficulty": "easy",
+      "gold": "SELECT inv_src, COUNT(*) FROM dbo.InvoiceLine GROUP BY inv_src"
+    },
+    {
+      "id": "ur-cust",
+      "question": "ہمارے کتنے گاہک ہیں؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Customers FROM dbo.Customer"
+    },
+    {
+      "id": "ur-inv2026",
+      "question": "2026 میں کتنی انوائسز بنیں؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01'"
+    },
+    {
+      "id": "ur-topbook",
+      "question": "کل انوائس نیٹ رقم کے لحاظ سے ٹاپ 3 بکنگ مین کون ہیں؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+    },
+    {
+      "id": "ur-zero",
+      "question": "کتنی پروڈکٹس کا اسٹاک صفر ہے؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.Product WHERE stock = 0"
+    },
+    {
+      "id": "ur-cash",
+      "question": "گاہکوں سے کل کتنی نقد رقم وصول ہوئی؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(amt) FROM dbo.CashRecieved"
+    },
+    {
+      "id": "ur-area",
+      "question": "کن 5 علاقوں میں سب سے زیادہ گاہک ہیں؟ علاقے کا نام اور گاہکوں کی تعداد بتائیں۔",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC"
+    },
+    {
+      "id": "ur-comps",
+      "question": "کتنی کمپنیاں ہیں؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.Company"
+    },
+    {
+      "id": "ur-bestmonth",
+      "question": "2026 کے کس مہینے (نمبر) میں انوائس نیٹ سیل سب سے زیادہ تھی؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+    },
+    {
+      "id": "rl-cust",
+      "question": "hamare kitne customers hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) AS Customers FROM dbo.Customer"
+    },
+    {
+      "id": "rl-prod",
+      "question": "kitni products hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.Product"
+    },
+    {
+      "id": "rl-ret",
+      "question": "sales return ki total net amount kitni hai?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT SUM(netamount) FROM dbo.SalesReturnLine"
+    },
+    {
+      "id": "rl-towns",
+      "question": "kitne towns hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT COUNT(*) FROM dbo.TblTown"
+    },
+    {
+      "id": "rl-topcomp",
+      "question": "total_net ke hisab se top 5 companies konsi hain?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC"
+    },
+    {
+      "id": "rl-avginv",
+      "question": "average invoice net amount kya hai?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "roman-urdu"
+      ],
+      "difficulty": "medium",
+      "gold": "SELECT AVG(net_amt) FROM dbo.InvoiceLine"
+    },
+    {
+      "id": "nat-bestmonth",
+      "question": "2026 mein sab se zyada sale kis mahine mein hui?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "natural",
+        "roman-urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+    },
+    {
+      "id": "nat-topbook",
+      "question": "top 3 booking man kon hain net sale ke hisab se?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "natural",
+        "roman-urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+    },
+    {
+      "id": "nat-toprod",
+      "question": "2026 mein sab se zyada bikne wali 5 products (units)?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "natural",
+        "roman-urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC"
+    },
+    {
+      "id": "nat-debt",
+      "question": "sab se zyada udhaar kis area ke customers par hai?",
+      "language": "ur-Latn",
+      "tags": [
+        "mds",
+        "natural",
+        "roman-urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 1 a.name, SUM(c.cust_rec_balance) AS Due FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.area_id, a.name ORDER BY Due DESC"
+    },
+    {
+      "id": "nat-compunits",
+      "question": "Which company's products sold the most units in 2026?",
+      "language": "en",
+      "tags": [
+        "mds",
+        "natural"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT TOP 1 c.comp_name, SUM(d.sale_qty) AS Units FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Company c ON c.comp_id = d.comp_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY c.comp_id, c.comp_name ORDER BY Units DESC"
+    },
+    {
+      "id": "nat-monthsales-ur",
+      "question": "2026 میں ہر مہینے کی کل سیل کتنی رہی؟",
+      "language": "ur",
+      "tags": [
+        "mds",
+        "natural",
+        "urdu"
+      ],
+      "difficulty": "hard",
+      "gold": "SELECT MONTH(inv_date) AS Mon, SUM(net_amt) AS NetSales FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date)"
+    }
+  ]
+}

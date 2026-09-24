@@ -15,7 +15,7 @@ describe('ask', () => {
     expect(url).toBe('http://srv:3000/query/ask');
     expect((init.headers as Record<string, string>)['x-api-key']).toBe('secret');
     const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({ question: 'How many?', answer: true });
+    expect(body).toMatchObject({ question: 'How many?', answer: true, language: 'auto' });
     expect(body.context.map((c: { question: string }) => c.question)).toEqual(['q2', 'q3', 'q4', 'q5']);
   });
 
@@ -30,6 +30,18 @@ describe('ask', () => {
     const err = await ask(cfg, 'q', []).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ kind, message: expect.stringMatching(message) });
+  });
+
+  it('sends the chosen reply language', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(() => ok({ answer: 'Ap k 20 customers hain.' }));
+    await ask(cfg, 'kitne customers hain?', [], undefined, 'ur-Latn');
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body)).language).toBe('ur-Latn');
+  });
+
+  it('refuses to call out before a server address is set', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch');
+    await expect(ask({ baseUrl: '' }, 'q', [])).rejects.toMatchObject({ kind: 'unconfigured' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('reports network failures with the address to check', async () => {

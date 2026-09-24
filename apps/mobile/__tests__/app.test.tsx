@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { cue } from '../src/lib/feedback';
 import * as theme from '../src/theme';
 
 // Native recorder and picker are replaced at the app's own seams (useVoice, media).
@@ -11,6 +12,7 @@ jest.mock('../src/lib/useVoice', () => {
       return {
         state,
         durationMs: state === 'recording' ? 4200 : 0,
+        levels: Array(36).fill(0.2),
         start: async () => setState('recording'),
         cancel: async () => setState('idle'),
         finish: async () => {
@@ -22,6 +24,12 @@ jest.mock('../src/lib/useVoice', () => {
     },
   };
 });
+jest.mock('../src/lib/feedback', () => ({
+  cue: jest.fn(),
+  preloadFeedback: jest.fn(),
+  setFeedbackEnabled: jest.fn(),
+  START_CUE_MS: 0,
+}));
 jest.mock('../src/lib/media', () => ({
   pickImage: async () => ({ uri: 'file:///photo.jpg', name: 'photo.jpg', type: 'image/jpeg', thumb: 'data:image/jpeg;base64,AAAA' }),
 }));
@@ -217,8 +225,10 @@ it('sends a voice message and shows what was heard', async () => {
   renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What would you like to know?');
   fireEvent.press(screen.getByLabelText('Record voice message'));
-  expect(await screen.findByText('Recording')).toBeTruthy();
+  // Live row: timer + waveform, labelled for screen readers.
+  expect(await screen.findByLabelText('Recording')).toBeTruthy();
   expect(screen.getByText('0:04')).toBeTruthy();
+  expect(screen.getByLabelText('Cancel recording')).toBeTruthy();
   fireEvent.press(screen.getByLabelText('Send voice message'));
   await waitFor(() => expect(requests).toHaveLength(1));
 
@@ -226,7 +236,7 @@ it('sends a voice message and shows what was heard', async () => {
   const audio = requests[0].parts!.find(([k]) => k === 'audio')![1];
   // Native builds stream the file by URI (Jest's FormData may stringify the descriptor).
   expect(typeof audio === 'string' ? audio : JSON.stringify(audio)).toMatch(/voice\.m4a|object/);
-  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'audio']);
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'language', 'audio']);
   expect(screen.getByLabelText('Voice message 0:04')).toBeTruthy();
 
   await act(async () =>
@@ -249,7 +259,7 @@ it('sends a photo with a question and shows what was read', async () => {
   fireEvent.press(screen.getByLabelText('Send'));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests[0].body.question).toBe('How many of these did we sell?');
-  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'image']);
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'language', 'image']);
   expect(screen.queryByLabelText('Remove photo')).toBeNull();
 
   await act(async () =>
@@ -305,6 +315,24 @@ describe('in Urdu (the default)', () => {
     fireEvent.changeText(screen.getByLabelText('Message'), 'کتنے آرڈر ہیں؟');
     fireEvent.press(screen.getByLabelText('بھیجیں'));
     expect(await screen.findByText(/سرور http:\/\/localhost:3000 تک رسائی نہیں ہو سکی/)).toBeTruthy();
+    // A wrong address is fixed in Settings, so the error offers a shortcut there.
+    fireEvent.press(screen.getByLabelText('سیٹنگز کھولیں'));
+    expect(await screen.findByText('سرور کا پتہ')).toBeTruthy();
+  });
+
+  it('replies in Roman Urdu when chosen in Settings', async () => {
+    renderRouter(routes, { initialUrl: '/settings' });
+    fireEvent.press(await screen.findByLabelText('Roman Urdu'));
+    expect(await AsyncStorage.getItem('settings.replyLanguage')).toBe(JSON.stringify('ur-Latn'));
+    fireEvent.press(screen.getByLabelText('Save settings'));
+    await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
+    fireEvent.changeText(screen.getByLabelText('Message'), 'hamare kitne customers hain?');
+    fireEvent.press(screen.getByLabelText('بھیجیں'));
+    await waitFor(() => expect(requests.length).toBe(1));
+    expect(requests[0].body).toMatchObject({ question: 'hamare kitne customers hain?', language: 'ur-Latn' });
+    await act(async () => requests[0].resolve(200, answerWith({ answer: 'Ap k **1,050** customers hain.', language: 'ur-Latn' })));
+    expect(await screen.findByText('1,050')).toBeTruthy();
+    expect(cue).toHaveBeenCalledWith('answer');
   });
 
   it('switches to English instantly from Settings', async () => {
@@ -312,7 +340,8 @@ describe('in Urdu (the default)', () => {
     await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
     fireEvent.press(screen.getByLabelText('گفتگوئیں کھولیں'));
     fireEvent.press(await screen.findByLabelText('سیٹنگز'));
-    fireEvent.press(await screen.findByLabelText('English'));
+    // The first "English" is the interface language; the reply-language group has its own.
+    fireEvent.press((await screen.findAllByLabelText('English'))[0]);
     expect(await screen.findByText('Language')).toBeTruthy();
     expect(await AsyncStorage.getItem('settings.language')).toBe(JSON.stringify('en'));
   });

@@ -56,8 +56,22 @@ export function valueHintSql(table: TableInfo, column: ColumnInfo, maxDistinct: 
   );
 }
 
+/** Values that identify people or places rather than categorize anything. */
+const PERSONAL_VALUE = [
+  /^\+?[\d\s()-]{6,}$/, // phone numbers, long numeric ids, cheque/booking numbers
+  /@/, // emails
+  /^-?\d{1,3}\.\d{3,},\s*-?\d{1,3}\.\d{3,}$/, // "lat,lng" coordinates
+];
+
+/**
+ * A column is only hinted when its values categorize (status codes, groups,
+ * months). If most sampled values look like phone numbers, ids, emails or
+ * coordinates the column is skipped entirely, whatever its name says.
+ */
 export function toHint(rows: { v: unknown }[], maxDistinct: number): string[] | undefined {
   if (rows.length === 0 || rows.length > maxDistinct) return undefined;
   const values = rows.map((r) => String(r.v).trim()).filter((v) => v && v.length <= MAX_VALUE_CHARS);
+  const personal = values.filter((v) => PERSONAL_VALUE.some((re) => re.test(v))).length;
+  if (personal > 0 && personal >= values.length / 3) return undefined;
   return values.length ? values : undefined;
 }

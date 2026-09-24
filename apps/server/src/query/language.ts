@@ -39,7 +39,7 @@ export function detectLanguage(text: string): Lang {
 export const LANGUAGE_NAME: Record<Lang, string> = {
   en: 'English',
   ur: 'Urdu (in Urdu script)',
-  'ur-Latn': 'Roman Urdu (Urdu written in Latin letters, the way Pakistanis type it)',
+  'ur-Latn': 'Roman Urdu (Urdu in Latin letters, the casual way Pakistanis text, e.g. "Ap k 20 customers hain")',
 };
 
 /** Fixed phrases the server writes itself, so they never cost a model call. */
@@ -50,7 +50,7 @@ export const PHRASES: Record<Lang, { noRows: string; cannotAnswer: string }> = {
     cannotAnswer: 'اس ڈیٹا بیس سے اس سوال کا جواب نہیں دیا جا سکتا:',
   },
   'ur-Latn': {
-    noRows: 'Is sawal ke liye koi record nahi mila.',
-    cannotAnswer: 'Is database se is sawal ka jawab nahi diya ja sakta:',
+    noRows: 'Is sawal ka koi record nahi mila.',
+    cannotAnswer: 'Ye database is sawal ka jawab nahi de sakta:',
   },
 };

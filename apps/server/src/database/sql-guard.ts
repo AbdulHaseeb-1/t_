@@ -126,3 +126,39 @@ export function assertReadOnlySql(sql: string): string {
   if (hit) throw new UnsafeSqlError(`forbidden keyword "${hit[0].toUpperCase()}"`);
   return trimmed;
 }
+
+/** Every identifier the statement references: bare words plus the contents of [..] and ".." quotes. */
+export function referencedIdentifiers(sql: string): Set<string> {
+  const ids = new Set<string>();
+  for (const m of sql.matchAll(/\[((?:[^\]]|\]\])+)\]|"((?:[^"]|"")+)"/g)) ids.add((m[1] ?? m[2]).replace(/\]\]|""/g, (q) => q[0]).toLowerCase());
+  for (const w of stripTsql(sql).match(/[A-Za-z_][A-Za-z0-9_$#@]*/g) ?? []) ids.add(w.toLowerCase());
+  return ids;
+}
+
+export function globToRegExp(glob: string): RegExp {
+  const src = glob
+    .toLowerCase()
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  return new RegExp(`^${src}$`);
+}
+
+/** Rejects statements that name a denied column (e.g. passwords), quoted or not. */
+export function assertNoDeniedColumns(sql: string, denied: RegExp[]): void {
+  if (!denied.length) return;
+  for (const id of referencedIdentifiers(sql)) {
+    if (denied.some((r) => r.test(id))) throw new UnsafeSqlError(`column "${id}" is not available`);
+  }
+}
+
+/**
+ * `SELECT *` / `alias.*` would return columns the guard cannot see by name
+ * (e.g. an identity-number column). COUNT(*) and multiplication stay allowed.
+ */
+export function assertNoStarProjection(sql: string): void {
+  const bare = stripTsql(sql);
+  if (/(?:\bSELECT|\bDISTINCT|\bTIES|\)|,)\s*(?:[A-Za-z_][\w$#@]*\s*\.\s*|\bq\s*\.\s*)?\*\s*(?:,|\bFROM\b|$)/i.test(bare)) {
+    throw new UnsafeSqlError('list the needed columns instead of *');
+  }
+}

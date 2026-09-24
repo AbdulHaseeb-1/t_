@@ -12,6 +12,7 @@ function compactCount(n: number): string {
 /**
  * One line per table, e.g.
  *   dbo.Orders ~12.3k rows | OrderId int PK, CustomerId int ->dbo.Customers.Id, Status varchar(12) {Open|Closed}
+ *   dbo.Town ~193 rows | area_id int, town_id int, name varchar(30), PK(area_id, town_id)
  * Roughly 3-5x fewer tokens than CREATE TABLE DDL with the same information
  * an LLM needs to write correct joins.
  */
@@ -24,10 +25,13 @@ export function renderTable(t: TableInfo): string {
   ]
     .filter(Boolean)
     .join(' ');
+  const pk = t.columns.filter((c) => c.pk);
+  // A composite key marked per column reads as several unique ids; spell it out once instead.
+  const composite = pk.length > 1;
   const cols = t.columns
     .map((c) => {
       let s = `${c.name} ${c.type}`;
-      if (c.pk) s += ' PK';
+      if (c.pk && !composite) s += ' PK';
       if (c.fk) s += ` ->${c.fk}`;
       if (c.description) s += ` "${c.description}"`;
       if (c.values?.length) {
@@ -37,7 +41,7 @@ export function renderTable(t: TableInfo): string {
       return s;
     })
     .join(', ');
-  return `${head} | ${cols}`;
+  return composite ? `${head} | ${cols}, PK(${pk.map((c) => c.name).join(', ')})` : `${head} | ${cols}`;
 }
 
 export function renderTables(tables: TableInfo[]): string {

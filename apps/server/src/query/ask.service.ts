@@ -173,7 +173,7 @@ export class AskService {
       try {
         const result = await this.timed(timings, 'dbMs', () => this.db.readOnlyQuery(cachedSql, maxRows));
         const answer = input.answer
-          ? await this.phrase(input.question, cachedSql, result, meter, timings)
+          ? await this.phrase(input.question, cachedSql, result, meter, timings, lang)
           : null;
         return done({ sql: cachedSql, answer, result, cache: 'sql', attempts: 0 });
       } catch (err) {
@@ -335,7 +335,7 @@ export class AskService {
     result: QueryResult,
     meter: UsageMeter,
     timings: Timings,
-    lang: Lang = 'en',
+    lang: Lang,
   ): Promise<string> {
     if (result.rowCount === 0) return PHRASES[lang].noRows;
     // A single value needs no language model (English only: Urdu needs a natural label).

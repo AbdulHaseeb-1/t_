@@ -4,20 +4,14 @@ import { dirname } from 'node:path';
 import { Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { AppConfig } from '../../config/app-config.js';
 import { DatabaseService } from '../database.service.js';
+import { globToRegExp } from '../sql-guard.js';
 import { buildSnapshot, INTROSPECTION_SQL } from './schema-introspector.js';
 import { renderIndex, renderTable, renderTables } from './schema-renderer.js';
+import { applySchemaNotes, loadSchemaNotes, type SchemaNotes } from './schema-notes.js';
 import { SchemaRetriever } from './schema-retriever.js';
 import type { SchemaContext, SchemaSnapshot, TableInfo } from './schema.types.js';
 import { hintCandidates, toHint, valueHintSql } from './value-hints.js';
 
-function globToRegExp(glob: string): RegExp {
-  const src = glob
-    .toLowerCase()
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*')
-    .replace(/\?/g, '.');
-  return new RegExp(`^${src}$`);
-}
 
 interface Loaded {
   snapshot: SchemaSnapshot;
@@ -35,11 +29,15 @@ export class SchemaCatalogService implements OnModuleInit {
   private readonly logger = new Logger(SchemaCatalogService.name);
   private loaded?: Loaded;
   private loading?: Promise<Loaded>;
+  /** Read once at startup: a malformed notes file should fail the boot, not a question. */
+  private readonly notes: SchemaNotes;
 
   constructor(
     private readonly config: AppConfig,
     private readonly db: DatabaseService,
-  ) {}
+  ) {
+    this.notes = loadSchemaNotes(config.get('SCHEMA_NOTES_FILE'));
+  }
 
   async onModuleInit(): Promise<void> {
     try {
@@ -166,12 +164,16 @@ export class SchemaCatalogService implements OnModuleInit {
   private applyFilters(s: SchemaSnapshot): SchemaSnapshot {
     const include = this.config.get('SCHEMA_INCLUDE').map(globToRegExp);
     const exclude = this.config.get('SCHEMA_EXCLUDE').map(globToRegExp);
-    const tables = s.tables.filter((t) => {
-      const id = t.id.toLowerCase();
-      if (include.length && !include.some((r) => r.test(id))) return false;
-      return !exclude.some((r) => r.test(id));
-    });
-    return { ...s, tables };
+    const denied = this.config.get('DB_DENY_COLUMNS').map(globToRegExp);
+    const tables = s.tables
+      .filter((t) => {
+        const id = t.id.toLowerCase();
+        if (include.length && !include.some((r) => r.test(id))) return false;
+        return !exclude.some((r) => r.test(id));
+      })
+      // Denied columns (secrets, identity numbers) are invisible to the model.
+      .map((t) => ({ ...t, columns: t.columns.filter((c) => !denied.some((r) => r.test(c.name.toLowerCase()))) }));
+    return { ...s, tables: applySchemaNotes(tables, this.notes) };
   }
 
   private prepare(raw: SchemaSnapshot): Loaded {

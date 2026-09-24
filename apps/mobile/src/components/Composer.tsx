@@ -17,6 +17,7 @@ import { useVoice } from '../lib/useVoice';
 import type { Outgoing } from '../state/chats';
 import { fonts, type, usePalette } from '../theme';
 import { IconButton } from './IconButton';
+import { PulseDot, Waveform } from './Waveform';
 
 interface Props {
   busy: boolean;
@@ -53,7 +54,7 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
   const voice = useVoice(
     useCallback((audio) => onSend({ text: text.trim(), audio, image: image ?? undefined }), [onSend, text, image]),
   );
-  const recording = voice.state === 'recording';
+  const recording = voice.state === 'recording' || voice.state === 'starting';
   const hasContent = text.trim().length > 0 || !!image;
 
   const reset = () => {
@@ -101,7 +102,13 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
       <View style={[styles.stopGlyph, { backgroundColor: p.onPrimary }]} />
     </Pressable>
   ) : recording ? (
-    <Pressable accessibilityRole="button" accessibilityLabel={t.sendRecording} onPress={finishRecording} style={[styles.round, { backgroundColor: p.primary }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t.sendRecording}
+      onPress={finishRecording}
+      disabled={voice.state === 'starting'}
+      style={[styles.round, { backgroundColor: p.primary }]}
+    >
       <Feather name="arrow-up" size={18} color={p.onPrimary} />
     </Pressable>
   ) : hasContent ? (
@@ -134,10 +141,10 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
       )}
 
       {recording ? (
-        <View style={[row(rtl), styles.recRow]} accessibilityLiveRegion="polite">
-          <View style={[styles.recDot, { backgroundColor: p.danger }]} />
-          <Text style={[type.body, { color: p.text, fontVariant: ['tabular-nums'] }]}>{clock(voice.durationMs)}</Text>
-          <Text style={[scriptStyle(t.recording, type.meta), { color: p.muted }]}>{t.recording}</Text>
+        <View style={[row(rtl), styles.recRow]} accessibilityLiveRegion="polite" accessibilityLabel={t.recording}>
+          <PulseDot color={p.danger} />
+          <Text style={[type.body, styles.clock, { color: p.text }]}>{clock(voice.durationMs)}</Text>
+          <Waveform levels={voice.levels} color={p.text} rtl={rtl} />
         </View>
       ) : (
         <TextInput
@@ -191,7 +198,7 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
 
       <View style={[row(rtl), styles.bar]}>
         {recording ? (
-          <IconButton name="x" label={t.cancelRecording} size={20} onPress={voice.cancel} />
+          <IconButton name="trash-2" label={t.cancelRecording} size={19} color={p.muted} onPress={voice.cancel} />
         ) : (
           <IconButton
             name={menu ? 'x' : 'plus'}
@@ -227,8 +234,8 @@ const styles = StyleSheet.create({
   attachRow: { paddingHorizontal: 4, paddingTop: 2 },
   thumb: { width: 56, height: 56, borderRadius: 10 },
   remove: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  recRow: { alignItems: 'center', gap: 10, paddingHorizontal: 4, minHeight: 28 },
-  recDot: { width: 9, height: 9, borderRadius: 4.5 },
+  recRow: { alignItems: 'center', gap: 10, paddingHorizontal: 4, minHeight: 30 },
+  clock: { fontVariant: ['tabular-nums'], minWidth: 40 },
   menu: { gap: 8, paddingHorizontal: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
   bar: { alignItems: 'center' },

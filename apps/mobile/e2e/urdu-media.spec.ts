@@ -63,7 +63,7 @@ test('Urdu is the default: Urdu question, Urdu answer in Nastaliq', async ({ pag
 test('voice message: spoken Urdu is heard, answered and shown', async ({ page }) => {
   await fresh(page);
   await page.getByRole('button', { name: 'آواز کا پیغام ریکارڈ کریں' }).click();
-  await expect(page.getByText('ریکارڈنگ')).toBeVisible();
+  await expect(page.getByLabel('ریکارڈنگ', { exact: true })).toBeVisible();
   await page.waitForTimeout(4200);
   await page.getByRole('button', { name: 'آواز کا پیغام بھیجیں' }).click();
   await expect(page.getByLabel(/^آواز کا پیغام \d:\d\d$/)).toBeVisible();
@@ -106,8 +106,9 @@ test('switching to English applies instantly and persists', async ({ page }) => 
   await fresh(page);
   await page.getByRole('button', { name: 'گفتگوئیں کھولیں' }).click();
   await page.getByRole('button', { name: 'سیٹنگز' }).click();
-  await page.getByRole('radio', { name: 'English' }).click();
-  await expect(page.getByText('Language')).toBeVisible();
+  // The first "English" is the interface language (the reply-language group has one too).
+  await page.getByRole('radio', { name: 'English' }).first().click();
+  await expect(page.getByText('Language', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save settings' }).click();
   await expect(page.getByText('What would you like to know?')).toBeVisible();
   await page.reload();

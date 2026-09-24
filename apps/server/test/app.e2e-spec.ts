@@ -330,6 +330,32 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     expect(visionRequest!.reasoning_effort).toBe('low');
   });
 
+  it('uses a question written in the image verbatim, ignoring unrelated image content', async () => {
+    const sqlPrompts: string[] = [];
+    script = (body) => {
+      const sys = role(body);
+      if (sys.startsWith('You help people query')) {
+        // The vision model folds the table into its paraphrase; the written question must win.
+        return {
+          content:
+            '{"language":"ur","written_question":"ہمارے کتنے پروڈکٹس ہیں؟","question":"How many Gizmo products with quantity 12?","display":"x","extracted":"سوال اور ایک جدول"}',
+        };
+      }
+      if (sys.startsWith('You are a precise data analyst')) return { content: 'ہمارے 5 پروڈکٹس ہیں۔' };
+      sqlPrompts.push(JSON.stringify(body.messages));
+      return { content: '```sql\nSELECT COUNT(*) AS [Products] FROM [dbo].[Products]\n```' };
+    };
+    const form = new FormData();
+    form.append('image', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), 'q.png');
+    const { status, body } = await upload(form);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ image: { display: 'ہمارے کتنے پروڈکٹس ہیں؟' }, language: 'ur', result: { rows: [[5]] } });
+    // The fake server hands bodies over as latin1; decode to compare the Urdu text.
+    const sent = Buffer.from(sqlPrompts.join(), 'latin1').toString('utf8');
+    expect(sent).toContain('ہمارے کتنے پروڈکٹس ہیں؟');
+    expect(sent).not.toContain('Gizmo');
+  });
+
   it('rejects empty, unsupported and oversized uploads', async () => {
     const empty = new FormData();
     empty.append('question', '');

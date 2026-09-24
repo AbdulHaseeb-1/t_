@@ -87,6 +87,31 @@ describe('renderer', () => {
     );
   });
 
+  it('spells out a composite primary key once instead of marking each column', () => {
+    const town: TableInfo = {
+      id: 'dbo.TblTown',
+      schema: 'dbo',
+      name: 'TblTown',
+      kind: 'table',
+      rowCount: 193,
+      columns: [col('town_id', { pk: true }), col('name', { type: 'varchar(30)' }), col('area_id', { pk: true })],
+    };
+    expect(renderTable(town)).toBe('dbo.TblTown ~193 rows | town_id int, name varchar(30), area_id int, PK(town_id, area_id)');
+  });
+
+  it('always includes a table named in the question, even when wider tables match more words', () => {
+    const wide = (id: string): TableInfo => ({
+      id,
+      schema: 'dbo',
+      name: id.slice(4),
+      kind: 'table',
+      columns: [col('net_sales'), col('invoice_total'), col('detail_net')],
+    });
+    const company: TableInfo = { id: 'dbo.Company', schema: 'dbo', name: 'Company', kind: 'table', columns: [col('comp_id', { pk: true })] };
+    const r = new SchemaRetriever([wide('dbo.InvoiceDetail'), wide('dbo.InvoiceView'), wide('dbo.SalesDetail'), company]);
+    expect(r.rank('top companies by net sales using invoice detail', 3).map((t) => t.id)).toContain('dbo.Company');
+  });
+
   it('caps the names-only index', () => {
     expect(renderIndex(tables, 30)).toBe('dbo.Customers, dbo.SalesOrders, ... (+more)');
   });

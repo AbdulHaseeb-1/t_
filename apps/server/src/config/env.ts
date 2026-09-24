@@ -53,8 +53,16 @@ export const envSchema = z.object({
 
   /** Glob patterns on `schema.table`, e.g. `dbo.*,sales.*`. Empty = everything. */
   SCHEMA_INCLUDE: csv,
+  /**
+   * Column-name globs that must never be read (secrets and identity numbers).
+   * They are hidden from the model and any SQL naming them is rejected. For full
+   * protection also DENY them to the reader login (infra/mssql/harden.sql).
+   */
+  DB_DENY_COLUMNS: csv.transform((v) => (v.length ? v : ['*password*', '*passwd*', '*pwd*', '*secret*', '*token*', '*cnic*', '*ssn*'])),
   SCHEMA_EXCLUDE: csv,
   SCHEMA_CACHE_FILE: z.string().default('.cache/schema.json'),
+  /** JSON of curated table/column notes (grain, which amount is "sales"...). See schema-notes.ts. */
+  SCHEMA_NOTES_FILE: z.string().default(''),
   /** Below this rendered size the whole schema is sent (stable prefix => provider cache hits). */
   SCHEMA_FULL_CONTEXT_MAX_CHARS: z.coerce.number().int().positive().default(24_000),
   SCHEMA_MAX_TABLES: z.coerce.number().int().positive().default(10),
@@ -71,7 +79,7 @@ export const envSchema = z.object({
   SCHEMA_VALUE_HINTS_EXCLUDE: z
     .string()
     .default(
-      'name|mail|phone|mobile|fax|address|street|zip|postal|ssn|passport|password|pwd|token|secret|iban|card|account|birth|dob|salary|note|comment|description|url|ip',
+      'name|mail|email|phone|ph|cell|mobile|tel|fax|address|addr|street|zip|postal|ssn|cnic|nic|passport|password|pwd|token|secret|iban|card|account|acc|birth|dob|salary|note|notes|comment|remarks|description|desc|url|ip|loc|location|gps|lat|lng|lon|cheque|chq|insr|updt|by|user|contact',
     ),
 
   /** Verified question -> SQL pairs used as few-shot examples. */

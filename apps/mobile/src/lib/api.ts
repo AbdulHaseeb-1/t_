@@ -31,6 +31,9 @@ export interface AskResponse {
   usage: { llmCalls: number; costUsd?: number };
 }
 
+/** Answer language: auto follows the question; ur-Latn is Roman Urdu. */
+export type ReplyLanguage = 'auto' | 'ur' | 'ur-Latn' | 'en';
+
 export interface Turn {
   question: string;
   sql: string;
@@ -41,7 +44,7 @@ export interface ServerConfig {
   apiKey?: string;
 }
 
-export type ApiErrorKind = 'network' | 'timeout' | 'auth' | 'rate_limit' | 'query' | 'unavailable' | 'server' | 'aborted';
+export type ApiErrorKind = 'unconfigured' | 'network' | 'timeout' | 'auth' | 'rate_limit' | 'query' | 'unavailable' | 'server' | 'aborted';
 
 export class ApiError extends Error {
   constructor(
@@ -88,6 +91,8 @@ async function request<T>(
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort);
 
+  if (!cfg.baseUrl.trim()) throw new ApiError('unconfigured', 'No server address is set. Add it in Settings.');
+
   let res: Response;
   try {
     res = await fetch(`${normalizeBaseUrl(cfg.baseUrl)}${path}`, {
@@ -114,11 +119,17 @@ async function request<T>(
   return body as T;
 }
 
-export function ask(cfg: ServerConfig, question: string, context: Turn[], signal?: AbortSignal): Promise<AskResponse> {
+export function ask(
+  cfg: ServerConfig,
+  question: string,
+  context: Turn[],
+  signal?: AbortSignal,
+  language: ReplyLanguage = 'auto',
+): Promise<AskResponse> {
   return request<AskResponse>(
     cfg,
     '/query/ask',
-    { method: 'POST', body: JSON.stringify({ question, context: context.slice(-4), answer: true }) },
+    { method: 'POST', body: JSON.stringify({ question, context: context.slice(-4), answer: true, language }) },
     signal,
   );
 }
@@ -135,13 +146,14 @@ export interface MediaFile {
  */
 export async function askMedia(
   cfg: ServerConfig,
-  input: { question: string; context: Turn[]; audio?: MediaFile; image?: MediaFile },
+  input: { question: string; context: Turn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage },
   signal?: AbortSignal,
 ): Promise<AskResponse> {
   const form = new FormData();
   form.append('question', input.question);
   form.append('context', JSON.stringify(input.context.slice(-4)));
   form.append('answer', 'true');
+  form.append('language', input.language ?? 'auto');
   for (const [field, file] of [['audio', input.audio], ['image', input.image]] as const) {
     if (!file) continue;
     if (Platform.OS === 'web') {

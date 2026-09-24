@@ -126,6 +126,19 @@ describe('AskService', () => {
     expect(db.readOnlyQuery).toHaveBeenCalledTimes(2);
   });
 
+  it('answers a cached-SQL hit in the requested language, not English', async () => {
+    // Regression: the SQL-cache path used to phrase every answer in English.
+    const { service, calls } = setup(
+      ['```sql\nSELECT COUNT(*) AS Customers FROM dbo.Customers\n```', 'Ap k 400 customers hain.'],
+      () => ({ ...scalar, columns: [{ name: 'Customers', type: 'int' }] }),
+    );
+    const en = await service.ask(ask('How many customers do we have?'));
+    expect(en.answer).toBe('Customers: **42**');
+    const roman = await service.ask(ask('How many customers do we have?', { language: 'ur-Latn' }));
+    expect(roman).toMatchObject({ cache: 'sql', language: 'ur-Latn', answer: 'Ap k 400 customers hain.' });
+    expect(JSON.stringify(calls.at(-1)!.messages)).toMatch(/Roman Urdu/);
+  });
+
   it('repairs failing SQL and escalates the final attempt to the smart tier', async () => {
     const { service, calls } = setup(
       [

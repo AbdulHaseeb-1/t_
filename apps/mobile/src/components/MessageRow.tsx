@@ -1,7 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { inferChart } from '../lib/chart';
 import type { AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
@@ -76,6 +77,17 @@ function Assistant({ m }: { m: AssistantMessage }) {
         </View>
         <View style={[styles.actions, row(rtl)]}>
           <IconButton name="rotate-ccw" label={t.retry} size={16} color={p.muted} onPress={() => retry(m.id)} />
+          {m.fixInSettings && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t.openSettings}
+              onPress={() => router.push('/settings')}
+              style={({ pressed }) => [styles.fix, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+            >
+              <Feather name="settings" size={14} color={p.text} />
+              <Text style={[scriptStyle(t.openSettings, type.meta), { color: p.text }]}>{t.openSettings}</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -113,5 +125,6 @@ const styles = StyleSheet.create({
   photoImg: { width: '100%', height: '100%' },
   assistant: { gap: 12 },
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  actions: { marginHorizontal: -10, marginTop: -6 },
+  actions: { marginHorizontal: -10, marginTop: -6, alignItems: 'center', gap: 4 },
+  fix: { alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
 });

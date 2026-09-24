@@ -1,13 +1,19 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton } from '../components/IconButton';
-import { checkConnection, normalizeBaseUrl, type ServerConfig } from '../lib/api';
+import { checkConnection, normalizeBaseUrl, type ReplyLanguage, type ServerConfig } from '../lib/api';
 import { describeError } from '../lib/errors';
 import { row, scriptStyle, type UiLanguage, useI18n } from '../i18n';
 import { useSettings } from '../state/settings';
 import { fonts, type, usePalette } from '../theme';
+
+/** Back to the chat, also when Settings was opened directly (deep link, first run). */
+function leave() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
+}
 
 type Check = { state: 'idle' } | { state: 'checking' } | { state: 'ok' | 'warn' | 'fail'; message: string };
 
@@ -19,35 +25,96 @@ export default function SettingsScreen() {
   return <SettingsForm initial={server} save={save} />;
 }
 
-function LanguageSwitch() {
+function Segment<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  hint?: string;
+}) {
   const p = usePalette();
-  const { language, setLanguage } = useSettings();
-  const { t, rtl } = useI18n();
-  const options: { value: UiLanguage; label: string }[] = [
-    { value: 'ur', label: 'اردو' },
-    { value: 'en', label: 'English' },
-  ];
+  const { rtl } = useI18n();
   return (
     <View style={styles.group}>
-      <Text style={[scriptStyle(t.language, type.meta), { color: p.muted }]}>{t.language}</Text>
-      <View style={[styles.segment, row(rtl), { borderColor: p.border }]} accessibilityRole="radiogroup">
+      <Text style={[scriptStyle(label, type.meta), { color: p.muted }]}>{label}</Text>
+      <View
+        style={[styles.segment, row(rtl), options.length > 3 && styles.grid, { borderColor: p.border }]}
+        accessibilityRole="radiogroup"
+        accessibilityLabel={label}
+      >
         {options.map((o) => {
-          const on = language === o.value;
+          const on = value === o.value;
           return (
             <Pressable
               key={o.value}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
+              aria-checked={on}
               accessibilityLabel={o.label}
-              onPress={() => setLanguage(o.value)}
-              style={[styles.segmentItem, on && { backgroundColor: p.primary }]}
+              onPress={() => onChange(o.value)}
+              style={[styles.segmentItem, options.length > 3 && styles.gridItem, on && { backgroundColor: p.primary }]}
             >
-              <Text style={[scriptStyle(o.label, type.label), { color: on ? p.onPrimary : p.text, textAlign: 'center' }]}>{o.label}</Text>
+              <Text numberOfLines={1} style={[scriptStyle(o.label, type.label), { color: on ? p.onPrimary : p.text, textAlign: 'center' }]}>
+                {o.label}
+              </Text>
             </Pressable>
           );
         })}
       </View>
+      {!!hint && <Text style={[scriptStyle(hint, type.meta), { color: p.faint }]}>{hint}</Text>}
     </View>
+  );
+}
+
+function Preferences() {
+  const p = usePalette();
+  const { language, setLanguage, replyLanguage, setReplyLanguage, sounds, setSounds } = useSettings();
+  const { t, rtl } = useI18n();
+  return (
+    <>
+      <Segment<UiLanguage>
+        label={t.language}
+        value={language}
+        onChange={setLanguage}
+        options={[
+          { value: 'ur', label: 'اردو' },
+          { value: 'en', label: 'English' },
+        ]}
+      />
+      <Segment<ReplyLanguage>
+        label={t.replyLanguage}
+        value={replyLanguage}
+        onChange={setReplyLanguage}
+        hint={t.replyAutoHint}
+        options={[
+          { value: 'auto', label: t.replyAuto },
+          { value: 'ur', label: 'اردو' },
+          { value: 'ur-Latn', label: t.romanUrdu },
+          { value: 'en', label: 'English' },
+        ]}
+      />
+      <View style={styles.group}>
+        <View style={[row(rtl), styles.switchRow]}>
+          <Text style={[scriptStyle(t.sounds, type.label), styles.flex, { color: p.text }]}>{t.sounds}</Text>
+          <Switch
+            value={sounds}
+            onValueChange={setSounds}
+            accessibilityLabel={t.sounds}
+            trackColor={{ true: p.accent, false: p.border }}
+            thumbColor={p.surface}
+            // react-native-web colours the "on" thumb separately.
+            {...({ activeThumbColor: p.surface } as object)}
+          />
+        </View>
+        <Text style={[scriptStyle(t.soundsHint, type.meta), { color: p.faint }]}>{t.soundsHint}</Text>
+      </View>
+    </>
   );
 }
 
@@ -58,7 +125,7 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
   const [key, setKey] = useState(initial.apiKey ?? '');
   const [check, setCheck] = useState<Check>({ state: 'idle' });
 
-  const draft = { baseUrl: normalizeBaseUrl(url || initial.baseUrl), apiKey: key.trim() || undefined };
+  const draft = { baseUrl: url.trim() ? normalizeBaseUrl(url) : '', apiKey: key.trim() || undefined };
 
   const test = async () => {
     setCheck({ state: 'checking' });
@@ -75,7 +142,7 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
 
   const done = async () => {
     await save(draft);
-    router.back();
+    leave();
   };
 
   const field = [type.body, styles.input, { color: p.text, backgroundColor: p.surface, borderColor: p.border }];
@@ -84,7 +151,7 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
       <View style={[styles.bar, row(rtl)]}>
-        <IconButton name="x" label={t.closeSettings} onPress={() => router.back()} />
+        <IconButton name="x" label={t.closeSettings} onPress={leave} />
         <Text style={[scriptStyle(t.settingsTitle, type.title), styles.title, { color: p.text, textAlign: 'center' }]} accessibilityRole="header">
           {t.settingsTitle}
         </Text>
@@ -94,7 +161,6 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <LanguageSwitch />
         <View style={styles.group}>
           <Text style={[scriptStyle(t.serverAddress, type.meta), { color: p.muted }]} nativeID="url-label">
             {t.serverAddress}
@@ -106,6 +172,7 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
             autoCorrect={false}
             keyboardType="url"
             placeholder="http://192.168.1.20:3000"
+            autoFocus={!initial.baseUrl}
             placeholderTextColor={p.faint}
             accessibilityLabelledBy="url-label"
             accessibilityLabel="Server address"
@@ -151,6 +218,8 @@ function SettingsForm({ initial, save }: { initial: ServerConfig; save: (next: S
             {check.message}
           </Text>
         )}
+        <View style={[styles.divider, { backgroundColor: p.border }]} />
+        <Preferences />
       </ScrollView>
     </SafeAreaView>
   );
@@ -165,6 +234,12 @@ const styles = StyleSheet.create({
   group: { gap: 8 },
   input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
   segment: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 3, gap: 3 },
-  segmentItem: { flex: 1, borderRadius: 9, paddingVertical: 6, alignItems: 'center' },
+  segmentItem: { flex: 1, borderRadius: 9, paddingVertical: 6, paddingHorizontal: 4, alignItems: 'center' },
+  grid: { flexWrap: 'wrap' },
+  // Two per row: long labels ("Roman Urdu") stay whole on small phones.
+  gridItem: { flexBasis: '48%', flexGrow: 1 },
+  switchRow: { alignItems: 'center', gap: 12 },
+  flex: { flex: 1 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
   test: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center' },
 });

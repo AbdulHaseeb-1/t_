@@ -112,7 +112,8 @@ test('explains an unreachable server and recovers after fixing settings', async 
   await ask(page, 'How many customers do we have?');
   await expect(page.getByText(/Can't reach the server/)).toBeVisible();
 
-  await open();
+  // The error offers a direct way to fix the address.
+  await page.getByRole('button', { name: 'Open settings' }).click();
   await page.getByRole('textbox', { name: 'Server address' }).fill(good);
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText(/^Connected\. Database is up/)).toBeVisible();
@@ -120,6 +121,25 @@ test('explains an unreachable server and recovers after fixing settings', async 
   await page.getByRole('button', { name: 'Retry' }).click();
   await lastAnswerDone(page);
   await expect(page.getByText(/\b400\b/).first()).toBeVisible();
+});
+
+test('replies in Roman Urdu when chosen, and the choice persists', async ({ page }) => {
+  await page.getByRole('button', { name: 'Open conversations' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('radio', { name: 'Roman Urdu' }).click();
+  await page.screenshot({ path: `${SHOTS}/settings.png` });
+  await page.getByRole('button', { name: 'Save settings' }).click();
+
+  await ask(page, 'How many customers do we have?');
+  await lastAnswerDone(page);
+  // Roman Urdu: Latin script, Urdu grammar ("Ap k 400 customers hain").
+  await expect(page.getByText(/\bhain\b/i).first()).toBeVisible();
+  await expect(page.getByText(/\b400\b/).first()).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Open conversations' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('radio', { name: 'Roman Urdu' })).toBeChecked();
 });
 
 test('renders tables in dark mode', async ({ browser }) => {

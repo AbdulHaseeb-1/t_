@@ -1,5 +1,5 @@
 import { FakeOpenAI, testConfig } from '../testing/fake-openai.js';
-import { LlmService } from './llm.service.js';
+import { LlmService, reasoningHeadroom } from './llm.service.js';
 import { UsageMeter } from './llm.types.js';
 import type { ModelPricingService } from './model-pricing.service.js';
 
@@ -41,7 +41,8 @@ describe('LlmService', () => {
     expect(res.message.content).toBe('from-openai');
     expect(openai.requests[0]).toMatchObject({
       model: 'gpt-6-luna',
-      max_completion_tokens: 50,
+      // 50 visible tokens + headroom for low-effort reasoning, so thinking never starves the answer.
+      max_completion_tokens: 50 + reasoningHeadroom('low'),
       prompt_cache_key: 'sql:abc',
       reasoning_effort: 'low',
     });

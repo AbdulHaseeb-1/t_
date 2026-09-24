@@ -43,3 +43,7 @@ yarn-error.*
 # Playwright
 test-results/
 playwright-report/
+
+# release signing (never commit)
+*.keystore
+credentials/

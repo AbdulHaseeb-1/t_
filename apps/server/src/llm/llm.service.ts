@@ -65,6 +65,13 @@ function isFailoverError(err: unknown): boolean {
   return false;
 }
 
+const REASONING_HEADROOM: Record<string, number> = { none: 0, minimal: 1_000, low: 2_000, medium: 6_000, high: 16_000 };
+
+/** Extra output tokens a reasoning effort may consume before the visible answer. Unset = model default (~medium). */
+export function reasoningHeadroom(effort: string | undefined): number {
+  return REASONING_HEADROOM[effort ?? 'medium'] ?? REASONING_HEADROOM.medium;
+}
+
 /**
  * One OpenAI-compatible code path for OpenAI and OpenRouter. The mode is
  * switchable at runtime; `auto` walks the fallback order, skipping providers
@@ -229,8 +236,11 @@ export class LlmService {
 
   private async send(p: Provider, req: ChatRequest): Promise<ChatResult> {
     const model = p.models[req.tier];
-    const maxTokens = req.maxTokens ?? this.config.get('LLM_MAX_OUTPUT_TOKENS');
     const effort = req.reasoningEffort ?? p.reasoning[req.tier];
+    // Reasoning tokens count against the output cap. Without headroom a hard
+    // question spends the whole budget thinking and returns empty content.
+    const maxTokens =
+      (req.maxTokens ?? this.config.get('LLM_MAX_OUTPUT_TOKENS')) + reasoningHeadroom(effort);
 
     const body: ChatCompletionCreateParamsNonStreaming & Record<string, unknown> = {
       model,

@@ -12,14 +12,16 @@ export const SQL_RULES = `You translate questions into ONE Microsoft SQL Server 
 Output format: a single \`\`\`sql fenced block and nothing else.
 Rules:
 - Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE/MERGE, INTO, DECLARE, SET, EXEC, temp tables, or multiple statements.
+- Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
+- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line. Follow any table or column notes (-- or "quoted").
 - Questions may come from Urdu or Roman Urdu speakers (with an English translation). Map Urdu words for places, statuses and categories to the stored values (e.g. پاکستان -> 'PK', منسوخ -> 'Cancelled').
 - Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled').
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
 - Apply exactly the filters the question states. Do not silently exclude rows (e.g. cancelled orders, inactive customers) unless asked.
 - T-SQL integer division truncates: CAST to decimal(18,4) before AVG of integer columns and before dividing.
-- Count entities with COUNT(DISTINCT key) whenever joins can repeat rows.
+- Count entities with COUNT(DISTINCT key) whenever joins can repeat rows. PK(a, b) marks a composite key: a single one of its columns is not unique, so count the table's own rows with COUNT(*).
 - For "never", "without", "no ..." use NOT EXISTS (NOT IN breaks on NULLs).
 - For an overall "top", "most", "least", "highest" use TOP (n) WITH TIES and ORDER BY, so ties are never hidden.
 - For the top item(s) per group ("for each region, the best rep") compute RANK() OVER (PARTITION BY group ORDER BY measure DESC) in a CTE and filter rank <= n.
@@ -49,7 +51,7 @@ export function sqlMessages(
     { role: 'system', content: SQL_RULES.replace('{maxRows}', String(maxRows)) },
     {
       role: 'system',
-      content: `Database: ${database}\nSchema (schema.table ~rows | column type [PK] [->referenced column] [{stored values}]):\n${ctx.text}`,
+      content: `Database: ${database}\nSchema (schema.table ~rows | column type [PK] [->referenced column] [{stored values}] [, PK(composite key columns)]):\n${ctx.text}`,
     },
   ];
   if (examples.length) {
@@ -87,8 +89,10 @@ Always start with at least one complete Urdu sentence, even when a table follows
 Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.
 Translate table headings into Urdu.`;
 
-const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu (Urdu in Latin letters, as Pakistanis type it), clear and polite.
-Always start with at least one complete Roman Urdu sentence, even when a table or list follows.
+const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu, the casual way Pakistanis text, for example:
+"Ap k 1,050 customers hain." / "Is mahine 320 orders aaye, jin mein se 12 cancel hue."
+Keep everyday business words in English (customers, orders, sales, revenue, stock, invoice, products).
+Short, friendly sentences with "ap". Always start with at least one full sentence, even when a table follows.
 Keep numbers, names, codes and IDs from the data exactly as they appear.`;
 
 /** Language instruction goes in the user turn, so the system prompt stays identical (cacheable) for every language. */

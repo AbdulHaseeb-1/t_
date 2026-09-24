@@ -15,8 +15,7 @@ Each run writes `eval/reports/<timestamp>-<dataset>/`:
 
 | File | For |
 |---|---|
-| `report.html` | Interactive scorecard: variant comparison, accuracy by capability, failure causes, flips vs baseline, and every case with gold vs generated SQL and results side by side |
-| `report.md` | The same numbers as Markdown for PRs and chat |
+| `report.txt` | Plain-text scorecard (also printed): variant comparison, accuracy by difficulty and capability, failure causes, rescues, and every failure with its question and generated SQL |
 | `results.json` | Raw per-case records for your own analysis |
 
 ## How scoring works
@@ -46,7 +45,7 @@ Metrics per variant:
 |---|---|---|
 | `SCHEMA_VALUE_HINTS` | `true` | Samples the stored values of low-cardinality text columns (`Status {Delivered\|Cancelled…}`) so filters use real codes. Columns whose names suggest personal data are never sampled (`SCHEMA_VALUE_HINTS_EXCLUDE`). |
 | `ASK_EMPTY_RESULT_RECHECK` | `true` | A filtered or joined query that returns 0 rows gets one smart-tier re-check of its literals, dates and join paths. |
-| `ASK_FEWSHOT_K` | `3` | Injects the most similar verified question→SQL pairs from `EXAMPLES_FILE` (managed via `POST /query/examples`). |
+| `ASK_FEWSHOT_K` | `0` | Injects the most similar verified question→SQL pairs from `EXAMPLES_FILE` (managed via `POST /query/examples`). |
 | `ASK_SQL_CANDIDATES` | `1` | Self-consistency: N parallel candidates, and the result most of them agree on wins. |
 
 In the ablation, `few-shot` uses the dataset's own gold queries as the example library with **leave-one-out**, so a question never sees its own answer. That simulates a mature library of verified queries. It measures the benefit of similar examples existing, not of exact answers.
@@ -59,7 +58,7 @@ In the ablation, `few-shot` uses the dataset's own gold queries as the example l
 4. Run `pnpm eval --dataset eval/datasets/<yours>.json --check`. It flags gold queries that fail, return no rows, or hit the row cap.
 5. Run `pnpm eval --dataset ... --repeat 3`. Treat changes smaller than about ±2 sd as noise.
 
-For the MDS_EPD database, restrict the schema first (e.g. `SCHEMA_INCLUDE=mdm.viw_*`) and write gold SQL against the same views the model will see.
+`datasets/mds-epd.json` is a worked example for a real ERP database (40 questions in English, Urdu and Roman Urdu). Run it with the settings from `infra/mssql/mds-epd.env.example`: its `SCHEMA_EXCLUDE` and `SCHEMA_NOTES_FILE` are what took accuracy from 95.6% to 100%. When a question fails, read the generated SQL in `report.txt`. A wrong table or grain is usually fixed with one sentence in the schema notes file, not with a prompt change.
 
 ## Cost of a run
 

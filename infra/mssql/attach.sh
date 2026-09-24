@@ -19,4 +19,8 @@ docker compose --env-file ../.env exec -T mssql /opt/mssql-tools18/bin/sqlcmd \
   -v DB_NAME="${DB_NAME:-MDS_EPD}" MDF_FILE="$MDF_FILE" \
      READER_LOGIN="${DB_USER:-db_intel_reader}" READER_PASSWORD="$DB_PASSWORD" \
   -i /dev/stdin < mssql/attach.sql
-echo "Attached. Start the API with: pnpm dev"
+docker compose --env-file ../.env exec -T mssql /opt/mssql-tools18/bin/sqlcmd \
+  -C -b -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+  -v DB_NAME="${DB_NAME:-MDS_EPD}" READER_LOGIN="${DB_USER:-db_intel_reader}" \
+  -i /dev/stdin < mssql/harden.sql
+echo "Attached and hardened. Start the API with: pnpm dev"

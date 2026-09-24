@@ -3,7 +3,7 @@ import sql from 'mssql';
 import { AppConfig } from '../config/app-config.js';
 import { SqlExecutionError } from '../common/errors.js';
 import type { QueryResult, ResultColumn } from './database.types.js';
-import { assertReadOnlySql } from './sql-guard.js';
+import { assertNoDeniedColumns, assertNoStarProjection, assertReadOnlySql, globToRegExp } from './sql-guard.js';
 
 interface ColumnMeta {
   name: string;
@@ -28,9 +28,11 @@ function normalizeCell(v: unknown): unknown {
 export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(DatabaseService.name);
   private readonly pool: sql.ConnectionPool;
+  private readonly denied: RegExp[];
   private connecting?: Promise<sql.ConnectionPool>;
 
   constructor(private readonly config: AppConfig) {
+    this.denied = config.get('DB_DENY_COLUMNS').map(globToRegExp);
     this.pool = new sql.ConnectionPool({
       server: config.get('DB_HOST'),
       port: config.get('DB_PORT'),
@@ -86,6 +88,8 @@ export class DatabaseService implements OnModuleInit, OnApplicationShutdown {
    */
   async readOnlyQuery(text: string, maxRows = this.config.get('DB_MAX_ROWS')): Promise<QueryResult> {
     const safe = assertReadOnlySql(text);
+    assertNoDeniedColumns(safe, this.denied);
+    if (this.denied.length) assertNoStarProjection(safe);
     const cap = Math.min(maxRows, this.config.get('DB_MAX_ROWS'));
     const pool = await this.connect();
     const tx = new sql.Transaction(pool);

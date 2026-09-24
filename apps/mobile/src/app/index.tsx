@@ -1,14 +1,16 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, StyleSheet, Text, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
 import { Header } from '../components/Header';
 import { MessageRow } from '../components/MessageRow';
+import { RouteMark } from '../components/RouteMark';
 import { scriptStyle, useI18n } from '../i18n';
 import type { Message } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
+import { useSettings } from '../state/settings';
 import { fonts, type, usePalette } from '../theme';
 
 const EMPTY: Message[] = [];
@@ -24,6 +26,8 @@ export default function ChatScreen() {
   const chat = useActiveChat();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const list = useRef<FlatList<Message>>(null);
+  const { server, ready } = useSettings();
+  const needsServer = ready && !server.baseUrl;
 
   const messages = chat?.messages ?? EMPTY;
   // Inverted list: newest at the bottom, keyboard-friendly, no scroll-to-end bookkeeping.
@@ -63,8 +67,26 @@ export default function ChatScreen() {
         <View style={styles.fill}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
-              <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+              <RouteMark size={52} />
+              {needsServer ? (
+                <>
+                  <Text style={[scriptStyle(t.setupTitle, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.setupTitle}</Text>
+                  <Text style={[scriptStyle(t.setupBody, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.setupBody}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t.setupAction}
+                    onPress={openSettings}
+                    style={({ pressed }) => [styles.setup, { backgroundColor: p.primary }, pressed && styles.pressed]}
+                  >
+                    <Text style={[scriptStyle(t.setupAction, type.label), { color: p.onPrimary }]}>{t.setupAction}</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
+                  <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+                </>
+              )}
             </View>
           ) : (
             <FlatList
@@ -108,6 +130,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingVertical: 16, maxWidth: 760, width: '100%', alignSelf: 'center' },
   gap: { height: 22 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
-  greeting: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 36, textAlign: 'center' },
+  greeting: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 36, textAlign: 'center', marginTop: 8 },
+  setup: { marginTop: 10, borderRadius: 22, paddingHorizontal: 20, height: 44, justifyContent: 'center' },
+  pressed: { opacity: 0.85 },
   composer: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, maxWidth: 784, width: '100%', alignSelf: 'center' },
 });
