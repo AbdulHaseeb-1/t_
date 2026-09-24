@@ -5,6 +5,7 @@ import { Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestj
 import { AppConfig } from '../../config/app-config.js';
 import { DatabaseService } from '../database.service.js';
 import { globToRegExp } from '../sql-guard.js';
+import { introspectDuckDb } from './duckdb-introspector.js';
 import { buildSnapshot, INTROSPECTION_SQL } from './schema-introspector.js';
 import { renderIndex, renderTable, renderTables } from './schema-renderer.js';
 import { applySchemaNotes, loadSchemaNotes, type SchemaNotes } from './schema-notes.js';
@@ -40,6 +41,9 @@ export class SchemaCatalogService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
+    // A DuckDB file is introspected in milliseconds and may have been re-converted
+    // since the cache was written: always read it fresh.
+    if (this.db.dialect === 'duckdb') return;
     try {
       const raw = await readFile(this.config.get('SCHEMA_CACHE_FILE'), 'utf8');
       const snapshot = JSON.parse(raw) as SchemaSnapshot;
@@ -62,7 +66,9 @@ export class SchemaCatalogService implements OnModuleInit {
     return (await this.ensure()).hash;
   }
 
+  /** Re-introspects; in DuckDB mode first picks up a newer .mdf or DuckDB file. */
   async refresh(): Promise<SchemaSnapshot> {
+    await this.db.reload();
     this.loaded = undefined;
     return (await this.ensure(true)).snapshot;
   }
@@ -121,9 +127,11 @@ export class SchemaCatalogService implements OnModuleInit {
 
   private async introspect(): Promise<Loaded> {
     const started = performance.now();
-    const recordsets = await this.db.internalQuery(INTROSPECTION_SQL);
     // Cache the unfiltered snapshot so changing SCHEMA_INCLUDE/EXCLUDE never needs a re-introspect.
-    const snapshot = buildSnapshot(this.config.get('DB_NAME'), recordsets);
+    const snapshot =
+      this.db.dialect === 'duckdb'
+        ? await introspectDuckDb(this.db.databaseName, async (q) => (await this.db.internalQuery(q))[0] ?? [])
+        : buildSnapshot(this.config.get('DB_NAME'), await this.db.internalQuery(INTROSPECTION_SQL));
     if (this.config.get('SCHEMA_VALUE_HINTS')) await this.sampleValues(this.applyFilters(snapshot).tables);
     this.logger.log(
       `Introspected ${snapshot.tables.length} objects in ${Math.round(performance.now() - started)}ms`,
@@ -147,7 +155,7 @@ export class SchemaCatalogService implements OnModuleInit {
     const worker = async () => {
       for (let item = queue.shift(); item; item = queue.shift()) {
         try {
-          const [rows = []] = await this.db.internalQuery(valueHintSql(item.table, item.column, maxDistinct));
+          const [rows = []] = await this.db.internalQuery(valueHintSql(item.table, item.column, maxDistinct, this.db.dialect));
           item.column.values = toHint(rows as { v: unknown }[], maxDistinct);
           if (item.column.values) sampled++;
         } catch (err) {

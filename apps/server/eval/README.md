@@ -58,6 +58,8 @@ In the ablation, `few-shot` uses the dataset's own gold queries as the example l
 4. Run `pnpm eval --dataset eval/datasets/<yours>.json --check`. It flags gold queries that fail, return no rows, or hit the row cap.
 5. Run `pnpm eval --dataset ... --repeat 3`. Treat changes smaller than about ±2 sd as noise.
 
+Cases may add `goldDuckdb`, the same reference query in DuckDB SQL, which is used when `DB_ENGINE=duckdb` (all 40 MDS_EPD gold queries return identical results on both engines).
+
 `datasets/mds-epd.json` is a worked example for a real ERP database (40 questions in English, Urdu and Roman Urdu). Run it with the settings from `infra/mssql/mds-epd.env.example`: its `SCHEMA_EXCLUDE` and `SCHEMA_NOTES_FILE` are what took accuracy from 95.6% to 100%. When a question fails, read the generated SQL in `report.txt`. A wrong table or grain is usually fixed with one sentence in the schema notes file, not with a prompt change.
 
 ## Cost of a run

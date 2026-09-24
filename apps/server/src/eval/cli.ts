@@ -126,6 +126,8 @@ async function main(): Promise<void> {
 
   const datasetPath = resolve(values.dataset!);
   const dataset = await loadDataset(datasetPath);
+  // Gold SQL is written for the engine under test.
+  if (process.env.DB_ENGINE === 'duckdb') for (const c of dataset.cases) c.gold = c.goldDuckdb ?? c.gold;
   if (values.seed) await seed(dataset, datasetPath);
 
   const filter = values.filter ? new RegExp(values.filter, 'i') : undefined;

@@ -55,8 +55,25 @@ const FORBIDDEN = [
 const FORBIDDEN_RE = new RegExp(`\\b(${FORBIDDEN.join('|')})\\b`, 'i');
 const SEQUENCE_RE = /\bNEXT\s+VALUE\s+FOR\b/i;
 
+export type SqlDialect = 'tsql' | 'duckdb';
+
+/**
+ * DuckDB statements and table functions that reach outside the database file:
+ * files, URLs, other databases, extensions, environment, dynamic SQL. The
+ * engine is also opened read-only with external access disabled, so these
+ * are a second line of defence.
+ */
+const DUCKDB_FORBIDDEN_RE = new RegExp(
+  `\\b(${['ATTACH', 'DETACH', 'COPY', 'EXPORT', 'IMPORT', 'INSTALL', 'LOAD', 'PRAGMA', 'RESET', 'CALL', 'VACUUM', 'SUMMARIZE', 'DESCRIBE', 'SHOW', 'PIVOT_WIDER'].join('|')})\\b`,
+  'i',
+);
+const DUCKDB_FUNCTION_RE =
+  /\b(read_\w+|\w+_scan|glob|getenv|query|query_table|sniff_csv|parquet_\w+|duckdb_\w+|pragma_\w+|current_setting|which_secret|load_\w+|write_\w+)\s*\(/i;
+/** DuckDB treats a string in FROM/JOIN as a file to scan: FROM 'data.csv'. */
+const DUCKDB_FILE_SCAN_RE = /\b(FROM|JOIN|,)\s*'s'/i;
+
 /** Replaces literals/identifiers with placeholders and drops comments. */
-export function stripTsql(sql: string): string {
+export function stripTsql(sql: string, dialect: SqlDialect = 'tsql'): string {
   let out = '';
   let i = 0;
   const n = sql.length;
@@ -81,7 +98,7 @@ export function stripTsql(sql: string): string {
       }
       if (depth > 0) throw new UnsafeSqlError('unterminated comment');
       out += ' ';
-    } else if (c === "'" || c === '[' || c === '"') {
+    } else if (c === "'" || (c === '[' && dialect === 'tsql') || c === '"') {
       const close = c === '[' ? ']' : c;
       i++;
       let closed = false;
@@ -110,20 +127,30 @@ export function stripTsql(sql: string): string {
  * Accepts exactly one read-only SELECT (optionally with CTEs) and returns it
  * without trailing semicolons. Throws UnsafeSqlError otherwise.
  */
-export function assertReadOnlySql(sql: string): string {
+export function assertReadOnlySql(sql: string, dialect: SqlDialect = 'tsql'): string {
   const trimmed = sql
     .trim()
     .replace(/;+\s*$/, '')
     .trim();
   if (!trimmed) throw new UnsafeSqlError('empty statement');
   if (trimmed.length > 20_000) throw new UnsafeSqlError('statement too long');
+  if (dialect === 'duckdb') {
+    // Literal forms the stripper does not model could hide text from the checks below.
+    if (/\$[A-Za-z_]*\$/.test(trimmed)) throw new UnsafeSqlError('dollar-quoted strings are not allowed');
+    if (/(^|[^A-Za-z0-9_])[eE]'/.test(trimmed)) throw new UnsafeSqlError('escape-string literals are not allowed');
+  }
 
-  const bare = stripTsql(trimmed);
+  const bare = stripTsql(trimmed, dialect);
   if (bare.includes(';')) throw new UnsafeSqlError('multiple statements are not allowed');
   if (!/^\s*(SELECT|WITH)\b/i.test(bare)) throw new UnsafeSqlError('only SELECT / WITH queries are allowed');
 
-  const hit = FORBIDDEN_RE.exec(bare) ?? SEQUENCE_RE.exec(bare);
+  const hit = FORBIDDEN_RE.exec(bare) ?? SEQUENCE_RE.exec(bare) ?? (dialect === 'duckdb' ? DUCKDB_FORBIDDEN_RE.exec(bare) : null);
   if (hit) throw new UnsafeSqlError(`forbidden keyword "${hit[0].toUpperCase()}"`);
+  if (dialect === 'duckdb') {
+    const fn = DUCKDB_FUNCTION_RE.exec(bare);
+    if (fn) throw new UnsafeSqlError(`function "${fn[1]}" is not allowed`);
+    if (DUCKDB_FILE_SCAN_RE.test(bare)) throw new UnsafeSqlError('reading files is not allowed');
+  }
   return trimmed;
 }
 

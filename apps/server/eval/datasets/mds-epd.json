@@ -71,7 +71,8 @@
         "mds"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC",
+      "goldDuckdb": "SELECT MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC LIMIT 1"
     },
     {
       "id": "en-topcomp",
@@ -81,7 +82,8 @@
         "mds"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC"
+      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC",
+      "goldDuckdb": "SELECT c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC LIMIT 5"
     },
     {
       "id": "en-topbook",
@@ -91,7 +93,8 @@
         "mds"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC",
+      "goldDuckdb": "SELECT b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC LIMIT 3"
     },
     {
       "id": "en-area",
@@ -101,7 +104,8 @@
         "mds"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC"
+      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC",
+      "goldDuckdb": "SELECT a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC LIMIT 5"
     },
     {
       "id": "en-prod",
@@ -161,7 +165,8 @@
         "mds"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC"
+      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC",
+      "goldDuckdb": "SELECT p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC LIMIT 5"
     },
     {
       "id": "en-avginv",
@@ -234,7 +239,8 @@
         "urdu"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC",
+      "goldDuckdb": "SELECT b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC LIMIT 3"
     },
     {
       "id": "ur-zero",
@@ -267,7 +273,8 @@
         "urdu"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC"
+      "gold": "SELECT TOP 5 a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC",
+      "goldDuckdb": "SELECT a.name, COUNT(*) AS Customers FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.name ORDER BY Customers DESC LIMIT 5"
     },
     {
       "id": "ur-comps",
@@ -289,7 +296,8 @@
         "urdu"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC",
+      "goldDuckdb": "SELECT MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC LIMIT 1"
     },
     {
       "id": "rl-cust",
@@ -344,7 +352,8 @@
         "roman-urdu"
       ],
       "difficulty": "medium",
-      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC"
+      "gold": "SELECT TOP 5 c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC",
+      "goldDuckdb": "SELECT c.comp_name, SUM(d.total_net) AS NetSales FROM dbo.InvoiceDetail d JOIN dbo.Company c ON c.comp_id = d.comp_id GROUP BY c.comp_name ORDER BY NetSales DESC LIMIT 5"
     },
     {
       "id": "rl-avginv",
@@ -367,7 +376,8 @@
         "roman-urdu"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC"
+      "gold": "SELECT TOP 1 MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC",
+      "goldDuckdb": "SELECT MONTH(inv_date) AS Mon FROM dbo.InvoiceLine WHERE inv_date >= '2026-01-01' AND inv_date < '2027-01-01' GROUP BY MONTH(inv_date) ORDER BY SUM(net_amt) DESC LIMIT 1"
     },
     {
       "id": "nat-topbook",
@@ -379,7 +389,8 @@
         "roman-urdu"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC"
+      "gold": "SELECT TOP 3 b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC",
+      "goldDuckdb": "SELECT b.bName, SUM(i.net_amt) AS NetSales FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId GROUP BY b.bName ORDER BY NetSales DESC LIMIT 3"
     },
     {
       "id": "nat-toprod",
@@ -391,7 +402,8 @@
         "roman-urdu"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC"
+      "gold": "SELECT TOP 5 p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC",
+      "goldDuckdb": "SELECT p.name, SUM(d.sale_qty) AS Qty FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Product p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY p.comp_id, p.group_id, p.prod_id, p.name ORDER BY Qty DESC LIMIT 5"
     },
     {
       "id": "nat-debt",
@@ -403,7 +415,8 @@
         "roman-urdu"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 1 a.name, SUM(c.cust_rec_balance) AS Due FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.area_id, a.name ORDER BY Due DESC"
+      "gold": "SELECT TOP 1 a.name, SUM(c.cust_rec_balance) AS Due FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.area_id, a.name ORDER BY Due DESC",
+      "goldDuckdb": "SELECT a.name, SUM(c.cust_rec_balance) AS Due FROM dbo.Customer c JOIN dbo.TblArea a ON a.area_id = c.area_id GROUP BY a.area_id, a.name ORDER BY Due DESC LIMIT 1"
     },
     {
       "id": "nat-compunits",
@@ -414,7 +427,8 @@
         "natural"
       ],
       "difficulty": "hard",
-      "gold": "SELECT TOP 1 c.comp_name, SUM(d.sale_qty) AS Units FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Company c ON c.comp_id = d.comp_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY c.comp_id, c.comp_name ORDER BY Units DESC"
+      "gold": "SELECT TOP 1 c.comp_name, SUM(d.sale_qty) AS Units FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Company c ON c.comp_id = d.comp_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY c.comp_id, c.comp_name ORDER BY Units DESC",
+      "goldDuckdb": "SELECT c.comp_name, SUM(d.sale_qty) AS Units FROM dbo.InvoiceDetail d JOIN dbo.InvoiceLine i ON i.inv_no = d.inv_no JOIN dbo.Company c ON c.comp_id = d.comp_id WHERE i.inv_date >= '2026-01-01' AND i.inv_date < '2027-01-01' GROUP BY c.comp_id, c.comp_name ORDER BY Units DESC LIMIT 1"
     },
     {
       "id": "nat-monthsales-ur",
