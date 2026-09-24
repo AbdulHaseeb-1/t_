@@ -28,6 +28,11 @@ async function ask(page: Page, question: string) {
   await page.getByRole('button', { name: 'Send' }).click();
 }
 
+async function openSettings(page: Page) {
+  await page.getByRole('button', { name: 'Open conversations' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+}
+
 async function lastAnswerDone(page: Page) {
   await expect(page.getByLabel('Working on it')).toHaveCount(0);
 }
@@ -50,10 +55,35 @@ test('answers from the real database and shows its evidence', async ({ page }) =
   await lastAnswerDone(page);
   await expect(page.getByText(/115/).first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Show query and data' }).click();
-  await expect(page.getByText(/'PK'/)).toBeVisible();
+  // Queries are hidden by default: the panel offers the data only.
+  await expect(page.getByRole('button', { name: 'Show query and data' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show data' }).click();
+  await expect(page.getByText(/'PK'/)).toHaveCount(0);
   await page.screenshot({ path: `${SHOTS}/answer-light.png` });
+
+  // Turning "Show SQL queries" on reveals the query behind the same answer.
+  await openSettings(page);
+  await page.getByRole('switch', { name: 'Show SQL queries' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  // The panel stays open and now carries the query as well.
+  await expect(page.getByRole('button', { name: 'Hide query and data' })).toBeVisible();
+  await expect(page.getByText(/'PK'/)).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('shows token usage, cache and timing details for an answer', async ({ page }) => {
+  await ask(page, 'What was net revenue by sales channel in 2025?');
+  await lastAnswerDone(page);
+  await expect(page.getByTestId(/^chart-(bars|donut)$/)).toBeVisible();
+  await page.getByTestId('usage-pill').click();
+  await expect(page.getByText('This conversation')).toBeVisible();
+  await expect(page.getByText('Input', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).last().click();
+  await page.getByLabel(/^Details: /).click();
+  await expect(page.getByText('Answer details')).toBeVisible();
+  await expect(page.getByText('Model', { exact: true })).toBeVisible();
+  await expect(page.getByText('Database', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Whole schema|tables/).first()).toBeVisible();
 });
 
 test('resolves follow-up questions from the conversation', async ({ page }) => {
@@ -93,21 +123,20 @@ test('stops a request and retries it', async ({ page }) => {
   await expect(page.getByText('Stopped.')).toBeVisible();
   await page.getByRole('button', { name: 'Retry' }).click();
   await lastAnswerDone(page);
-  await expect(page.getByRole('button', { name: 'Show query and data' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show data' })).toBeVisible();
 });
 
 test('explains an unreachable server and recovers after fixing settings', async ({ page }) => {
-  const open = async () => {
-    await page.getByRole('button', { name: 'Open conversations' }).click();
-    await page.getByRole('button', { name: 'Settings' }).click();
-  };
-  await open();
+  await openSettings(page);
+  await page.getByTestId('row-server').click();
   const address = page.getByRole('textbox', { name: 'Server address' });
   const good = await address.inputValue();
   await address.fill('localhost:9');
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText(/Can't reach the server at http:\/\/localhost:9/)).toBeVisible();
   await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByRole('button', { name: 'Server, localhost:9' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close settings' }).click();
 
   await ask(page, 'How many customers do we have?');
   await expect(page.getByText(/Can't reach the server/)).toBeVisible();
@@ -124,11 +153,13 @@ test('explains an unreachable server and recovers after fixing settings', async 
 });
 
 test('replies in Roman Urdu when chosen, and the choice persists', async ({ page }) => {
-  await page.getByRole('button', { name: 'Open conversations' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openSettings(page);
+  await page.getByRole('button', { name: 'Reply language, Auto' }).click();
   await page.getByRole('radio', { name: 'Roman Urdu' }).click();
+  await expect(page.getByRole('radio', { name: 'Roman Urdu' })).toBeChecked();
+  await page.getByRole('button', { name: 'Back' }).click();
   await page.screenshot({ path: `${SHOTS}/settings.png` });
-  await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
 
   await ask(page, 'How many customers do we have?');
   await lastAnswerDone(page);
@@ -137,9 +168,8 @@ test('replies in Roman Urdu when chosen, and the choice persists', async ({ page
   await expect(page.getByText(/\b400\b/).first()).toBeVisible();
 
   await page.reload();
-  await page.getByRole('button', { name: 'Open conversations' }).click();
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await expect(page.getByRole('radio', { name: 'Roman Urdu' })).toBeChecked();
+  await openSettings(page);
+  await expect(page.getByRole('button', { name: 'Reply language, Roman Urdu' })).toBeVisible();
 });
 
 test('renders tables in dark mode', async ({ browser }) => {

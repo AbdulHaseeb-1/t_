@@ -19,3 +19,24 @@ export function formatDuration(ms: number, lang: 'en' | 'ur' = 'en'): string {
 export function plural(n: number, word: string): string {
   return `${numberFmt.format(n)} ${word}${n === 1 ? '' : 's'}`;
 }
+
+/** 842 -> "842", 12_345 -> "12.3K". */
+export function formatTokens(n: number): string {
+  if (n < 1000) return String(Math.round(n));
+  if (n < 1e6) return `${(n / 1000).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '')}K`;
+  return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+}
+
+/** Tiny API costs stay readable: $0.00042 -> "$0.0004", below that "< $0.0001". */
+export function formatCost(usd: number | undefined): string {
+  if (usd === undefined) return '—';
+  if (usd === 0) return '$0';
+  if (usd < 0.0001) return '< $0.0001';
+  return `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
+}
+
+/** Short durations in ms, longer ones in seconds. */
+export function formatMs(ms: number, lang: 'en' | 'ur' = 'en'): string {
+  if (ms < 1000) return lang === 'ur' ? `${Math.round(ms)} ملی سیکنڈ` : `${Math.round(ms)} ms`;
+  return formatDuration(ms, lang);
+}

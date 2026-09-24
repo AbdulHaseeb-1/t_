@@ -28,6 +28,7 @@ const result = (variant: string, id: string, ok: boolean, sql = 'SELECT 1'): Cas
     costUsd: 0.0001,
     costComplete: true,
     models: ['openai:m'],
+    calls: [],
   },
 });
 

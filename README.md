@@ -85,7 +85,23 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | GET/POST/DELETE | `/query/examples` | verified question→SQL pairs (few-shot library; SQL must run) | none |
 | GET | `/health` | DB + LLM status (no API key needed) | none |
 
-Every `/query/ask` and `/query/analyze` response includes `usage` (calls, prompt/cached/completion tokens, `costUsd`, models) and `timings`.
+Every `/query/ask` and `/query/analyze` response includes `usage` (prompt/cached/completion tokens, `costUsd`, models, and a per-call breakdown tagged `sql`, `answer`, `recheck`, `translate`, `transcribe`, `vision` or `agent`) and `timings` (`llmMs`, `dbMs`, `mediaMs`). `/query/ask` also reports the `schema` context sent (whole schema or retrieved tables, with its token size) and the conversation `context` (earlier turns, engine).
+
+## Speech to text
+
+Voice questions are transcribed before they are answered. The provider is chosen by `TRANSCRIBE_PROVIDER`:
+
+| Setting | Provider order | Notes |
+|---|---|---|
+| `auto` (default) | Gemini if `GEMINI_API_KEY` is set, then OpenAI | the other provider is the automatic fallback |
+| `gemini` / `openai` | that one first | |
+
+- **`gemini-3.5-flash-lite`** (default `GEMINI_TRANSCRIBE_MODEL`): about $0.001 per minute of audio (1,920 audio tokens at $0.30/M plus the transcript at $2.50/M). It is prompted to write Urdu speech in Urdu script (never Hindi Devanagari), to keep English business words and numbers as spoken, and not to translate.
+- **`gemini-3.8-flash`**: more accurate on noisy audio, about $0.0065 per minute.
+- **`gemini-3.5-transcribe`**: Google's dedicated speech model. Not the default, because Urdu is not among its supported languages.
+- **OpenAI `gpt-4o-transcribe`**: used when no Gemini key is set, and as the fallback. About $0.006 per minute.
+
+The provider and model that transcribed a question are returned as `speech` and appear in the app's answer details.
 
 ## LLM providers
 

@@ -282,7 +282,10 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     });
     expect(body.translatedQuestion).toBeUndefined(); // schema fits: the SQL model reads the Urdu directly
     expect(body.usage.models).toContain('openai:gpt-4o-transcribe');
-    expect(body.usage.costComplete).toBe(false);
+    // Transcription is priced too, so the reported cost covers every call.
+    expect(body.usage.costComplete).toBe(true);
+    expect(body.usage.calls.map((c: { purpose: string }) => c.purpose)).toContain('transcribe');
+    expect(body.speech).toMatchObject({ provider: 'openai', model: 'gpt-4o-transcribe' });
     const sent = llm.transcriptions.at(-1)!;
     expect(sent).toContain('name="model"');
     expect(sent).toContain('gpt-4o-transcribe');

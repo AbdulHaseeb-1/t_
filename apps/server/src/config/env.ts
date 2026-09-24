@@ -108,6 +108,10 @@ export const envSchema = z.object({
 
   /** Speech-to-text model (OpenAI audio API). */
   TRANSCRIBE_MODEL: z.string().default('gpt-4o-transcribe'),
+  /** auto: Gemini when GEMINI_API_KEY is set, else OpenAI; the other one is the fallback. */
+  TRANSCRIBE_PROVIDER: z.enum(['auto', 'gemini', 'openai']).default('auto'),
+  GEMINI_TRANSCRIBE_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  GEMINI_BASE_URL: z.string().default('https://generativelanguage.googleapis.com'),
   /** Reading images: high detail + a little reasoning was needed to read small Urdu text reliably. */
   VISION_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).default('low'),
   MEDIA_MAX_AUDIO_MB: z.coerce.number().positive().default(10),
@@ -144,6 +148,7 @@ export const envSchema = z.object({
   LLM_BREAKER_COOLDOWN_MS: z.coerce.number().int().positive().default(60_000),
 
   OPENAI_API_KEY: optionalString,
+  GEMINI_API_KEY: optionalString,
   OPENAI_BASE_URL: optionalString,
   OPENAI_MODEL_FAST: z.string().default('gpt-6-luna'),
   OPENAI_MODEL_SMART: z.string().default('gpt-6-sol'),

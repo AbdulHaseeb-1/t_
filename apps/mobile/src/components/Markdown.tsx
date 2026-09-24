@@ -33,13 +33,23 @@ const CHAR_WIDTH = 7.4;
 /** Nastaliq glyphs run wider and taller than Latin at the same size. */
 const URDU_CHAR_WIDTH = 8.6;
 const CELL_PADDING = 20;
+/** Room for glyph metrics the estimate misses, so a single word never wraps mid-word. */
+const SLACK = 10;
+
+/** Capitals and digits run wider than the average lowercase glyph. */
+function textWidth(t: string): number {
+  if (isUrduText(t)) return t.length * URDU_CHAR_WIDTH;
+  let w = 0;
+  for (const ch of t) w += /[A-Z0-9%]/.test(ch) ? CHAR_WIDTH * 1.2 : CHAR_WIDTH;
+  return w;
+}
 
 /** One width per column, from its longest cell, so header and body always line up. */
 function columnWidths(block: Extract<Block, { type: 'table' }>): number[] {
   return block.header.map((h, c) => {
     const cells = [h, ...block.rows.map((r) => r[c] ?? [])].map(spansToText);
-    const width = Math.max(...cells.map((t) => t.length * (isUrduText(t) ? URDU_CHAR_WIDTH : CHAR_WIDTH)));
-    return Math.round(Math.min(260, Math.max(64, width + CELL_PADDING)));
+    const width = Math.max(...cells.map(textWidth));
+    return Math.round(Math.min(260, Math.max(64, width + CELL_PADDING + SLACK)));
   });
 }
 

@@ -3,38 +3,42 @@ import { memo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { QueryResult } from '../lib/api';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { formatCell, formatDuration } from '../lib/format';
+import { formatCell } from '../lib/format';
 import { fonts, type, usePalette } from '../theme';
 
 const PREVIEW_ROWS = 50;
 
 interface Props {
-  sql: string;
+  /** Omitted when SQL is hidden in Settings: the panel then shows only the data. */
+  sql?: string;
   result: QueryResult;
-  totalMs?: number;
 }
 
-/** "SQL · 12 rows" disclosure: the evidence behind an answer, one tap away. */
-export const DataPanel = memo(function DataPanel({ sql, result, totalMs }: Props) {
+/**
+ * "Data · 12 rows" disclosure: the evidence behind an answer (and the chart's
+ * table view), one tap away. The query itself shows only when enabled in Settings.
+ */
+export const DataPanel = memo(function DataPanel({ sql, result }: Props) {
   const p = usePalette();
-  const { t, rtl, lang } = useI18n();
+  const { t, rtl } = useI18n();
   const [open, setOpen] = useState(false);
   const rows = result.rows.slice(0, PREVIEW_ROWS);
   const numeric = result.columns.map((_, c) => rows.length > 0 && rows.every((r) => r[c] === null || typeof r[c] === 'number'));
   const count = result.rowCount === 1 ? t.row : t.rows(formatCell(result.rowCount));
-  const summary = `${count}${result.truncated ? '+' : ''}${totalMs ? ` · ${formatDuration(totalMs, lang)}` : ''}`;
+  const summary = `${count}${result.truncated ? '+' : ''}`;
+  const title = sql ? t.query : t.data;
 
   return (
     <View style={[styles.box, { borderColor: p.border }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={open ? t.hideQuery : t.showQuery}
+        accessibilityLabel={sql ? (open ? t.hideQuery : t.showQuery) : open ? t.hideData : t.showData}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen((o) => !o)}
         style={({ pressed }) => [styles.head, row(rtl), pressed && { backgroundColor: p.sunken }]}
       >
-        <Feather name="database" size={14} color={p.muted} />
-        <Text style={[scriptStyle(t.query, { ...type.meta, fontFamily: fonts.sansMedium }), { color: p.text }]}>{t.query}</Text>
+        <Feather name={sql ? 'code' : 'table'} size={14} color={p.muted} />
+        <Text style={[scriptStyle(title, { ...type.meta, fontFamily: fonts.sansMedium }), { color: p.text }]}>{title}</Text>
         <Text style={[scriptStyle(summary, type.meta), { color: p.muted, flex: 1 }]} numberOfLines={1}>
           {summary}
         </Text>
@@ -43,11 +47,13 @@ export const DataPanel = memo(function DataPanel({ sql, result, totalMs }: Props
 
       {open && (
         <View style={[styles.body, { borderColor: p.border }]}>
-          <ScrollView horizontal style={[styles.sql, { backgroundColor: p.sunken }]}>
-            <Text style={[type.code, { color: p.text }]} selectable>
-              {sql}
-            </Text>
-          </ScrollView>
+          {!!sql && (
+            <ScrollView horizontal style={[styles.sql, { backgroundColor: p.sunken }]}>
+              <Text style={[type.code, { color: p.text }]} selectable>
+                {sql}
+              </Text>
+            </ScrollView>
+          )}
           {result.columns.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View>

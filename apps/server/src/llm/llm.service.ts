@@ -290,6 +290,7 @@ export class LlmService {
     const usage: CallUsage = {
       provider: p.name,
       model: res.model ?? model,
+      purpose: req.purpose,
       promptTokens,
       cachedPromptTokens,
       completionTokens,

@@ -41,9 +41,19 @@ jest.mock('../src/theme', () => {
 
 import RootLayout from '../src/app/_layout';
 import ChatScreen from '../src/app/index';
-import SettingsScreen from '../src/app/settings';
+import SettingsChoose from '../src/app/settings/choose';
+import SettingsHome from '../src/app/settings/index';
+import SettingsLayout from '../src/app/settings/_layout';
+import SettingsServer from '../src/app/settings/server';
 
-const routes = { _layout: RootLayout, index: ChatScreen, settings: SettingsScreen };
+const routes = {
+  _layout: RootLayout,
+  index: ChatScreen,
+  'settings/_layout': SettingsLayout,
+  'settings/index': SettingsHome,
+  'settings/server': SettingsServer,
+  'settings/choose': SettingsChoose,
+};
 
 interface Pending {
   url: string;
@@ -65,7 +75,19 @@ function answer(sql: string, text: string, rows: unknown[][] = [[500]]) {
     cache: null,
     attempts: 1,
     timings: { totalMs: 1400, llmMs: 1300, dbMs: 100 },
-    usage: { llmCalls: 1, costUsd: 0.0001 },
+    usage: {
+      llmCalls: 2,
+      promptTokens: 1800,
+      cachedPromptTokens: 1024,
+      completionTokens: 120,
+      costUsd: 0.0001,
+      calls: [
+        { purpose: 'sql', model: 'openai:gpt-6-luna', promptTokens: 1500, cachedPromptTokens: 1024, completionTokens: 60, latencyMs: 900 },
+        { purpose: 'answer', model: 'openai:gpt-6-luna', promptTokens: 300, cachedPromptTokens: 0, completionTokens: 60, latencyMs: 400 },
+      ],
+    },
+    schema: { tables: [], full: true, tableCount: 66, chars: 21000, approxTokens: 6000 },
+    context: { turns: 0, engine: 'duckdb' },
   };
 }
 
@@ -118,9 +140,44 @@ it('asks, shows progress, renders the answer and the evidence', async () => {
   expect(await screen.findByText('500')).toBeTruthy();
   expect(screen.queryByLabelText('Working on it')).toBeNull();
 
-  fireEvent.press(screen.getByLabelText('Show query and data'));
-  expect(screen.getByText('SELECT COUNT(*) AS Orders FROM sales.Orders')).toBeTruthy();
+  // SQL is hidden by default: the panel offers the data table only.
+  fireEvent.press(screen.getByLabelText('Show data'));
   expect(screen.getAllByText('500').length).toBeGreaterThan(1);
+  expect(screen.queryByText('SELECT COUNT(*) AS Orders FROM sales.Orders')).toBeNull();
+});
+
+it('shows the SQL behind answers when enabled in Settings', async () => {
+  await AsyncStorage.setItem('settings.showSql', JSON.stringify(true));
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('How many orders are there?');
+  await act(async () => requests[0].resolve(200, answer('SELECT COUNT(*) AS Orders FROM sales.Orders', 'There are **500** orders.')));
+  fireEvent.press(await screen.findByLabelText('Show query and data'));
+  expect(screen.getByText('SELECT COUNT(*) AS Orders FROM sales.Orders')).toBeTruthy();
+});
+
+it('shows what each answer cost and where the time went', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('How many orders are there?');
+  await act(async () => requests[0].resolve(200, answer('SELECT 1', 'There are **500** orders.')));
+  // Per-answer line: time, tokens; tap for the breakdown.
+  fireEvent.press(await screen.findByLabelText('Details: 1.4 s · 1.9K Tokens'));
+  expect(await screen.findByText('Answer details')).toBeTruthy();
+  expect(screen.getByText('Write query')).toBeTruthy();
+  expect(screen.getByText('Write answer')).toBeTruthy();
+  expect(screen.getByText('1K cached')).toBeTruthy();
+  expect(screen.getByText('Whole schema: 66 tables (~6K tokens)')).toBeTruthy();
+  expect(screen.getByText('Converted .mdf file (DuckDB)')).toBeTruthy();
+  expect(screen.getByText('Fresh: written and run for this question')).toBeTruthy();
+  // Model 1,300 ms vs database 100 ms
+  expect(screen.getByText('1.3 s')).toBeTruthy();
+  expect(screen.getByText('100 ms')).toBeTruthy();
+
+  // Header pill: this conversation's tokens.
+  fireEvent.press(screen.getByLabelText('Usage: 1.9K tokens'));
+  expect(await screen.findByText('This conversation')).toBeTruthy();
+  expect(screen.getByText('1 answer')).toBeTruthy();
 });
 
 it('sends earlier turns so follow-up questions resolve', async () => {
@@ -276,9 +333,38 @@ it('draws grouped results as a chart', async () => {
     requests[0].resolve(200, answerWith({ answer: 'PK leads.' }, ['Country', 'Revenue'], [['PK', 300], ['AE', 120], ['GB', 90]])),
   );
   await screen.findByText('PK leads.');
+  const chart = screen.getByTestId('chart-bars');
+  // Headline: the total across categories; tapping a bar shows its value and share.
+  expect(screen.getByText('510')).toBeTruthy();
   // Charts size themselves to their container: simulate the layout pass.
-  fireEvent(screen.getByTestId('chart'), 'layout', { nativeEvent: { layout: { width: 320, height: 0, x: 0, y: 0 } } });
-  expect(await screen.findByLabelText('Bar chart')).toBeTruthy();
+  expect(chart).toBeTruthy();
+  fireEvent(screen.getByTestId('chart-plot'), 'layout', { nativeEvent: { layout: { width: 320, height: 0, x: 0, y: 0 } } });
+  expect(await screen.findByLabelText(/PK 300, AE 120, GB 90/)).toBeTruthy();
+});
+
+it('draws monthly results as growth columns with the change vs the previous month', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Sales by month');
+  await act(async () =>
+    requests[0].resolve(200, answerWith({ answer: 'August was best.' }, ['month_number', 'net_sales'], [[6, 100], [7, 120], [8, 150]])),
+  );
+  await screen.findByText('August was best.');
+  expect(screen.getByTestId('chart-columns')).toBeTruthy();
+  expect(screen.getByText('Aug')).toBeTruthy();
+  expect(screen.getByLabelText('+25% vs Jul')).toBeTruthy();
+  expect(screen.getByLabelText('+50% since Jun')).toBeTruthy();
+});
+
+it('shows one row of several figures as KPI tiles', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Revenue and orders this year');
+  await act(async () => requests[0].resolve(200, answerWith({ answer: 'Summary.' }, ['total_revenue', 'orders'], [[2_500_000, 812]])));
+  await screen.findByText('Summary.');
+  expect(screen.getByLabelText('Total revenue: 2,500,000')).toBeTruthy();
+  expect(screen.getByText('2.5M')).toBeTruthy();
+  expect(screen.getByLabelText('Orders: 812')).toBeTruthy();
 });
 
 describe('in Urdu (the default)', () => {
@@ -305,7 +391,7 @@ describe('in Urdu (the default)', () => {
     expect(requests[0].body.question).toBe('پاکستان میں کتنے گاہک ہیں؟');
     await act(async () => requests[0].resolve(200, answerWith({ answer: 'پاکستان میں **115** گاہک ہیں۔', language: 'ur' })));
     expect(await screen.findByText('115')).toBeTruthy();
-    expect(screen.getByLabelText('کوئری اور ڈیٹا دکھائیں')).toBeTruthy();
+    expect(screen.getByLabelText('ڈیٹا دکھائیں')).toBeTruthy();
   });
 
   it('shows errors in Urdu', async () => {
@@ -322,9 +408,13 @@ describe('in Urdu (the default)', () => {
 
   it('replies in Roman Urdu when chosen in Settings', async () => {
     renderRouter(routes, { initialUrl: '/settings' });
+    // Settings list -> Reply language page -> pick Roman Urdu (applies instantly).
+    fireEvent.press(await screen.findByLabelText('جواب کی زبان, خودکار'));
     fireEvent.press(await screen.findByLabelText('Roman Urdu'));
     expect(await AsyncStorage.getItem('settings.replyLanguage')).toBe(JSON.stringify('ur-Latn'));
-    fireEvent.press(screen.getByLabelText('Save settings'));
+    fireEvent.press(screen.getByLabelText('واپس'));
+    expect(await screen.findByLabelText('جواب کی زبان, Roman Urdu')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('سیٹنگز بند کریں'));
     await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
     fireEvent.changeText(screen.getByLabelText('Message'), 'hamare kitne customers hain?');
     fireEvent.press(screen.getByLabelText('بھیجیں'));
@@ -340,9 +430,10 @@ describe('in Urdu (the default)', () => {
     await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
     fireEvent.press(screen.getByLabelText('گفتگوئیں کھولیں'));
     fireEvent.press(await screen.findByLabelText('سیٹنگز'));
-    // The first "English" is the interface language; the reply-language group has its own.
-    fireEvent.press((await screen.findAllByLabelText('English'))[0]);
-    expect(await screen.findByText('Language')).toBeTruthy();
+    fireEvent.press(await screen.findByLabelText('ایپ کی زبان, اردو'));
+    fireEvent.press(await screen.findByLabelText('English'));
+    // The page re-renders in English immediately.
+    expect(await screen.findByText('App language')).toBeTruthy();
     expect(await AsyncStorage.getItem('settings.language')).toBe(JSON.stringify('en'));
   });
 });

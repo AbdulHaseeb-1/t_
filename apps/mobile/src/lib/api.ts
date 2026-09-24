@@ -27,8 +27,35 @@ export interface AskResponse {
   result: QueryResult | null;
   cache: 'answer' | 'sql' | null;
   attempts: number;
-  timings: { totalMs: number; llmMs: number; dbMs: number };
-  usage: { llmCalls: number; costUsd?: number };
+  timings: { totalMs: number; llmMs: number; dbMs: number; mediaMs?: number };
+  usage: Usage;
+  /** Schema context the model saw (older servers omit the size fields). */
+  schema?: { tables: string[]; full: boolean; tableCount?: number; chars?: number; approxTokens?: number };
+  context?: { turns: number; engine: 'mssql' | 'duckdb' };
+  trace?: { repairs: number; escalated: boolean; emptyRecheck: boolean };
+  /** Voice messages: which speech-to-text model heard it. */
+  speech?: { provider: string; model: string };
+}
+
+export interface CallUsage {
+  purpose: string;
+  model: string;
+  promptTokens: number;
+  cachedPromptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  costUsd?: number;
+}
+
+export interface Usage {
+  llmCalls: number;
+  promptTokens?: number;
+  cachedPromptTokens?: number;
+  completionTokens?: number;
+  costUsd?: number;
+  costComplete?: boolean;
+  models?: string[];
+  calls?: CallUsage[];
 }
 
 /** Answer language: auto follows the question; ur-Latn is Roman Urdu. */

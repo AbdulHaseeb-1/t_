@@ -27,6 +27,7 @@ export class TranslatorService {
     const res = await this.llm.chat(
       {
         tier: 'fast',
+        purpose: 'translate',
         messages: [
           { role: 'system', content: SYSTEM },
           { role: 'user', content: text },
