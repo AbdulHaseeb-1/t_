@@ -9,7 +9,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ bodyLimit: 1_048_576, trustProxy: true }),
-    { bufferLogs: true },
+    // rawBody: the WhatsApp webhook signature is computed over the exact bytes Meta sent.
+    { bufferLogs: true, rawBody: true },
   );
   app.useLogger(app.get(Logger));
   await configureApp(app);

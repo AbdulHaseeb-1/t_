@@ -14,8 +14,8 @@ import type { TableInfo } from './schema.types.js';
  */
 export type SchemaNotes = Map<string, string>;
 
-/** Relative paths resolve like `.env`: from the server directory, else from the repo root. */
-function resolveNotesPath(file: string): string {
+/** Relative paths resolve like `.env`: from the server directory, else from the repo root (infra/...). */
+export function resolveConfigPath(file: string): string {
   if (isAbsolute(file) || existsSync(file)) return file;
   const fromRoot = joinPath('..', '..', file);
   return existsSync(fromRoot) ? fromRoot : file;
@@ -23,7 +23,7 @@ function resolveNotesPath(file: string): string {
 
 export function loadSchemaNotes(file: string): SchemaNotes {
   if (!file) return new Map();
-  const raw = JSON.parse(readFileSync(resolveNotesPath(file), 'utf8')) as Record<string, unknown>;
+  const raw = JSON.parse(readFileSync(resolveConfigPath(file), 'utf8')) as Record<string, unknown>;
   const notes: SchemaNotes = new Map();
   for (const [key, value] of Object.entries(raw)) {
     if (key.startsWith('$') || typeof value !== 'string' || !value.trim()) continue;

@@ -12,6 +12,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatProvider } from '../state/chats';
+import { ReportsProvider } from '../state/reports';
 import { I18nProvider, SettingsProvider } from '../state/settings';
 import { usePalette } from '../theme';
 
@@ -35,11 +36,13 @@ export default function RootLayout() {
       <SettingsProvider>
         <I18nProvider>
           <ChatProvider>
-          <StatusBar style="auto" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-          </Stack>
+            <ReportsProvider>
+              <StatusBar style="auto" />
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+              </Stack>
+            </ReportsProvider>
           </ChatProvider>
         </I18nProvider>
       </SettingsProvider>

@@ -104,6 +104,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
 
+/** The saved server outside React (background tasks run without the provider). */
+export async function loadServerConfig(): Promise<ServerConfig> {
+  const [url, key] = await Promise.all([storage.get<string>(URL_KEY), secrets.get(API_KEY)]);
+  return { baseUrl: url || DEFAULT_API_URL, apiKey: key || undefined };
+}
+
 export function useSettings(): SettingsValue {
   const v = useContext(SettingsContext);
   if (!v) throw new Error('useSettings must be used inside SettingsProvider');

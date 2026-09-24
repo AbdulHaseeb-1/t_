@@ -14,9 +14,12 @@ interface Props {
   /** Tokens used in this conversation; the pill hides at 0. */
   tokens?: number;
   onUsage?: () => void;
+  /** Unread scheduled reports: a bell with a count opens the inbox. */
+  unread?: number;
+  onInbox?: () => void;
 }
 
-export const Header = memo(function Header({ title, onMenu, onNewChat, canStartNew, tokens = 0, onUsage }: Props) {
+export const Header = memo(function Header({ title, onMenu, onNewChat, canStartNew, tokens = 0, onUsage, unread = 0, onInbox }: Props) {
   const p = usePalette();
   const { t, rtl } = useI18n();
   const tok = formatTokens(tokens);
@@ -39,6 +42,14 @@ export const Header = memo(function Header({ title, onMenu, onNewChat, canStartN
           <Text style={[type.meta, styles.pillText, { color: p.muted }]}>{tok}</Text>
         </Pressable>
       )}
+      {onInbox && unread > 0 && (
+        <View>
+          <IconButton name="bell" label={t.inboxButton(unread)} onPress={onInbox} />
+          <View style={[styles.badge, { backgroundColor: p.accent }]} pointerEvents="none">
+            <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+          </View>
+        </View>
+      )}
       <IconButton name="edit" label={t.appNewChat} onPress={onNewChat} disabled={!canStartNew} />
     </View>
   );
@@ -49,4 +60,6 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center' },
   pill: { alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 8, height: 26 },
   pillText: { fontVariant: ['tabular-nums'] },
+  badge: { position: 'absolute', top: 6, right: 4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
 });

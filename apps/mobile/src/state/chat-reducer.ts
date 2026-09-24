@@ -1,4 +1,4 @@
-import type { AskResponse, CallUsage, QueryResult, Turn } from '../lib/api';
+import type { AskResponse, CallUsage, ParamValues, QueryResult, Turn } from '../lib/api';
 
 export interface UserMessage {
   id: string;
@@ -28,6 +28,13 @@ export interface AssistantMessage {
   language?: 'en' | 'ur' | 'ur-Latn';
   /** What was read from an attached photo. */
   imageNote?: string;
+  /** Set when this answer is a report template run (Retry re-runs the report). */
+  report?: ReportRef;
+}
+
+export interface ReportRef {
+  id: string;
+  params: ParamValues;
 }
 
 export type Message = UserMessage | AssistantMessage;
@@ -62,6 +69,7 @@ export type ChatAction =
       question: string;
       now: number;
       media?: Pick<UserMessage, 'audio' | 'image'>;
+      report?: ReportRef;
     }
   | { type: 'retry'; chatId: string; assistantId: string }
   | { type: 'answer'; chatId: string; assistantId: string; response: AskResponse }
@@ -139,7 +147,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: [
           ...chat.messages,
           { id: action.userId, role: 'user', text: action.question, ...action.media },
-          { id: action.assistantId, role: 'assistant', question: action.question, status: 'pending' },
+          { id: action.assistantId, role: 'assistant', question: action.question, status: 'pending', ...(action.report && { report: action.report }) },
         ],
       };
       return { ...touch(state, next), activeId: action.chatId };
@@ -151,7 +159,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         chats: {
           ...state.chats,
-          [chat.id]: updateMessage(chat, action.assistantId, (m) => ({ id: m.id, role: m.role, question: m.question, status: 'pending' })),
+          [chat.id]: updateMessage(chat, action.assistantId, (m) => ({ id: m.id, role: m.role, question: m.question, status: 'pending', report: m.report })),
         },
       };
     }

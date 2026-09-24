@@ -337,6 +337,19 @@ export class AskService {
     return { winner: best[0], agreement: best.length, tried: n };
   }
 
+  /** The prose answer for a result produced elsewhere (report templates), metered on its own. */
+  async describe(
+    question: string,
+    sql: string,
+    result: QueryResult,
+    lang: Lang,
+  ): Promise<{ answer: string; usage: UsageSummary; llmMs: number }> {
+    const meter = new UsageMeter();
+    const timings: Timings = { llmMs: 0, dbMs: 0 };
+    const answer = await this.phrase(question, sql, result, meter, timings, lang);
+    return { answer, usage: meter.summary(), llmMs: Math.round(timings.llmMs) };
+  }
+
   private async phrase(
     question: string,
     sql: string,

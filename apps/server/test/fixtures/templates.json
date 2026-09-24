@@ -1,0 +1,18 @@
+{
+  "templates": [
+    {
+      "id": "orders-on-day",
+      "title": "Orders on a day",
+      "summary": false,
+      "params": [{ "name": "day", "label": "Day", "type": "date", "default": "2025-01-02" }],
+      "sql": "SELECT COUNT(*) AS orders FROM dbo.Orders WHERE OrderDate >= {{day}} AND OrderDate < {{day+1}}"
+    },
+    {
+      "id": "top-customers",
+      "title": "Top customers",
+      "summary": false,
+      "params": [{ "name": "limit", "label": "How many", "type": "number", "default": 3, "min": 1, "max": 50 }],
+      "sql": "SELECT TOP ({{limit}}) c.FullName AS customer, COUNT(*) AS orders FROM dbo.Orders AS o JOIN dbo.Customers AS c ON c.CustomerId = o.CustomerId GROUP BY c.CustomerId, c.FullName ORDER BY orders DESC, customer"
+    }
+  ]
+}

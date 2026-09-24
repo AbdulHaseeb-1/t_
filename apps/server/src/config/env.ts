@@ -167,6 +167,36 @@ export const envSchema = z.object({
   /** Question -> full answer. Short-lived because data changes. */
   CACHE_ANSWER_TTL_S: z.coerce.number().int().nonnegative().default(120),
 
+  /** One-tap report templates (JSON, see infra/mssql/mds-epd.templates.json); empty = none built in. */
+  TEMPLATES_FILE: z.string().default(''),
+  /** Templates users save from the app. */
+  USER_TEMPLATES_FILE: z.string().default('.cache/templates.json'),
+  /** Time zone for "today" in reports and for schedule times. */
+  REPORT_TIMEZONE: z.string().default('Asia/Karachi'),
+
+  /** Runs scheduled reports in this process (turn off on extra replicas so each report runs once). */
+  SCHEDULER_ENABLED: bool(true),
+  SCHEDULES_FILE: z.string().default('.cache/schedules.json'),
+  INBOX_FILE: z.string().default('.cache/inbox.json'),
+  DEVICES_FILE: z.string().default('.cache/devices.json'),
+  /** Expo push service (app builds with FCM credentials); the app also polls the inbox without it. */
+  EXPO_PUSH_URL: z.string().default('https://exp.host/--/api/v2/push/send'),
+  EXPO_ACCESS_TOKEN: optionalString,
+
+  /** WhatsApp Cloud API (Meta). All of token, phone number id, verify token and app secret are needed. */
+  WHATSAPP_TOKEN: optionalString,
+  WHATSAPP_PHONE_NUMBER_ID: optionalString,
+  /** Any secret string; entered again in Meta's webhook settings. */
+  WHATSAPP_VERIFY_TOKEN: optionalString,
+  /** Meta app secret: every webhook call is checked against its X-Hub-Signature-256. */
+  WHATSAPP_APP_SECRET: optionalString,
+  /** Numbers allowed to query the database (international digits, comma-separated). Empty = nobody. */
+  WHATSAPP_ALLOWED_NUMBERS: csv,
+  WHATSAPP_GRAPH_URL: z.string().default('https://graph.facebook.com/v25.0'),
+  /** Approved template for scheduled reports sent outside the 24-hour window ({{1}} title, {{2}} summary). */
+  WHATSAPP_REPORT_TEMPLATE: optionalString,
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en'),
+
   /**
    * Web model benchmark at /bench (runs the eval harness from the browser and
    * spends API credits), off by default. Protected by API_KEY like every route.

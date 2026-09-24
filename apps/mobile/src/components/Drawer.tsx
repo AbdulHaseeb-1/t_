@@ -15,6 +15,10 @@ interface Props {
   onNewChat: () => void;
   onDelete: (id: string) => void;
   onSettings: () => void;
+  onReports?: () => void;
+  onSchedules?: () => void;
+  onInbox?: () => void;
+  unread?: number;
 }
 
 function relativeDay(ts: number, t: ReturnType<typeof useI18n>['t'], lang: string): string {
@@ -26,7 +30,7 @@ function relativeDay(ts: number, t: ReturnType<typeof useI18n>['t'], lang: strin
 }
 
 /** Conversation list: slides over the chat, dismissed by the scrim or a selection. */
-export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onSelect, onNewChat, onDelete, onSettings }: Props) {
+export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onSelect, onNewChat, onDelete, onSettings, onReports, onSchedules, onInbox, unread = 0 }: Props) {
   const p = usePalette();
   const { t, rtl, lang } = useI18n();
   const insets = useSafeAreaInsets();
@@ -81,6 +85,28 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
           <Feather name="edit" size={18} color={p.text} />
           <Text style={[scriptStyle(t.appNewChat, type.label), { color: p.text }]}>{t.appNewChat}</Text>
         </Pressable>
+
+        {(
+          [
+            [onReports, 'grid', t.reports, 0],
+            [onSchedules, 'clock', t.schedules, 0],
+            [onInbox, 'inbox', t.inbox, unread],
+          ] as const
+        ).map(([onPress, icon, label, count]) =>
+          onPress ? (
+            <Pressable
+              key={label}
+              accessibilityRole="button"
+              accessibilityLabel={count ? t.inboxButton(count) : label}
+              onPress={onPress}
+              style={({ pressed }) => [styles.row, row(rtl), pressed && { backgroundColor: p.sunken }]}
+            >
+              <Feather name={icon} size={18} color={p.text} />
+              <Text style={[scriptStyle(label, type.label), { color: p.text, flex: 1 }]}>{label}</Text>
+              {count > 0 && <Text style={[type.meta, styles.count, { color: '#fff', backgroundColor: p.accent }]}>{count > 99 ? '99+' : count}</Text>}
+            </Pressable>
+          ) : null,
+        )}
 
         <Text style={[scriptStyle(t.recents, type.meta), styles.section, { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{t.recents}</Text>
         <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 8 }}>
@@ -139,4 +165,5 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   chat: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, gap: 1 },
   empty: { paddingHorizontal: 12, paddingVertical: 8 },
+  count: { minWidth: 20, paddingHorizontal: 6, borderRadius: 10, overflow: 'hidden', textAlign: 'center' },
 });

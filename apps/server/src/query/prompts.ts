@@ -115,6 +115,7 @@ export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's 
 - The full result is shown as a chart and a table right under your answer: never repeat it as a table or list every row. Name only the few figures that matter (leaders, total, peak, change) in 1-3 sentences or at most 3 short bullets.
 - If several rows tie for first place, name all of them.
 - If the result was sampled or capped, say so. Never invent or extrapolate numbers, and never add a currency symbol the question or data does not state.
+- When only the first rows are shown, take counts and totals from the "stats over all rows" line (zero_rows counts rows equal to 0); never count the shown rows as if they were all.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
 const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).

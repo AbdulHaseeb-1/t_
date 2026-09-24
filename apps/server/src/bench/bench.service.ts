@@ -27,6 +27,7 @@ import { buildPipeline, type Pipeline } from '../eval/pipeline.js';
 import type { CaseResult } from '../eval/runner.js';
 import type { AskResponse } from '../query/ask.service.js';
 import { compareResults } from '../query/result-compare.js';
+import { tsqlOnly } from '../reports/template.js';
 import { type CompareInput, modelOverrides, type StartRunInput, variantNames } from './bench.dto.js';
 
 export type RunStatus = 'gold' | 'running' | 'done' | 'failed' | 'cancelled';
@@ -89,8 +90,6 @@ export interface CompareResult {
 }
 
 const ID = /^[\w.-]+$/;
-/** T-SQL syntax DuckDB cannot run; such gold needs a goldDuckdb twin to be graded on DuckDB. */
-const TSQL_ONLY = /\bTOP\s*\(?\d|\[\w|\bGETDATE\s*\(|\bDATEADD\s*\(|\bDATEDIFF\s*\(|\bISNULL\s*\(|\bCONVERT\s*\(|\bN'|\bLEN\s*\(|\bCHARINDEX\s*\(/i;
 const PLAYGROUND_ROWS = 50;
 const MAX_PIPELINES = 8;
 
@@ -137,7 +136,7 @@ export class BenchService implements OnApplicationShutdown {
             tags: count(d.cases.flatMap((c) => c.tags)),
             difficulties: count(d.cases.map((c) => c.difficulty)),
             languages: count(d.cases.map((c) => c.language ?? 'en')),
-            compatible: this.engine === 'mssql' || d.cases.every((c) => !c.gold || c.goldDuckdb || !TSQL_ONLY.test(c.gold)),
+            compatible: this.engine === 'mssql' || d.cases.every((c) => !c.gold || c.goldDuckdb || !tsqlOnly(c.gold)),
           };
         } catch (err) {
           return { file, name: file, database: '', cases: 0, tags: {}, difficulties: {}, languages: {}, compatible: false, error: (err as Error).message };

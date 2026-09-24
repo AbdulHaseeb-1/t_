@@ -6,11 +6,14 @@ import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
 import { Header } from '../components/Header';
 import { MessageRow } from '../components/MessageRow';
+import { ReportChips } from '../components/ReportParts';
 import { RouteMark } from '../components/RouteMark';
+import { useOpenReport } from '../components/useOpenReport';
 import { scriptStyle, useI18n } from '../i18n';
 import { UsageSheet } from '../components/Details';
 import { type Message, usageTotals } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
+import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
 import { fonts, type, usePalette } from '../theme';
 
@@ -31,6 +34,15 @@ export default function ChatScreen() {
   const list = useRef<FlatList<Message>>(null);
   const { server, ready } = useSettings();
   const needsServer = ready && !server.baseUrl;
+  const { templates, unread } = useReports();
+  const { openReport, sheet } = useOpenReport();
+  const go = useCallback((path: '/reports' | '/schedules' | '/inbox') => {
+    setDrawerOpen(false);
+    router.push(path);
+  }, []);
+  const openReports = useCallback(() => go('/reports'), [go]);
+  const openSchedules = useCallback(() => go('/schedules'), [go]);
+  const openInbox = useCallback(() => go('/inbox'), [go]);
 
   const messages = chat?.messages ?? EMPTY;
   // Inverted list: newest at the bottom, keyboard-friendly, no scroll-to-end bookkeeping.
@@ -74,6 +86,8 @@ export default function ChatScreen() {
           canStartNew={!!chat}
           tokens={totals.tokens}
           onUsage={openUsage}
+          unread={unread}
+          onInbox={openInbox}
         />
         <View style={styles.fill}>
           {messages.length === 0 ? (
@@ -96,6 +110,7 @@ export default function ChatScreen() {
                 <>
                   <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
                   <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+                  <ReportChips templates={templates} onPick={openReport} onAll={openReports} />
                 </>
               )}
             </View>
@@ -132,7 +147,12 @@ export default function ChatScreen() {
         onNewChat={newChat}
         onDelete={actions.remove}
         onSettings={openSettings}
+        onReports={openReports}
+        onSchedules={openSchedules}
+        onInbox={openInbox}
+        unread={unread}
       />
+      {sheet}
     </SafeAreaView>
   );
 }

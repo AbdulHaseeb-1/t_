@@ -48,6 +48,12 @@ describe('toPromptTable', () => {
     expect(out).toContain('total{min=1 max=100 sum=5050 avg=50.5}');
   });
 
+  it('counts zero and negative rows over all rows (e.g. out of stock), not just the shown sample', () => {
+    const rows = Array.from({ length: 100 }, (_, i) => [`p${i}`, i < 70 ? 0 : i < 75 ? -2 : 5]);
+    const out = toPromptTable(result(rows), 10);
+    expect(out).toContain('total{min=-2 max=5 sum=115 avg=1.15 zero_rows=70 negative_rows=5}');
+  });
+
   it('only computes stats for numeric columns', () => {
     expect(numericStats(result([['x', 1]])).map((s) => s.column)).toEqual(['total']);
   });

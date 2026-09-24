@@ -16,6 +16,9 @@ interface NumericStats {
   sum: number;
   avg: number;
   nonNull: number;
+  /** Rows equal to 0 / below 0 ("out of stock", "overdrawn"): counts the model must not guess from a sample. */
+  zeros: number;
+  negatives: number;
 }
 
 /** Stats over every returned row, so the model can reason about rows it never sees. */
@@ -26,9 +29,13 @@ export function numericStats(result: QueryResult): NumericStats[] {
     let max = -Infinity;
     let sum = 0;
     let n = 0;
+    let zeros = 0;
+    let negatives = 0;
     for (const row of result.rows) {
       const v = row[i];
       if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      if (v === 0) zeros++;
+      else if (v < 0) negatives++;
       min = Math.min(min, v);
       max = Math.max(max, v);
       sum += v;
@@ -43,6 +50,8 @@ export function numericStats(result: QueryResult): NumericStats[] {
         sum: round(sum),
         avg: round(sum / n),
         nonNull: n,
+        zeros,
+        negatives,
       });
     }
   });
@@ -67,7 +76,9 @@ export function toPromptTable(result: QueryResult, maxRows: number): string {
     if (stats.length) {
       notes.push(
         `stats over all ${result.rowCount} rows: ` +
-          stats.map((s) => `${s.column}{min=${s.min} max=${s.max} sum=${s.sum} avg=${s.avg}}`).join('; '),
+          stats
+            .map((s) => `${s.column}{min=${s.min} max=${s.max} sum=${s.sum} avg=${s.avg}${s.zeros ? ` zero_rows=${s.zeros}` : ''}${s.negatives ? ` negative_rows=${s.negatives}` : ''}}`)
+            .join('; '),
       );
     }
   }

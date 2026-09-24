@@ -40,3 +40,8 @@ export function formatMs(ms: number, lang: 'en' | 'ur' = 'en'): string {
   if (ms < 1000) return lang === 'ur' ? `${Math.round(ms)} ملی سیکنڈ` : `${Math.round(ms)} ms`;
   return formatDuration(ms, lang);
 }
+
+/** "Thu 24 Sep, 09:00" in the device's time zone. */
+export function formatWhen(iso: string, lang: 'en' | 'ur' = 'en'): string {
+  return new Date(iso).toLocaleString(lang === 'ur' ? 'ur-PK' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}

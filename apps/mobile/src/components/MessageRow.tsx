@@ -7,6 +7,8 @@ import { row, scriptStyle, useI18n } from '../i18n';
 import { inferChart } from '../lib/chart';
 import type { AnswerDetails, AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
 import { formatDuration, formatTokens } from '../lib/format';
+import { saveTemplate } from '../lib/api';
+import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
 import { useChatActions } from '../state/chats';
 import { type, usePalette } from '../theme';
@@ -15,6 +17,7 @@ import { DataPanel } from './DataPanel';
 import { AnswerDetailsSheet } from './Details';
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
+import { SaveReportSheet } from './ReportParts';
 import { Thinking } from './Thinking';
 
 function clock(ms: number): string {
@@ -60,9 +63,18 @@ function Assistant({ m }: { m: AssistantMessage }) {
   const p = usePalette();
   const { t, rtl, lang } = useI18n();
   const { retry } = useChatActions();
-  const { showSql } = useSettings();
+  const { showSql, server } = useSettings();
+  const { reload: reloadReports } = useReports();
   const [copied, setCopied] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const schedule = useCallback(() => {
+    router.push({
+      pathname: '/schedules/edit',
+      params: m.report ? { template: m.report.id, params: JSON.stringify(m.report.params) } : { question: m.question },
+    });
+  }, [m.report, m.question]);
   const chart = useMemo(() => (m.status === 'done' ? inferChart(m.result, m.question, lang) : null), [m.status, m.result, m.question, lang]);
 
   const copy = useCallback(async () => {
@@ -111,9 +123,25 @@ function Assistant({ m }: { m: AssistantMessage }) {
       <View style={[styles.actions, row(rtl)]}>
         <IconButton name={copied ? 'check' : 'copy'} label={copied ? t.copied : t.copy} size={16} color={p.muted} onPress={copy} />
         <IconButton name="rotate-ccw" label={t.askAgain} size={16} color={p.muted} onPress={() => retry(m.id)} />
+        {m.sql && !m.report && (
+          <IconButton name={saved ? 'check' : 'bookmark'} label={saved ? t.savedAsReport : t.saveAsReport} size={16} color={p.muted} onPress={() => setSaving(true)} disabled={saved} />
+        )}
+        {(m.sql || m.report) && <IconButton name="clock" label={t.scheduleIt} size={16} color={p.muted} onPress={schedule} />}
         {m.details && <MetaLine details={m.details} onPress={() => setDetailsOpen(true)} />}
       </View>
       {detailsOpen && <AnswerDetailsSheet details={m.details} visible={detailsOpen} onClose={() => setDetailsOpen(false)} />}
+      {saving && (
+        <SaveReportSheet
+          question={m.question}
+          onClose={() => setSaving(false)}
+          onSave={async (title) => {
+            await saveTemplate(server, { title, question: m.question, sql: m.sql ?? undefined });
+            setSaving(false);
+            setSaved(true);
+            reloadReports();
+          }}
+        />
+      )}
     </View>
   );
 }
