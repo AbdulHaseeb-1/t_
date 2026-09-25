@@ -173,3 +173,15 @@ export function parseMarkdown(src: string): Block[] {
 export function spansToText(spans: Span[]): string {
   return spans.map((s) => s.text).join('');
 }
+
+/**
+ * Text that is still streaming can end inside a **bold** or `code` span:
+ * close it (and drop a lone trailing `*`) so raw markers never flash.
+ */
+export function closeOpenSpans(text: string): string {
+  let out = text.endsWith('*') && !text.endsWith('**') ? text.slice(0, -1) : text;
+  // An opener with nothing after it yet is dropped; one with text is closed.
+  if ((out.match(/`/g) ?? []).length % 2) out = out.endsWith('`') ? out.slice(0, -1) : `${out}\``;
+  if ((out.replace(/`[^`]*`/g, '').match(/\*\*/g) ?? []).length % 2) out = out.endsWith('**') ? out.slice(0, -2) : `${out}**`;
+  return out;
+}

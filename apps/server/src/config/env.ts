@@ -211,7 +211,19 @@ export const envSchema = z.object({
 
   ASK_MAX_REPAIRS: z.coerce.number().int().nonnegative().default(2),
   ASK_ANSWER_MAX_ROWS: z.coerce.number().int().positive().default(60),
+  /** Model turns per chat/analysis run (each turn may run several tools in parallel). */
   AGENT_MAX_STEPS: z.coerce.number().int().positive().default(8),
+  /**
+   * OpenAI API the agent uses. `responses` keeps the model's reasoning across tool calls;
+   * `chat_completions` is for OpenAI-compatible gateways without the Responses API.
+   */
+  AGENT_OPENAI_API: z.enum(['responses', 'chat_completions']).default('responses'),
+  /** Reasoning effort for the chat agent; unset = the tier's LLM_REASONING_EFFORT_*. */
+  AGENT_REASONING_EFFORT: reasoningEffort,
+  /** Earlier chat turns (question + answer + SQL) the agent sees. */
+  AGENT_HISTORY_TURNS: z.coerce.number().int().nonnegative().max(20).default(6),
+  /** Export agent traces to the OpenAI dashboard (off: questions and data stay out of traces). */
+  AGENT_TRACING: bool(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

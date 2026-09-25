@@ -25,6 +25,31 @@ export const askSchema = z.object({
 });
 export type AskInput = z.infer<typeof askSchema>;
 
+/**
+ * Earlier chat turns, oldest first: what was asked, what was answered, and the SQL
+ * behind the answer (absent for conversational turns), so follow-ups resolve.
+ */
+const chatContext = z
+  .array(
+    z.object({
+      question: z.string().trim().min(1).max(2000),
+      answer: z.string().max(4000).optional(),
+      sql: z.string().min(1).max(20_000).optional(),
+    }),
+  )
+  .max(12)
+  .default([]);
+
+export const chatSchema = z.object({
+  question,
+  context: chatContext,
+  language,
+  tier,
+  noCache: z.boolean().default(false),
+});
+export type ChatInput = z.infer<typeof chatSchema>;
+export type ChatTurn = z.infer<typeof chatContext>[number];
+
 export const analyzeSchema = z.object({
   question,
   language,
@@ -48,24 +73,32 @@ export type ExampleInput = z.infer<typeof exampleSchema>;
 
 export type Turn = z.infer<typeof context>[number];
 
+const jsonField = z
+  .string()
+  .default('[]')
+  .transform((s, ctx) => {
+    try {
+      return JSON.parse(s) as unknown;
+    } catch {
+      ctx.addIssue({ code: 'custom', message: 'context must be JSON' });
+      return z.NEVER;
+    }
+  });
+
 /** Text fields of a multipart /query/ask/media request (files are handled separately). */
 export const mediaFieldsSchema = z.object({
   question: z.string().trim().max(2000).default(''),
-  context: z
-    .string()
-    .default('[]')
-    .transform((s, ctx) => {
-      try {
-        return JSON.parse(s) as unknown;
-      } catch {
-        ctx.addIssue({ code: 'custom', message: 'context must be JSON' });
-        return z.NEVER;
-      }
-    })
-    .pipe(context),
+  context: jsonField.pipe(context),
   language,
   answer: z
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+});
+
+/** Text fields of a multipart /query/chat/media request. */
+export const chatMediaFieldsSchema = z.object({
+  question: z.string().trim().max(2000).default(''),
+  context: jsonField.pipe(chatContext),
+  language,
 });

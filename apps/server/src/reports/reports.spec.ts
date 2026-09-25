@@ -57,7 +57,7 @@ const external: Server = createServer((req, res) => {
   });
 });
 
-// ── fake model: SQL for questions, a sentence for answers ───────────────
+// ── fake model: SQL for questions, a sentence for answers; the chat agent queries, then answers ──
 let llm: FakeOpenAI;
 let transcript = 'How many orders are there?';
 
@@ -77,6 +77,7 @@ function env(extra: Record<string, string> = {}) {
     OPENAI_BASE_URL: '',
     OPENROUTER_BASE_URL: '',
     LLM_PROVIDER: 'openai',
+    AGENT_OPENAI_API: 'chat_completions',
     SCHEMA_CACHE_FILE: join(dir, 'schema.json'),
     TEMPLATES_FILE: join(dir, 'templates.json'),
     USER_TEMPLATES_FILE: join(dir, 'user-templates.json'),
@@ -133,6 +134,11 @@ beforeAll(async () => {
     (body) => {
       const msgs = (body.messages as { role: string; content: string }[] | undefined) ?? [];
       if (!msgs.length) return { content: '' };
+      if (body.tools) {
+        if (msgs.at(-1)?.role === 'tool') return { content: 'There are **3** orders in total.' };
+        const args = { title: 'Orders', sql: 'SELECT COUNT(*) AS orders FROM sales.Orders', display: 'number', chart: null };
+        return { toolCalls: [{ id: `call_${msgs.length}`, name: 'run_sql', arguments: JSON.stringify(args) }] };
+      }
       if (msgs[0].content.startsWith('You are a precise data analyst')) return { content: 'There are **3** orders in total.' };
       return { content: '```sql\nSELECT COUNT(*) AS orders FROM sales.Orders\n```' };
     },
@@ -147,7 +153,7 @@ beforeAll(async () => {
   templates.onModuleInit();
   inbox = new InboxService(config);
   push = new PushService(config);
-  whatsapp = new WhatsAppService(config, pipe.ask, new MediaService(config, pipe.llm, pipe.ask), templates);
+  whatsapp = new WhatsAppService(config, pipe.analyst, new MediaService(config, pipe.llm, pipe.ask, pipe.analyst), templates);
   scheduler = new SchedulerService(config, templates, pipe.ask, inbox, push, whatsapp);
   await push.register('ExponentPushToken[abc123]', 'android', 'Test phone');
 });
@@ -296,7 +302,7 @@ describe('scheduler', () => {
     expect('deliveries' in r && r.deliveries[0]).toMatchObject({ to: COLD, status: 'failed', error: expect.stringMatching(/24 hours.*WHATSAPP_REPORT_TEMPLATE/) });
     expect((await scheduler.get(s.id)).lastStatus).toBe('failed');
 
-    const withTemplate = new WhatsAppService(testConfig({ ...env({ WHATSAPP_REPORT_TEMPLATE: 'report_ready' }) }), pipe.ask, {} as MediaService, templates);
+    const withTemplate = new WhatsAppService(testConfig({ ...env({ WHATSAPP_REPORT_TEMPLATE: 'report_ready' }) }), pipe.analyst, {} as MediaService, templates);
     graph.length = 0;
     await withTemplate.sendReport(COLD, { title: 'Cold', text: 'x', summary: 'There are 3 orders.' });
     expect(graph.at(-1)?.body).toMatchObject({

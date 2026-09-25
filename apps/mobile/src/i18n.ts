@@ -8,7 +8,7 @@ const en = {
   appNewChat: 'New chat',
   greeting: 'What would you like to know?',
   greetingHint: 'Ask about your database by typing, speaking, or sharing a photo.',
-  placeholder: 'Ask about your data',
+  placeholder: 'Ask a question',
   send: 'Send',
   stop: 'Stop',
   record: 'Record voice message',
@@ -35,7 +35,12 @@ const en = {
   today: 'Today',
   yesterday: 'Yesterday',
   daysAgo: (n: number) => `${n} days ago`,
-  working: 'Working on it',
+  working: 'Thinking',
+  stageThinking: 'Thinking',
+  stageListening: 'Listening',
+  stageReading: 'Reading the photo',
+  stageSchema: 'Checking the data',
+  stageQuery: 'Querying',
   retry: 'Retry',
   askAgain: 'Ask again',
   copy: 'Copy answer',
@@ -50,6 +55,11 @@ const en = {
   rows: (n: string) => `${n} rows`,
   row: '1 row',
   showingRows: (shown: number, total: string) => `Showing ${shown} of ${total} rows.`,
+  previousPage: 'Previous',
+  nextPage: 'Next',
+  tablePage: (first: number, last: number, total: string, more: boolean) => `${first}–${last} of ${total}${more ? '+' : ''}`,
+  savedRows: (saved: number, total: string) => `Only ${saved} of ${total} rows were saved. Ask again to load the full result.`,
+  cappedRows: (count: string) => `The query stopped at ${count} rows. Narrow the question to see more.`,
   chart: 'Chart',
   heard: 'Heard',
   readFromImage: 'From the photo',
@@ -78,7 +88,7 @@ const en = {
   replyAutoHint: 'Auto replies in the language you ask in. Roman Urdu replies like "Ap k 20 customers hain."',
   romanUrdu: 'Roman Urdu',
   sounds: 'Sounds and vibration',
-  soundsHint: 'Plays a short tone when recording starts, is sent or discarded, and when an answer arrives.',
+  soundsHint: 'Recording cues play a short tone. A gentle vibration marks a completed answer.',
   connectedTo: (host: string) => `Server: ${host}`,
   // charts
   vsPrevious: (label: string) => `vs ${label}`,
@@ -147,7 +157,11 @@ const en = {
   errServer: 'The server returned an error.',
   // Reports, schedules, inbox
   reports: 'Reports',
+  reportsHint: 'Choose a report to run it. Browse by category or search by name.',
   allReports: 'All reports',
+  clearSearch: 'Clear search',
+  needsAttention: 'Needs attention',
+  noMatchingReports: 'No reports match your search.',
   quickReports: 'Quick reports',
   searchReports: 'Search reports',
   noReports: 'No reports on this server yet. Save an answer as a report, or add templates on the server (TEMPLATES_FILE).',
@@ -228,7 +242,7 @@ const ur: Strings = {
   appNewChat: 'نئی گفتگو',
   greeting: 'آپ کیا جاننا چاہتے ہیں؟',
   greetingHint: 'اپنے ڈیٹا بیس کے بارے میں لکھ کر، بول کر یا تصویر بھیج کر پوچھیں۔',
-  placeholder: 'اپنے ڈیٹا کے بارے میں پوچھیں',
+  placeholder: 'سوال پوچھیں',
   send: 'بھیجیں',
   stop: 'روکیں',
   record: 'آواز کا پیغام ریکارڈ کریں',
@@ -256,6 +270,11 @@ const ur: Strings = {
   yesterday: 'کل',
   daysAgo: (n: number) => `${n} دن پہلے`,
   working: 'جواب تیار ہو رہا ہے',
+  stageThinking: 'غور جاری ہے',
+  stageListening: 'آواز سنی جا رہی ہے',
+  stageReading: 'تصویر پڑھی جا رہی ہے',
+  stageSchema: 'ڈیٹا دیکھا جا رہا ہے',
+  stageQuery: 'کوئری',
   retry: 'دوبارہ کوشش کریں',
   askAgain: 'دوبارہ پوچھیں',
   copy: 'جواب کاپی کریں',
@@ -270,6 +289,11 @@ const ur: Strings = {
   rows: (n: string) => `${n} قطاریں`,
   row: '1 قطار',
   showingRows: (shown: number, total: string) => `${total} میں سے ${shown} قطاریں دکھائی جا رہی ہیں۔`,
+  previousPage: 'پچھلا',
+  nextPage: 'اگلا',
+  tablePage: (first: number, last: number, total: string, more: boolean) => `${total}${more ? '+' : ''} میں سے ${first}–${last}`,
+  savedRows: (saved: number, total: string) => `${total} میں سے صرف ${saved} قطاریں محفوظ ہیں۔ مکمل نتیجے کے لیے دوبارہ پوچھیں۔`,
+  cappedRows: (count: string) => `سوال کا نتیجہ ${count} قطاروں تک محدود ہے۔ مزید دیکھنے کے لیے سوال محدود کریں۔`,
   chart: 'چارٹ',
   heard: 'سنا گیا',
   readFromImage: 'تصویر سے',
@@ -298,7 +322,7 @@ const ur: Strings = {
   replyAutoHint: 'خودکار: جس زبان میں سوال ہو اسی میں جواب۔ رومن اردو میں جواب یوں آئے گا: "Ap k 20 customers hain."',
   romanUrdu: 'Roman Urdu',
   sounds: 'آواز اور وائبریشن',
-  soundsHint: 'ریکارڈنگ شروع، بھیجنے یا منسوخ کرنے اور جواب آنے پر ہلکی سی آواز۔',
+  soundsHint: 'ریکارڈنگ پر مختصر آواز اور جواب مکمل ہونے پر ہلکی وائبریشن۔',
   connectedTo: (host: string) => `سرور: ${host}`,
   // charts
   vsPrevious: (label: string) => `${label} کے مقابلے میں`,
@@ -367,7 +391,11 @@ const ur: Strings = {
   errServer: 'سرور میں خرابی پیش آئی۔',
   // Reports, schedules, inbox
   reports: 'رپورٹس',
+  reportsHint: 'رپورٹ چلانے کے لیے اسے منتخب کریں۔ زمرے کے لحاظ سے دیکھیں یا نام سے تلاش کریں۔',
   allReports: 'تمام رپورٹس',
+  clearSearch: 'تلاش صاف کریں',
+  needsAttention: 'توجہ درکار',
+  noMatchingReports: 'آپ کی تلاش سے کوئی رپورٹ نہیں ملی۔',
   quickReports: 'فوری رپورٹس',
   searchReports: 'رپورٹ تلاش کریں',
   noReports: 'اس سرور پر ابھی کوئی رپورٹ نہیں۔ کسی جواب کو رپورٹ کے طور پر محفوظ کریں، یا سرور پر ٹیمپلیٹس شامل کریں۔',
@@ -450,7 +478,7 @@ export interface I18n {
   rtl: boolean;
 }
 
-export const I18nContext = createContext<I18n>({ lang: 'ur', t: ur, rtl: true });
+export const I18nContext = createContext<I18n>({ lang: 'en', t: en, rtl: false });
 
 export function useI18n(): I18n {
   return useContext(I18nContext);
@@ -476,13 +504,15 @@ export function isUrduText(text: string): boolean {
  */
 export function scriptStyle(text: string, base: TextStyle, weight: 'regular' | 'bold' = 'regular'): TextStyle[] {
   if (!isUrduText(text)) return [base];
-  const size = (base.fontSize ?? 16) + 1;
+  const size = (base.fontSize ?? 16) + 2;
   return [
     base,
     {
       fontFamily: weight === 'bold' ? fonts.urduBold : fonts.urdu,
+      // The weight is in the font file; a base weight would make the system fake-bold it.
+      fontWeight: '400',
       fontSize: size,
-      lineHeight: Math.round(size * 2.1),
+      lineHeight: Math.round(size * 2),
       writingDirection: 'rtl',
       textAlign: 'right',
     },

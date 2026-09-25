@@ -4,7 +4,7 @@ import { validateEnv } from './env.js';
 function parseDotenv(text: string): Record<string, string> {
   return Object.fromEntries(
     text
-      .split('\n')
+      .split(/\r?\n/)
       .filter((l) => /^[A-Z_]+=/.test(l))
       .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
   );

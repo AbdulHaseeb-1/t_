@@ -67,18 +67,27 @@ const routes = {
 
 interface Pending {
   url: string;
-  body: { question: string; context: { question: string; sql: string }[] };
-  /** Multipart parts for /query/ask/media, as [name, value]. */
+  body: { question: string; context: { question: string; answer?: string; sql?: string }[] };
+  /** Multipart parts for /query/chat/media, as [name, value]. */
   parts?: [string, unknown][];
   resolve: (status: number, json: unknown) => void;
   signal: AbortSignal;
 }
 
 let requests: Pending[] = [];
+const jsonHeaders = { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null) };
 /** Canned answers for the app's background reads (report gallery, inbox, schedules); tests override them. */
 let canned: Record<string, unknown> = {};
 /** Makes the next question fail as if the server were unreachable. */
 let failNextAsk = false;
+const WebFormData = globalThis.FormData;
+
+/** Match React Native FormData: keep native file parts instead of stringifying them. */
+class NativeFormData {
+  _parts: [string, unknown][] = [];
+  append(name: string, value: unknown) { this._parts.push([name, value]); }
+  entries() { return this._parts[Symbol.iterator](); }
+}
 
 function answer(sql: string, text: string, rows: unknown[][] = [[500]]) {
   return {
@@ -106,6 +115,7 @@ function answer(sql: string, text: string, rows: unknown[][] = [[500]]) {
 }
 
 beforeEach(async () => {
+  globalThis.FormData = NativeFormData as unknown as typeof FormData;
   requests = [];
   await AsyncStorage.clear();
   // Most flows below are asserted with English labels; Urdu has its own tests.
@@ -123,8 +133,8 @@ beforeEach(async () => {
       const [m, pat] = k.split(' ');
       return m === method && (pat === path || (pat.endsWith('*') && path.startsWith(pat.slice(0, -1))));
     });
-    if (hit) return Promise.resolve({ ok: true, status: 200, json: async () => hit[1] } as Response);
-    if (failNextAsk && path.startsWith('/query/ask')) {
+    if (hit) return Promise.resolve({ ok: true, status: 200, headers: jsonHeaders, json: async () => hit[1] } as unknown as Response);
+    if (failNextAsk && /^\/query\/(ask|chat)/.test(path)) {
       failNextAsk = false;
       return Promise.reject(new TypeError('Network request failed'));
     }
@@ -139,13 +149,17 @@ beforeEach(async () => {
         parts,
         body: parts ? Object.fromEntries(parts.filter(([, v]) => typeof v === 'string')) : raw ? JSON.parse(String(raw)) : undefined,
         signal,
-        resolve: (status, json) => resolve({ ok: status < 400, status, json: async () => json } as Response),
+        // The chat client also accepts a plain JSON answer (servers without streaming).
+        resolve: (status, json) => resolve({ ok: status < 400, status, headers: jsonHeaders, json: async () => json } as unknown as Response),
       });
     });
   });
 });
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  globalThis.FormData = WebFormData;
+  jest.restoreAllMocks();
+});
 
 async function ask(text: string) {
   fireEvent.changeText(screen.getByLabelText('Message'), text);
@@ -163,16 +177,16 @@ it('asks, shows progress, renders the answer and the evidence', async () => {
   await ask('How many orders are there?');
   // Once as the message, once as the new chat's title.
   expect(screen.getAllByText('How many orders are there?')).toHaveLength(2);
-  expect(screen.getByLabelText('Working on it')).toBeTruthy();
+  expect(screen.getByLabelText(/^Thinking, /)).toBeTruthy();
   expect(screen.getByLabelText('Stop')).toBeTruthy();
   expect(screen.getByLabelText('Message').props.value).toBe('');
 
   await act(async () => requests[0].resolve(200, answer('SELECT COUNT(*) AS Orders FROM sales.Orders', 'There are **500** orders.')));
   expect(await screen.findByText('500')).toBeTruthy();
-  expect(screen.queryByLabelText('Working on it')).toBeNull();
+  expect(screen.queryByLabelText(/^Thinking, /)).toBeNull();
 
   // SQL is hidden by default: the panel offers the data table only.
-  fireEvent.press(screen.getByLabelText('Show data'));
+  fireEvent.press(await screen.findByLabelText('Show data'));
   expect(screen.getAllByText('500').length).toBeGreaterThan(1);
   expect(screen.queryByText('SELECT COUNT(*) AS Orders FROM sales.Orders')).toBeNull();
 });
@@ -320,11 +334,12 @@ it('sends a voice message and shows what was heard', async () => {
   fireEvent.press(screen.getByLabelText('Send voice message'));
   await waitFor(() => expect(requests).toHaveLength(1));
 
-  expect(requests[0].url).toMatch(/\/query\/ask\/media$/);
-  const audio = requests[0].parts!.find(([k]) => k === 'audio')![1];
-  // Native builds stream the file by URI (Jest's FormData may stringify the descriptor).
-  expect(typeof audio === 'string' ? audio : JSON.stringify(audio)).toMatch(/voice\.m4a|object/);
-  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'language', 'audio']);
+  expect(requests[0].url).toMatch(/\/query\/chat\/media$/);
+  const audio = requests[0].parts!.find(([k]) => k === 'audio')![1] as { name?: string; type?: string; bytes?: unknown };
+  // expo/fetch (the native fetch) cannot encode React Native's { uri } parts: the file goes as bytes, named and typed.
+  expect(audio).toMatchObject({ name: 'voice.m4a', type: 'audio/m4a' });
+  expect(typeof audio.bytes).toBe('function');
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'language', 'audio']);
   expect(screen.getByLabelText('Voice message 0:04')).toBeTruthy();
 
   await act(async () =>
@@ -347,7 +362,8 @@ it('sends a photo with a question and shows what was read', async () => {
   fireEvent.press(screen.getByLabelText('Send'));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests[0].body.question).toBe('How many of these did we sell?');
-  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'answer', 'language', 'image']);
+  expect(requests[0].url).toMatch(/\/query\/chat\/media$/);
+  expect(requests[0].parts!.map(([k]) => k)).toEqual(['question', 'context', 'language', 'image']);
   expect(screen.queryByLabelText('Remove photo')).toBeNull();
 
   await act(async () =>
@@ -371,6 +387,83 @@ it('draws grouped results as a chart', async () => {
   expect(chart).toBeTruthy();
   fireEvent(screen.getByTestId('chart-plot'), 'layout', { nativeEvent: { layout: { width: 320, height: 0, x: 0, y: 0 } } });
   expect(await screen.findByLabelText(/PK 300, AE 120, GB 90/)).toBeTruthy();
+});
+
+it('reveals a completed JSON answer gradually before showing its result', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Summarize sales');
+  const reply = 'Sales increased over the period, with the strongest results near the end of the month.';
+  await act(async () => requests[0].resolve(200, answer('SELECT 1', reply)));
+  expect(screen.queryByText(reply)).toBeNull();
+  expect(await screen.findByLabelText('Response in progress', {}, { timeout: 3000 })).toBeTruthy();
+  expect(await screen.findByText(reply, {}, { timeout: 5000 })).toBeTruthy();
+  expect(await screen.findByLabelText('Show data')).toBeTruthy();
+  expect(screen.queryByLabelText('Response in progress')).toBeNull();
+}, 10_000);
+
+it('fills an editable prompt from the installed sales templates', async () => {
+  canned['GET /templates'] = {
+    timezone: 'Asia/Karachi', today: '2026-09-24',
+    templates: [{ id: 'top-products', title: 'Top products', category: 'sales', icon: 'shopping-bag', params: [], alert: false, builtIn: true, hasSql: true }],
+  };
+  renderRouter(routes, { initialUrl: '/' });
+  fireEvent.press(await screen.findByLabelText('Top products: Rank by net sales'));
+  const input = screen.getByLabelText('Message');
+  expect(input.props.value).toContain('net sales this month');
+  fireEvent.changeText(input, 'List the top 5 products by net sales this month as a table.');
+  expect(screen.getByLabelText('Message').props.value).toContain('top 5 products');
+});
+
+it('opens all requested list rows from the analyst result widget', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Enlsit the top 3 products');
+  const rows = [
+    ['CALVIT-C SACHETS NATURAL', 1_143_693, 19_498],
+    ['Product B', 825_000, 8_300],
+    ['Product C', 706_500, 7_200],
+  ];
+  const columns = ['Product name', 'Net sales', 'Units sold'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'CALVIT-C leads.',
+    result,
+    results: [{ id: 'r1', title: 'Top products', sql: 'SELECT ...', result, display: { view: 'chart', chart: 'bar' } }],
+  }, columns, rows)));
+  await screen.findByText('CALVIT-C leads.');
+  expect(screen.getByText('Top products')).toBeTruthy();
+  expect(screen.getByText('CALVIT-C SACHETS NATURAL')).toBeTruthy();
+  expect(screen.getByText('Product B')).toBeTruthy();
+  expect(screen.getByText('Product C')).toBeTruthy();
+  expect(screen.getByText('Net sales')).toBeTruthy();
+  expect(screen.getByText('Units sold')).toBeTruthy();
+  expect(screen.queryByTestId('chart-bars')).toBeNull();
+});
+
+it('pages through every returned table row beyond the first 50', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('List 120 products');
+  const rows = Array.from({ length: 120 }, (_, i) => [`Product ${i + 1}`, 120 - i]);
+  await act(async () => requests[0].resolve(200, answerWith({ answer: 'Here are the products.' }, ['Product', 'Units'], rows)));
+  expect(await screen.findByText('Product 1')).toBeTruthy();
+  expect(screen.queryByText('Product 26')).toBeNull();
+  expect(screen.getByText('1–25 of 120')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Next'));
+  expect(screen.getByText('Product 26')).toBeTruthy();
+  expect(screen.getByText('26–50 of 120')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Next'));
+  expect(screen.getByText('Product 51')).toBeTruthy();
+  expect(screen.getByText('51–75 of 120')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Next'));
+  expect(screen.getByText('Product 76')).toBeTruthy();
+  expect(screen.getByText('76–100 of 120')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Next'));
+  expect(screen.getByText('Product 120')).toBeTruthy();
+  expect(screen.getByText('101–120 of 120')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Previous'));
+  expect(screen.getByText('Product 76')).toBeTruthy();
 });
 
 it('draws monthly results as growth columns with the change vs the previous month', async () => {
@@ -422,7 +515,7 @@ describe('in Urdu (the default)', () => {
     expect(requests[0].body.question).toBe('پاکستان میں کتنے گاہک ہیں؟');
     await act(async () => requests[0].resolve(200, answerWith({ answer: 'پاکستان میں **115** گاہک ہیں۔', language: 'ur' })));
     expect(await screen.findByText('115')).toBeTruthy();
-    expect(screen.getByLabelText('ڈیٹا دکھائیں')).toBeTruthy();
+    expect(await screen.findByLabelText('ڈیٹا دکھائیں', {}, { timeout: 3000 })).toBeTruthy();
   });
 
   it('shows errors in Urdu', async () => {
@@ -520,7 +613,7 @@ describe('reports', () => {
     await act(async () => requests[0].resolve(200, reportResponse('orders-today', "Today's orders", ['orders', 'units'], [[54, 120]], 'There were **54** orders today.')));
     // The message and the new chat's title.
     expect(await screen.findAllByText("📊 Today's orders")).toHaveLength(2);
-    expect(screen.getByLabelText('Orders: 54')).toBeTruthy(); // KPI tiles
+    expect(await screen.findByLabelText('Orders: 54', {}, { timeout: 3000 })).toBeTruthy(); // KPI tiles
     // A report answer offers Schedule, not "Save as report" (it already is one).
     expect(screen.getByLabelText('Schedule')).toBeTruthy();
     expect(screen.queryByLabelText('Save as report')).toBeNull();

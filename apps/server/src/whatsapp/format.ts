@@ -47,15 +47,25 @@ export function tableBlock(r: QueryResult, maxRows = 10): string {
 }
 
 /** A complete WhatsApp message for an answer or report, within the 4096-character limit. */
-export function answerMessage(opts: { title?: string; subtitle?: string; answer?: string | null; result?: QueryResult | null; note?: string }): string {
+export function answerMessage(opts: {
+  title?: string;
+  subtitle?: string;
+  answer?: string | null;
+  result?: QueryResult | null;
+  /** Several results, each under its own heading (chat answers). */
+  tables?: { title?: string; result: QueryResult }[];
+  note?: string;
+}): string {
   const parts: string[] = [];
   if (opts.title) parts.push(`*${opts.title}*${opts.subtitle ? `\n_${opts.subtitle}_` : ''}`);
   if (opts.note) parts.push(opts.note);
   if (opts.answer) parts.push(toWhatsApp(opts.answer));
-  // A single number is already in the sentence; a table adds nothing there.
-  const r = opts.result;
-  if (r && r.rowCount > 0 && !(r.rowCount === 1 && r.columns.length <= 2 && opts.answer)) parts.push(tableBlock(r));
-  if (r && r.rowCount === 0 && !opts.answer) parts.push('No rows.');
+  const tables = opts.tables ?? (opts.result ? [{ result: opts.result }] : []);
+  for (const { title, result: r } of tables) {
+    // A single number is already in the sentence; a table adds nothing there.
+    if (r.rowCount > 0 && !(r.rowCount === 1 && r.columns.length <= 2 && opts.answer)) parts.push(`${title ? `*${title}*\n` : ''}${tableBlock(r)}`);
+    if (r.rowCount === 0 && !opts.answer) parts.push('No rows.');
+  }
   let text = parts.filter(Boolean).join('\n\n');
   if (text.length > 4000) text = `${text.slice(0, 3990)}…`;
   return text;

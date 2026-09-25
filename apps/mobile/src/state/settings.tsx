@@ -17,8 +17,8 @@ const SHOW_SQL_KEY = 'settings.showSql';
  */
 export const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__ ? 'http://localhost:3000' : '');
 const REPLY_LANGUAGES: ReplyLanguage[] = ['auto', 'ur', 'ur-Latn', 'en'];
-/** Urdu first: the product's primary audience. */
-export const DEFAULT_LANGUAGE: UiLanguage = 'ur';
+/** English is the default until the user chooses a display language. */
+export const DEFAULT_LANGUAGE: UiLanguage = 'en';
 
 interface SettingsValue {
   ready: boolean;

@@ -1,6 +1,6 @@
+import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import * as BackgroundTask from 'expo-background-task';
-import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 import { type InboxEntry, listInbox, registerDevice, type ServerConfig } from './api';
@@ -19,12 +19,36 @@ const PUSH_KEY = 'inbox.pushToken';
 const CHANNEL = 'reports';
 const native = Platform.OS !== 'web';
 
+type NotificationsModule = typeof import('expo-notifications');
+
+/**
+ * expo-notifications subscribes to push tokens as soon as it loads, and that throws in
+ * Expo Go on Android (push was removed from Expo Go in SDK 53), taking every screen that
+ * imports it down with it. So it is loaded lazily and never in Expo Go on Android: the
+ * inbox badge still works there, system notifications need a development build.
+ */
+export const notificationsAvailable = native && !(Platform.OS === 'android' && isRunningInExpoGo());
+let loaded: NotificationsModule | null | undefined;
+
+function notifications(): NotificationsModule | null {
+  if (loaded === undefined) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- loading it at all is the side effect to avoid
+      loaded = notificationsAvailable ? (require('expo-notifications') as NotificationsModule) : null;
+    } catch {
+      loaded = null;
+    }
+  }
+  return loaded;
+}
+
 let loadConfig: () => Promise<ServerConfig> = async () => ({ baseUrl: '' });
 
 /** Configures how notifications look and where the background task finds the server. */
 export async function setupNotifications(load: () => Promise<ServerConfig>): Promise<void> {
   loadConfig = load;
-  if (!native) return;
+  const Notifications = notifications();
+  if (!Notifications) return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
   });
@@ -35,7 +59,8 @@ export async function setupNotifications(load: () => Promise<ServerConfig>): Pro
 
 /** Asks once (Android 13+ / iOS show a system prompt); true when notifications may be shown. */
 export async function ensureNotificationPermission(): Promise<boolean> {
-  if (!native) return false;
+  const Notifications = notifications();
+  if (!Notifications) return false;
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
@@ -54,7 +79,8 @@ export async function checkInbox(cfg: ServerConfig, notify: boolean): Promise<{ 
   const newest = res.reports.reduce((m, r) => (r.createdAt > m ? r.createdAt : m), since ?? new Date().toISOString());
   await storage.set(SEEN_KEY, newest);
   const pushed = !!(await storage.get<string>(PUSH_KEY));
-  if (notify && native && !pushed) {
+  const Notifications = notify && !pushed ? notifications() : null;
+  if (Notifications) {
     for (const r of fresh.slice(0, 5).reverse()) {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -95,7 +121,9 @@ export async function registerBackgroundCheck(): Promise<void> {
 /** Instant push, only in builds configured for it (EAS project id + FCM on Android). */
 export async function registerPush(cfg: ServerConfig): Promise<boolean> {
   const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId;
-  if (!native || !projectId || !cfg.baseUrl) return false;
+  if (!projectId || !cfg.baseUrl) return false;
+  const Notifications = notifications();
+  if (!Notifications) return false;
   try {
     const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     await registerDevice(cfg, token, Platform.OS === 'ios' ? 'ios' : 'android');
@@ -108,7 +136,8 @@ export async function registerPush(cfg: ServerConfig): Promise<boolean> {
 
 /** Calls back with the report id when the user taps a report notification. */
 export function onReportTapped(cb: (reportId: string) => void): () => void {
-  if (!native) return () => undefined;
+  const Notifications = notifications();
+  if (!Notifications) return () => undefined;
   const sub = Notifications.addNotificationResponseReceivedListener((r) => {
     const id = (r.notification.request.content.data as { reportId?: string } | undefined)?.reportId;
     if (id) cb(id);

@@ -34,6 +34,8 @@ export const templateSchema = z
     titleUr: z.string().max(80).optional(),
     description: z.string().max(300).optional(),
     descriptionUr: z.string().max(300).optional(),
+    /** Business meaning and answer guidance for the model; not shown as the report description. */
+    prompt: z.string().max(1200).optional(),
     category: z.enum(CATEGORIES).default('custom'),
     /** Feather icon name for the app. */
     icon: z.string().max(40).optional(),

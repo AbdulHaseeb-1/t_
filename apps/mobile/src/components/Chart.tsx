@@ -5,7 +5,7 @@ import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-
 import { scriptStyle, useI18n } from '../i18n';
 import { compactNumber, type Growth, humanize, lineDomain, niceMax, percent, type VizSpec } from '../lib/chart';
 import { formatCell } from '../lib/format';
-import { card, fonts, type, type ChartPalette, useChartPalette, usePalette } from '../theme';
+import { card, type ChartPalette, type, useChartPalette, usePalette, weight } from '../theme';
 
 /**
  * Charts follow one spec (see lib/chart.ts for the form choice):
@@ -13,7 +13,7 @@ import { card, fonts, type, type ChartPalette, useChartPalette, usePalette } fro
  * validated series colors in fixed order, selective labels, and a readout line
  * above the plot that doubles as the tap tooltip (nothing floats over marks).
  */
-const AXIS = { fontSize: 11, fontFamily: fonts.sans };
+const AXIS = { fontSize: 12 };
 
 function useWidth() {
   const [width, setWidth] = useState(0);
@@ -98,7 +98,7 @@ function Legend({ names, c }: { names: string[]; c: ChartPalette }) {
 
 function Title({ text }: { text: string }) {
   const p = usePalette();
-  return <Text style={[scriptStyle(text, { ...type.meta, fontFamily: fonts.sansMedium }), { color: p.text }]}>{text}</Text>;
+  return <Text style={[scriptStyle(text, { ...type.meta, ...weight.medium }), { color: p.text }]}>{text}</Text>;
 }
 
 function Kpis({ items }: { items: { label: string; value: number }[] }) {
@@ -408,7 +408,7 @@ function Donut({ spec }: { spec: Extract<VizSpec, { kind: 'donut' }> }) {
               onPress={() => setSel(a.i === sel ? null : a.i)}
             />
           ))}
-          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontFamily={fonts.sansSemibold} fontSize={17}>
+          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontWeight="600" fontSize={17}>
             {shown === null ? compactNumber(total) : `${Math.round((series.values[shown] / total) * 100)}%`}
           </SvgText>
           <SvgText x={size / 2} y={size / 2 + 18} textAnchor="middle" fill={p.muted} {...AXIS}>
@@ -452,15 +452,15 @@ const styles = StyleSheet.create({
   box: { gap: 8, width: '100%' },
   flex: { flex: 1 },
   readout: { alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
-  readoutValue: { fontFamily: fonts.sansSemibold, fontSize: 20, lineHeight: 26 },
+  readoutValue: { ...weight.semibold, fontSize: 21, lineHeight: 28 },
   delta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  deltaValue: { fontFamily: fonts.sansMedium },
+  deltaValue: { ...weight.medium },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
-  kpiValue: { fontFamily: fonts.sansSemibold, fontSize: 22, lineHeight: 28 },
+  kpiValue: { ...weight.semibold, fontSize: 24, lineHeight: 31 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   donutLegend: { flex: 1, minWidth: 140, gap: 6 },
   donutItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 },

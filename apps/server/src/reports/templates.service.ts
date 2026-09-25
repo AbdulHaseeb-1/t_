@@ -47,6 +47,7 @@ export interface NewTemplate {
   title: string;
   titleUr?: string;
   description?: string;
+  prompt?: string;
   category?: Category;
   question: string;
   sql?: string;
@@ -126,6 +127,7 @@ export class TemplatesService implements OnModuleInit {
       title: input.title,
       titleUr: input.titleUr,
       description: input.description,
+      prompt: input.prompt ?? input.question,
       category: input.category ?? 'custom',
       icon: 'bookmark',
       question: input.question,
@@ -169,7 +171,7 @@ export class TemplatesService implements OnModuleInit {
 
     if (!template) {
       const res = await this.asker.ask({
-        question: renderQuestion(t.question!, values),
+        question: `${t.prompt ? `Report context: ${t.prompt}\n\n` : ''}${renderQuestion(t.question!, values)}`,
         context: [],
         language: lang,
         answer: opts.answer ?? true,
@@ -188,7 +190,7 @@ export class TemplatesService implements OnModuleInit {
     let llmMs = 0;
     if ((opts.answer ?? true) && t.summary) {
       const described = await this.asker
-        .describe(`${t.title}${period ? ` (${period})` : ''}${t.description ? `. ${t.description}` : ''}`, sql, result, lang)
+        .describe(`${t.title}${period ? ` (${period})` : ''}${t.description ? `. ${t.description}` : ''}`, sql, result, lang, t.prompt)
         .catch((err: Error) => {
           // The numbers matter more than the prose: a model outage must not lose the report.
           this.logger.warn(`Report summary failed for ${t.id}: ${err.message}`);

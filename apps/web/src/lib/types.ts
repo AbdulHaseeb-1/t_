@@ -23,6 +23,7 @@ export interface ModelInfo {
   provider: Provider;
   name: string;
   available: boolean;
+  priceStatus: 'free' | 'paid' | 'unknown';
   promptPerM?: number;
   completionPerM?: number;
   cachedPerM?: number;
@@ -218,3 +219,5 @@ export interface CompareResponse {
   agreement: (boolean | null)[][];
   consensus: number[];
 }
+
+

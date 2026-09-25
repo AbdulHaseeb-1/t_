@@ -2,10 +2,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { LRUCache } from 'lru-cache';
 import { AppConfig } from '../config/app-config.js';
-import { AskService } from '../query/ask.service.js';
+import { AnalystService } from '../query/analyst/analyst.service.js';
 import { detectLanguage, type Lang } from '../query/language.js';
 import { MediaService } from '../query/media.service.js';
-import type { Turn } from '../query/query.dto.js';
+import type { ChatTurn } from '../query/query.dto.js';
 import type { ReportTemplate } from '../reports/template.js';
 import { TemplatesService } from '../reports/templates.service.js';
 import { answerMessage } from './format.js';
@@ -28,7 +28,7 @@ interface WebhookBody {
 }
 
 interface Conversation {
-  turns: Turn[];
+  turns: ChatTurn[];
   lang: Lang;
 }
 
@@ -77,7 +77,7 @@ export class WhatsAppService {
 
   constructor(
     private readonly config: AppConfig,
-    private readonly asker: AskService,
+    private readonly analyst: AnalystService,
     private readonly media: MediaService,
     private readonly templates: TemplatesService,
   ) {
@@ -188,7 +188,7 @@ export class WhatsAppService {
     }
   }
 
-  /** Text goes straight to the ask pipeline; voice notes and photos through the media pipeline. Follow-ups keep context. */
+  /** Text goes straight to the chat agent; voice notes and photos through the media pipeline first. Follow-ups keep context. */
   private async answer(
     from: string,
     conv: Conversation,
@@ -196,13 +196,18 @@ export class WhatsAppService {
   ): Promise<void> {
     const res =
       input.audio || input.image
-        ? await this.media.ask({ question: input.question ?? '', context: conv.turns, language: 'auto', answer: true, audio: input.audio, image: input.image })
-        : await this.asker.ask({ question: input.question!, context: conv.turns, language: 'auto', answer: true, tier: 'fast', noCache: false });
+        ? await this.media.chat({ question: input.question ?? '', context: conv.turns, language: 'auto', audio: input.audio, image: input.image })
+        : await this.analyst.chat({ question: input.question!, context: conv.turns, language: 'auto', tier: 'fast', noCache: false });
     conv.lang = res.language;
-    if (res.sql) conv.turns = [...conv.turns, { question: res.question, sql: res.sql }].slice(-4);
+    conv.turns = [...conv.turns, { question: res.question, answer: res.answer.slice(0, 1500), ...(res.sql ? { sql: res.sql } : {}) }].slice(-6);
     this.conversations.set(from, conv);
     const heard = 'transcript' in res && res.transcript ? `🎤 _${TEXT[conv.lang === 'ur' ? 'ur' : 'en'].heard}: ${res.transcript}_` : undefined;
-    await this.client!.sendText(from, answerMessage({ note: heard, answer: res.answer, result: res.result }));
+    // Headline figures are already in the sentence; tables and charts become aligned text tables.
+    const tables = res.results.filter((r) => r.display.view !== 'number');
+    await this.client!.sendText(
+      from,
+      answerMessage({ note: heard, answer: res.answer, tables: tables.map((r) => ({ title: tables.length > 1 ? r.title : undefined, result: r.result })) }),
+    );
   }
 
   private label(t: ReportTemplate, lang: Lang) {

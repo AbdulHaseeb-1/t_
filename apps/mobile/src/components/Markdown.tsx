@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, type TextStyle, View } from 'react-native';
 import { type Block, parseMarkdown, type Span, spansToText } from '../lib/markdown';
 import { isUrduText, scriptStyle } from '../i18n';
-import { fonts, type Palette, type, usePalette } from '../theme';
+import { fonts, type Palette, type, usePalette, weight } from '../theme';
 
 function Spans({ spans, base, p }: { spans: Span[]; base: TextStyle; p: Palette }) {
   return (
@@ -16,9 +16,9 @@ function Spans({ spans, base, p }: { spans: Span[]; base: TextStyle; p: Palette 
           );
         }
         const style: TextStyle[] = [];
-        if (s.bold && base.fontFamily === fonts.urdu) style.push({ fontFamily: fonts.urduBold });
-        else if (s.bold) style.push({ fontFamily: base.fontFamily === fonts.serif ? fonts.serifSemibold : fonts.sansSemibold });
-        if (s.italic && base.fontFamily !== fonts.urdu) style.push({ fontFamily: fonts.serifItalic });
+        if (s.bold && (base.fontFamily === fonts.urdu || base.fontFamily === fonts.urduBold)) style.push({ fontFamily: fonts.urduBold });
+        else if (s.bold) style.push(weight.semibold);
+        if (s.italic && base.fontFamily !== fonts.urdu && base.fontFamily !== fonts.urduBold) style.push({ fontStyle: 'italic' });
         return (
           <Text key={i} style={style}>
             {s.text}
@@ -61,7 +61,7 @@ function Table({ block, p }: { block: Extract<Block, { type: 'table' }>; p: Pale
     <View key={c} style={[styles.cell, { width: widths[c], borderColor: p.border }]}>
       <Text
         style={[
-          ...scriptStyle(spansToText(spans), header ? { ...type.meta, fontFamily: fonts.sansMedium } : type.meta),
+          ...scriptStyle(spansToText(spans), header ? { ...type.meta, ...weight.medium } : type.meta),
           { color: header ? p.muted : p.text },
           !isUrduText(spansToText(spans)) && { textAlign: block.align[c] ?? 'left' },
         ]}
@@ -84,25 +84,29 @@ function Table({ block, p }: { block: Extract<Block, { type: 'table' }>; p: Pale
   );
 }
 
-/** Renders the assistant's Markdown in the prose serif. Parsing is memoized per text. */
+/** Renders the assistant's Markdown in the prose style. Parsing is memoized per text. */
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const p = usePalette();
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   const prose: TextStyle = { ...type.prose, color: p.prose };
-  /** Urdu blocks: Nastaliq, right-aligned, right-to-left; others keep the serif. */
-  const proseFor = (text: string, weight: 'regular' | 'bold' = 'regular'): TextStyle =>
-    StyleSheet.flatten(scriptStyle(text, weight === 'bold' ? { ...prose, fontFamily: fonts.serifSemibold } : prose, weight));
+  /** Urdu blocks use Nastaliq with the line height its diagonals need. */
+  const proseFor = (text: string, bold: 'regular' | 'bold' = 'regular'): TextStyle =>
+    StyleSheet.flatten(scriptStyle(text, bold === 'bold' ? { ...prose, ...weight.semibold } : prose, bold));
+  const headingFor = (text: string, level: number): TextStyle =>
+    StyleSheet.flatten(scriptStyle(text, { ...(level === 1 ? type.heading : level === 2 ? type.subheading : type.title), color: p.prose }, 'bold'));
 
   return (
     <View style={styles.stack}>
       {blocks.map((b, i) => {
         switch (b.type) {
-          case 'heading':
+          case 'heading': {
+            const heading = headingFor(spansToText(b.spans), b.level);
             return (
-              <Text key={i} accessibilityRole="header" style={[proseFor(spansToText(b.spans), 'bold'), !isUrduText(spansToText(b.spans)) && { fontSize: b.level === 1 ? 21 : b.level === 2 ? 19 : 17.5 }]}>
-                <Spans spans={b.spans} base={proseFor(spansToText(b.spans))} p={p} />
+              <Text key={i} accessibilityRole="header" style={heading}>
+                <Spans spans={b.spans} base={heading} p={p} />
               </Text>
             );
+          }
           case 'paragraph':
             return (
               <Text key={i} style={proseFor(spansToText(b.spans))} selectable>

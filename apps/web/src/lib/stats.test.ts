@@ -71,8 +71,8 @@ describe('caseMatrix', () => {
 
 describe('estimateCost', () => {
   const catalog: ModelInfo[] = [
-    { id: 'm1', provider: 'openai', name: 'm1', available: true, promptPerM: 1, completionPerM: 4, cachedPerM: 0.1 },
-    { id: 'm2', provider: 'openai', name: 'm2', available: true },
+    { id: 'm1', provider: 'openai', name: 'm1', available: true, priceStatus: 'paid', promptPerM: 1, completionPerM: 4, cachedPerM: 0.1 },
+    { id: 'm2', provider: 'openai', name: 'm2', available: true, priceStatus: 'unknown' },
   ];
   it('prices uncached, cached and output tokens separately', () => {
     const e = estimateCost([{ provider: 'openai', model: 'm1' }], catalog, 100, { prompt: 8000, cached: 4000, completion: 150 });
@@ -108,3 +108,4 @@ describe('counts / specFromOverrides', () => {
     expect(specFromOverrides({})).toBeUndefined();
   });
 });
+

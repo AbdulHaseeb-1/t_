@@ -15,12 +15,13 @@ import { isUrduText, row, scriptStyle, useI18n } from '../i18n';
 import { type PickedImage, pickImage } from '../lib/media';
 import { useVoice } from '../lib/useVoice';
 import type { Outgoing } from '../state/chats';
-import { card, fonts, type, usePalette } from '../theme';
+import { card, fonts, type, usePalette, weight } from '../theme';
 import { IconButton } from './IconButton';
 import { PulseDot, Waveform } from './Waveform';
 
 interface Props {
   busy: boolean;
+  initialText?: string;
   onSend: (out: Outgoing) => void;
   onStop: () => void;
 }
@@ -38,10 +39,10 @@ function clock(ms: number): string {
  * The primary button is context-aware: mic when empty, send when there is
  * something to send, stop while an answer is pending.
  */
-export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) {
+export const Composer = memo(function Composer({ busy, initialText = '', onSend, onStop }: Props) {
   const p = usePalette();
   const { t, rtl } = useI18n();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [image, setImage] = useState<PickedImage | null>(null);
   const [menu, setMenu] = useState(false);
   const [photoError, setPhotoError] = useState(false);
@@ -109,15 +110,15 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
       disabled={voice.state === 'starting'}
       style={[styles.round, { backgroundColor: p.primary }]}
     >
-      <Feather name="arrow-up" size={18} color={p.onPrimary} />
+      <Feather name="arrow-up" size={20} color={p.onPrimary} />
     </Pressable>
   ) : hasContent ? (
     <Pressable accessibilityRole="button" accessibilityLabel={t.send} onPress={send} style={[styles.round, { backgroundColor: p.primary }]}>
-      <Feather name="arrow-up" size={18} color={p.onPrimary} />
+      <Feather name="arrow-up" size={20} color={p.onPrimary} />
     </Pressable>
   ) : (
     <Pressable accessibilityRole="button" accessibilityLabel={t.record} onPress={voice.start} style={[styles.round, { backgroundColor: p.sunken }]}>
-      <Feather name="mic" size={17} color={p.text} />
+      <Feather name="mic" size={19} color={p.text} />
     </Pressable>
   );
 
@@ -140,36 +141,52 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
         </View>
       )}
 
-      {recording ? (
-        <View style={[row(rtl), styles.recRow]} accessibilityLiveRegion="polite" accessibilityLabel={t.recording}>
-          <PulseDot color={p.danger} />
-          <Text style={[type.body, styles.clock, { color: p.text }]}>{clock(voice.durationMs)}</Text>
-          <Waveform levels={voice.levels} color={p.text} rtl={rtl} />
-        </View>
-      ) : (
-        <TextInput
-          ref={input}
-          value={text}
-          onChangeText={setText}
-          onKeyPress={onKeyPress}
-          placeholder={t.placeholder}
-          placeholderTextColor={p.faint}
-          multiline
-          numberOfLines={1}
-          onContentSizeChange={(e) => setHeight(e.nativeEvent.contentSize.height)}
-          accessibilityLabel="Message"
-          style={[
-            textStyle,
-            styles.input,
-            {
-              color: p.text,
-              height: Math.min(lineHeight * MAX_LINES, Math.max(lineHeight, height)),
-              textAlign: urdu ? 'right' : 'left',
-              writingDirection: urdu ? 'rtl' : 'ltr',
-            },
-          ]}
-        />
-      )}
+      <View style={[row(rtl), styles.entryRow]}>
+        {recording ? (
+          <IconButton name="trash-2" label={t.cancelRecording} size={19} color={p.muted} onPress={voice.cancel} />
+        ) : (
+          <IconButton
+            name={menu ? 'x' : 'plus'}
+            label={t.attach}
+            size={20}
+            disabled={busy}
+            // The web has no camera flow worth offering: go straight to the file picker.
+            onPress={() => (Platform.OS === 'web' ? attach('library') : setMenu((m) => !m))}
+          />
+        )}
+        {recording ? (
+          <View style={[row(rtl), styles.recRow]} accessibilityLiveRegion="polite" accessibilityLabel={t.recording}>
+            <PulseDot color={p.danger} />
+            <Text style={[type.body, styles.clock, { color: p.text }]}>{clock(voice.durationMs)}</Text>
+            <Waveform levels={voice.levels} color={p.text} rtl={rtl} />
+          </View>
+        ) : (
+          <TextInput
+            ref={input}
+            autoFocus={!!initialText}
+            value={text}
+            onChangeText={setText}
+            onKeyPress={onKeyPress}
+            placeholder={t.placeholder}
+            placeholderTextColor={p.muted}
+            multiline
+            numberOfLines={1}
+            onContentSizeChange={(e) => setHeight(e.nativeEvent.contentSize.height)}
+            accessibilityLabel="Message"
+            style={[
+              textStyle,
+              styles.input,
+              {
+                color: p.text,
+                height: text.length ? Math.min(lineHeight * MAX_LINES, Math.max(lineHeight, height)) : lineHeight,
+                textAlign: urdu ? 'right' : 'left',
+                writingDirection: urdu ? 'rtl' : 'ltr',
+              },
+            ]}
+          />
+        )}
+        {primary}
+      </View>
 
       {photoError && (
         <Pressable onPress={() => setPhotoError(false)} accessibilityRole="alert">
@@ -187,31 +204,15 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
         <View style={[row(rtl), styles.menu]}>
           <Pressable accessibilityRole="button" accessibilityLabel={t.choosePhoto} onPress={() => attach('library')} style={[styles.chip, { backgroundColor: p.sunken }]}>
             <Feather name="image" size={15} color={p.text} />
-            <Text style={[scriptStyle(t.choosePhoto, type.meta), { color: p.text, fontFamily: rtl ? fonts.urdu : fonts.sansMedium }]}>{t.choosePhoto}</Text>
+            <Text style={[scriptStyle(t.choosePhoto, type.meta), { color: p.text, ...(rtl ? { fontFamily: fonts.urdu } : weight.medium) }]}>{t.choosePhoto}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={t.takePhoto} onPress={() => attach('camera')} style={[styles.chip, { backgroundColor: p.sunken }]}>
             <Feather name="camera" size={15} color={p.text} />
-            <Text style={[scriptStyle(t.takePhoto, type.meta), { color: p.text, fontFamily: rtl ? fonts.urdu : fonts.sansMedium }]}>{t.takePhoto}</Text>
+            <Text style={[scriptStyle(t.takePhoto, type.meta), { color: p.text, ...(rtl ? { fontFamily: fonts.urdu } : weight.medium) }]}>{t.takePhoto}</Text>
           </Pressable>
         </View>
       )}
 
-      <View style={[row(rtl), styles.bar]}>
-        {recording ? (
-          <IconButton name="trash-2" label={t.cancelRecording} size={19} color={p.muted} onPress={voice.cancel} />
-        ) : (
-          <IconButton
-            name={menu ? 'x' : 'plus'}
-            label={t.attach}
-            size={20}
-            disabled={busy}
-            // The web has no camera flow worth offering: go straight to the file picker.
-            onPress={() => (Platform.OS === 'web' ? attach('library') : setMenu((m) => !m))}
-          />
-        )}
-        <View style={styles.spacer} />
-        {primary}
-      </View>
     </View>
   );
 });
@@ -219,21 +220,19 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
 const styles = StyleSheet.create({
   box: {
     borderRadius: 24,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
-    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
   },
-  input: { paddingTop: 0, paddingBottom: 0, paddingHorizontal: 4, outlineStyle: 'none' } as never,
+  entryRow: { alignItems: 'flex-end', gap: 4 },
+  input: { flex: 1, minWidth: 0, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, marginBottom: 9, outlineStyle: 'none' } as never,
   attachRow: { paddingHorizontal: 4, paddingTop: 2 },
   thumb: { width: 56, height: 56, borderRadius: 10 },
   remove: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  recRow: { alignItems: 'center', gap: 10, paddingHorizontal: 4, minHeight: 30 },
+  recRow: { flex: 1, alignItems: 'center', gap: 10, paddingHorizontal: 4, minHeight: 42 },
   clock: { fontVariant: ['tabular-nums'], minWidth: 40 },
   menu: { gap: 8, paddingHorizontal: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
-  bar: { alignItems: 'center' },
-  spacer: { flex: 1 },
-  round: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  round: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   stopGlyph: { width: 11, height: 11, borderRadius: 2 },
 });

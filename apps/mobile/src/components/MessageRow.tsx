@@ -1,12 +1,15 @@
 import Feather from '@expo/vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { inferChart } from '../lib/chart';
+import { closeOpenSpans } from '../lib/markdown';
+import { useSmoothText } from '../lib/useSmoothText';
 import type { AnswerDetails, AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
 import { formatDuration, formatTokens } from '../lib/format';
+import { cue } from '../lib/feedback';
 import { saveTemplate } from '../lib/api';
 import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
@@ -18,6 +21,7 @@ import { AnswerDetailsSheet } from './Details';
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
 import { SaveReportSheet } from './ReportParts';
+import { asksForTable, ResultWidget } from './ResultWidget';
 import { Thinking } from './Thinking';
 
 function clock(ms: number): string {
@@ -69,21 +73,34 @@ function Assistant({ m }: { m: AssistantMessage }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const wasPending = useRef(m.status === 'pending');
+  const { text: visibleText, done: revealDone } = useSmoothText(m.text ?? '', m.status === 'pending');
+  useEffect(() => {
+    if (m.status === 'pending') {
+      wasPending.current = true;
+      return;
+    }
+    if (m.status !== 'done' || !revealDone) return;
+    if (wasPending.current) {
+      wasPending.current = false;
+      cue('answer');
+    }
+  }, [m.status, revealDone]);
   const schedule = useCallback(() => {
     router.push({
       pathname: '/schedules/edit',
       params: m.report ? { template: m.report.id, params: JSON.stringify(m.report.params) } : { question: m.question },
     });
   }, [m.report, m.question]);
-  const chart = useMemo(() => (m.status === 'done' ? inferChart(m.result, m.question, lang) : null), [m.status, m.result, m.question, lang]);
+  const hasShownResults = !!m.results?.length;
+  const legacyTable = asksForTable(m.question);
+  const chart = useMemo(() => (m.status === 'done' && !hasShownResults && !legacyTable ? inferChart(m.result, m.question, lang) : null), [m.status, hasShownResults, legacyTable, m.result, m.question, lang]);
 
   const copy = useCallback(async () => {
     await Clipboard.setStringAsync(m.text ?? '');
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [m.text]);
-
-  if (m.status === 'pending') return <Thinking />;
 
   if (m.status === 'error' || m.status === 'stopped') {
     const message = m.status === 'stopped' && m.error === 'Stopped.' ? t.stopped : m.status === 'stopped' && m.error === 'Interrupted.' ? t.interrupted : (m.error ?? '');
@@ -110,16 +127,38 @@ function Assistant({ m }: { m: AssistantMessage }) {
     );
   }
 
+  if (m.status === 'pending' || (m.status === 'done' && !revealDone)) {
+    const stage = m.progress?.stage;
+    const stageLabel = stage === 'listening'
+      ? t.stageListening
+      : stage === 'reading'
+        ? t.stageReading
+        : stage === 'schema'
+          ? t.stageSchema
+          : stage === 'query'
+            ? t.stageQuery
+            : t.stageThinking;
+    if (!visibleText) return <Thinking label={m.progress?.label?.trim() || stageLabel} />;
+    return (
+      <View style={styles.assistant}>
+        <Markdown text={closeOpenSpans(visibleText)} />
+        <Text style={[type.prose, styles.cursor, { color: p.accent }]} accessibilityLabel="Response in progress">▍</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.assistant}>
-      {!!m.text && <Markdown text={m.text} />}
-      {chart && <Chart spec={chart} />}
+      {!!visibleText && <Markdown text={visibleText} />}
+      {hasShownResults
+        ? m.results!.map((item) => <ResultWidget key={item.id} item={item} question={m.question} showSql={showSql} />)
+        : chart && <Chart spec={chart} />}
       {!!m.imageNote && (
         <Text style={[scriptStyle(m.imageNote, type.meta), { color: p.muted }]}>
           {`${t.readFromImage}: ${m.imageNote}`}
         </Text>
       )}
-      {m.sql && m.result && <DataPanel sql={showSql ? m.sql : undefined} result={m.result} />}
+      {!hasShownResults && m.result && <DataPanel sql={showSql ? m.sql ?? undefined : undefined} result={m.result} defaultOpen={legacyTable || (!chart && m.result.rowCount > 1)} />}
       <View style={[styles.actions, row(rtl)]}>
         <IconButton name={copied ? 'check' : 'copy'} label={copied ? t.copied : t.copy} size={16} color={p.muted} onPress={copy} />
         <IconButton name="rotate-ccw" label={t.askAgain} size={16} color={p.muted} onPress={() => retry(m.id)} />
@@ -179,13 +218,14 @@ export const MessageRow = memo(function MessageRow({ message }: { message: Messa
 });
 
 const styles = StyleSheet.create({
-  userRow: { alignItems: 'flex-end', paddingLeft: 48, gap: 6 },
-  userRowRtl: { alignItems: 'flex-start', paddingLeft: 0, paddingRight: 48 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '100%', gap: 4 },
+  userRow: { alignItems: 'flex-end', paddingLeft: 32, gap: 6 },
+  userRowRtl: { alignItems: 'flex-start', paddingLeft: 0, paddingRight: 32 },
+  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '92%', gap: 4 },
   voice: { alignItems: 'center', gap: 6 },
   photo: { width: 120, height: 120, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   photoImg: { width: '100%', height: '100%' },
   assistant: { gap: 12 },
+  cursor: { marginTop: -8 },
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   actions: { marginHorizontal: -10, marginTop: -6, alignItems: 'center', gap: 4 },
   meta: { alignItems: 'center', gap: 5, paddingHorizontal: 8, flexShrink: 1 },

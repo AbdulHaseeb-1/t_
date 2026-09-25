@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { row, scriptStyle, useI18n } from '../i18n';
 import type { ParamValues, ReportTemplate, TemplateParam } from '../lib/api';
 import { CATEGORY_ICON, datePresets, defaultParams, paramLabel, resolveDate, templateDescription, templateTitle, validDate } from '../lib/reports';
-import { card, fonts, type, usePalette } from '../theme';
+import { card, type, usePalette, weight } from '../theme';
 import { useControlSurface } from './surface';
 import { Sheet } from './Sheet';
 
@@ -117,7 +117,7 @@ function ParamField({ param, value, onChange, today }: { param: TemplateParam; v
           if (validDate(s)) onChange(s);
         }}
         placeholder={t.customDate}
-        placeholderTextColor={p.faint}
+        placeholderTextColor={p.muted}
         autoCapitalize="none"
         autoCorrect={false}
         accessibilityLabel={`${label}: ${t.customDate}`}
@@ -159,7 +159,7 @@ export function ReportSheet({
             style={({ pressed }) => [styles.primary, row(rtl), { backgroundColor: p.primary }, pressed && { opacity: 0.85 }]}
           >
             <Feather name="play" size={16} color={p.onPrimary} />
-            <Text style={[scriptStyle(t.runReport, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.onPrimary }]}>{t.runReport}</Text>
+            <Text style={[scriptStyle(t.runReport, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.runReport}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -247,7 +247,7 @@ export function SaveReportSheet({ question, onClose, onSave }: { question: strin
           style={({ pressed }) => [styles.primary, row(rtl), { backgroundColor: p.primary, opacity: busy || title.trim().length < 2 ? 0.5 : pressed ? 0.85 : 1 }]}
         >
           <Feather name="bookmark" size={16} color={p.onPrimary} />
-          <Text style={[scriptStyle(t.save, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
+          <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
         </Pressable>
       </View>
     </Sheet>

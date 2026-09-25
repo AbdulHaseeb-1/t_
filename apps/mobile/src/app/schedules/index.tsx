@@ -12,7 +12,7 @@ import { formatWhen } from '../../lib/format';
 import { leave } from '../../lib/nav';
 import { describeFrequency } from '../../lib/reports';
 import { useSettings } from '../../state/settings';
-import { fonts, type, usePalette } from '../../theme';
+import { layout, type, usePalette, weight } from '../../theme';
 
 /** Everything scheduled, with a quick on/off switch; tap to edit. */
 export default function SchedulesScreen() {
@@ -65,7 +65,7 @@ export default function SchedulesScreen() {
               style={({ pressed }) => [styles.add, row(rtl), { backgroundColor: p.primary }, pressed && { opacity: 0.85 }]}
             >
               <Feather name="plus" size={16} color={p.onPrimary} />
-              <Text style={[scriptStyle(t.newSchedule, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.onPrimary }]}>{t.newSchedule}</Text>
+              <Text style={[scriptStyle(t.newSchedule, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.newSchedule}</Text>
             </Pressable>
           }
         />
@@ -84,7 +84,7 @@ export default function SchedulesScreen() {
           >
             <View style={[row(rtl), styles.cardTop]}>
               <View style={styles.flex}>
-                <Text style={[scriptStyle(s.name, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.text, textAlign: rtl ? 'right' : 'left' }]} numberOfLines={1}>
+                <Text style={[scriptStyle(s.name, type.title, 'bold'), { color: p.text, textAlign: rtl ? 'right' : 'left' }]} numberOfLines={1}>
                   {s.name}
                 </Text>
                 <Text style={[scriptStyle(describeFrequency(s.frequency, t, lang), type.meta), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{describeFrequency(s.frequency, t, lang)}</Text>
@@ -112,8 +112,8 @@ export default function SchedulesScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1, gap: 2 },
-  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 14, gap: 12 },
-  add: { alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, marginHorizontal: 4 },
+  body: { paddingBottom: 40, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter, gap: 14 },
+  add: { alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 40, borderRadius: 20 },
   pad: { padding: 16 },
   card: { borderRadius: 20, padding: 16, gap: 8 },
   cardTop: { alignItems: 'center', gap: 12 },

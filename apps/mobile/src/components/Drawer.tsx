@@ -4,7 +4,7 @@ import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, useWindowDim
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Chat } from '../state/chat-reducer';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { fonts, type, usePalette } from '../theme';
+import { type, usePalette, weight } from '../theme';
 
 interface Props {
   open: boolean;
@@ -41,19 +41,27 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
   const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) setMounted(true);
-    Animated.timing(x, {
+    // Mount the panel first so its native-driven opening animation is attached to a view.
+    if (open && !mounted) {
+      setMounted(true);
+      return;
+    }
+    if (!mounted) return;
+
+    const animation = Animated.timing(x, {
       toValue: open ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
+      duration: open ? 260 : 220,
+      easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(({ finished }) => {
+    });
+    animation.start(({ finished }) => {
       if (finished && !open) {
         setMounted(false);
         setConfirming(null);
       }
     });
-  }, [open, x]);
+    return () => animation.stop();
+  }, [open, mounted, x]);
 
   if (!mounted) return null;
 
@@ -76,6 +84,24 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
           },
         ]}
       >
+        <View style={[styles.drawerHeader, row(rtl), { borderBottomColor: p.border }]}>
+          <View style={[styles.brand, row(rtl)]}>
+            <View style={[styles.brandMark, { backgroundColor: p.sunken }]}>
+              <Feather name="database" size={16} color={p.accent} />
+            </View>
+            <Text style={[styles.brandName, { color: p.text }]}>DATALINK</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t.closeConversations}
+            onPress={onClose}
+            hitSlop={6}
+            style={({ pressed }) => [styles.closeButton, pressed && { backgroundColor: p.sunken }]}
+          >
+            <Feather name="x" size={18} color={p.muted} />
+          </Pressable>
+        </View>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t.startNewChat}
@@ -121,7 +147,7 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
                   <Text style={[scriptStyle(t.cancel, type.label), { color: p.muted }]}>{t.cancel}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" accessibilityLabel="Confirm delete" onPress={() => onDelete(c.id)} hitSlop={8}>
-                  <Text style={[scriptStyle(t.delete, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.danger }]}>{t.delete}</Text>
+                  <Text style={[scriptStyle(t.delete, { ...type.label, ...weight.semibold }, 'bold'), { color: p.danger }]}>{t.delete}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -135,10 +161,10 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
                 onLongPress={() => setConfirming(c.id)}
                 style={({ pressed }) => [styles.chat, (pressed || c.id === activeId) && { backgroundColor: p.sunken }]}
               >
-                <Text style={[scriptStyle(c.title || t.voiceMessage, { ...type.label, fontFamily: fonts.sans }), { color: p.text }]} numberOfLines={1}>
+                <Text style={[scriptStyle(c.title || t.voiceMessage, type.body), { color: p.text }]} numberOfLines={1}>
                   {c.title || t.voiceMessage}
                 </Text>
-                <Text style={[scriptStyle(t.today, type.meta), { color: p.faint, textAlign: rtl ? 'right' : 'left' }]}>{relativeDay(c.updatedAt, t, lang)}</Text>
+                <Text style={[scriptStyle(t.today, type.caption), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{relativeDay(c.updatedAt, t, lang)}</Text>
               </Pressable>
             ),
           )}
@@ -160,6 +186,11 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
 
 const styles = StyleSheet.create({
   panel: { position: 'absolute', top: 0, bottom: 0, paddingHorizontal: 8 },
+  drawerHeader: { minHeight: 52, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  brand: { alignItems: 'center', gap: 10 },
+  brandMark: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  brandName: { fontSize: 13, lineHeight: 18, fontWeight: '700', letterSpacing: 1.1 },
+  closeButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   row: { alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10 },
   section: { paddingHorizontal: 12, paddingTop: 16, paddingBottom: 6 },
   list: { flex: 1 },

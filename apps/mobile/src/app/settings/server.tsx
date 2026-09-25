@@ -8,7 +8,7 @@ import { checkConnection, normalizeBaseUrl, type ServerConfig } from '../../lib/
 import { describeError } from '../../lib/errors';
 import { leave } from '../../lib/nav';
 import { useSettings } from '../../state/settings';
-import { card, fonts, type, useChartPalette, usePalette } from '../../theme';
+import { card, layout, type, useChartPalette, usePalette, weight } from '../../theme';
 
 type Check = { state: 'idle' } | { state: 'checking' } | { state: 'ok' | 'warn' | 'fail'; message: string };
 
@@ -61,7 +61,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
           back
           action={
             <Pressable accessibilityRole="button" accessibilityLabel="Save settings" onPress={done} hitSlop={8} style={[styles.save, { backgroundColor: p.primary }]}>
-              <Text style={[scriptStyle(t.save, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
+              <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
             </Pressable>
           }
         />
@@ -75,7 +75,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
             keyboardType="url"
             placeholder="http://192.168.1.20:3000"
             autoFocus={!initial.baseUrl}
-            placeholderTextColor={p.faint}
+            placeholderTextColor={p.muted}
             accessibilityLabel="Server address"
             style={input}
           />
@@ -89,7 +89,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
             autoCorrect={false}
             secureTextEntry
             placeholder={t.optional}
-            placeholderTextColor={p.faint}
+            placeholderTextColor={p.muted}
             accessibilityLabel="API key"
             style={input}
           />
@@ -127,9 +127,9 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1 },
-  body: { paddingBottom: 32, gap: 22, maxWidth: 640, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
+  body: { paddingBottom: 32, gap: 24, maxWidth: layout.formWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter },
   input: { paddingHorizontal: 14, paddingVertical: 13, outlineStyle: 'none' } as never,
-  save: { paddingHorizontal: 16, height: 34, borderRadius: 17, justifyContent: 'center', marginHorizontal: 4 },
+  save: { paddingHorizontal: 16, height: 40, borderRadius: 20, justifyContent: 'center' },
   test: { borderRadius: 16, height: 48, alignItems: 'center', justifyContent: 'center', gap: 8 },
   status: { alignItems: 'flex-start', gap: 8, paddingHorizontal: 4 },
 });

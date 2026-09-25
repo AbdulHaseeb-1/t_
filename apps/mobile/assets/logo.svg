@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E08A68"/><stop offset="1" stop-color="#C25B3C"/></linearGradient></defs><rect width="1024" height="1024" rx="224" fill="url(#g)"/>
-  <g transform="translate(512 512) scale(0.74) translate(-512 -498)" fill="none" stroke="#FAF6EE" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="262" cy="760" r="54" stroke-width="49.92"/>
-    <path d="M 334 760 H 640 A 116 116 0 0 0 640 528 H 400 A 116 116 0 0 1 400 296 H 604" stroke-width="64"/>
-    <g stroke="none" fill="#FAF6EE">
-      <path fill-rule="evenodd" d="M 760 424 C 760 424 648 318 648 238 A 112 112 0 0 1 872 238 C 872 318 760 424 760 424 Z M 760 196 A 44 44 0 1 0 760.1 196 Z"/>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4B483F"/><stop offset="1" stop-color="#282722"/></linearGradient></defs><rect width="1024" height="1024" rx="224" fill="url(#g)"/>
+  <g transform="translate(512 512) scale(0.74) translate(-512 -512)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 300 260 V 764 M 300 260 H 490 C 681 260 772 356 772 512 C 772 668 681 764 490 764 H 300" stroke="#F5F0E6" stroke-width="72"/>
+    <path d="M 300 512 H 725" stroke="#D09A74" stroke-width="56"/>
+    <circle cx="300" cy="260" r="38" fill="#D09A74"/>
+    <circle cx="300" cy="764" r="38" fill="#D09A74"/>
+    <circle cx="725" cy="512" r="38" fill="#D09A74"/>
   </g></svg>

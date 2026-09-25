@@ -43,14 +43,23 @@ export const LANGUAGE_NAME: Record<Lang, string> = {
 };
 
 /** Fixed phrases the server writes itself, so they never cost a model call. */
-export const PHRASES: Record<Lang, { noRows: string; cannotAnswer: string }> = {
-  en: { noRows: 'The query returned no rows.', cannotAnswer: "I can't answer that from this database:" },
+export const PHRASES: Record<Lang, { noRows: string; cannotAnswer: string; found: string; noAnswer: string }> = {
+  en: {
+    noRows: 'The query returned no rows.',
+    cannotAnswer: "I can't answer that from this database:",
+    found: 'Here is what I found.',
+    noAnswer: "I couldn't put an answer together. Try asking it another way.",
+  },
   ur: {
     noRows: 'اس سوال کے لیے کوئی ریکارڈ نہیں ملا۔',
     cannotAnswer: 'اس ڈیٹا بیس سے اس سوال کا جواب نہیں دیا جا سکتا:',
+    found: 'یہ رہا نتیجہ۔',
+    noAnswer: 'میں اس کا جواب تیار نہیں کر سکا۔ براہِ کرم سوال دوسرے انداز میں پوچھیں۔',
   },
   'ur-Latn': {
     noRows: 'Is sawal ka koi record nahi mila.',
     cannotAnswer: 'Ye database is sawal ka jawab nahi de sakta:',
+    found: 'Ye raha result.',
+    noAnswer: 'Main iska jawab nahi bana saka. Sawal thora aur tarah se puchein.',
   },
 };

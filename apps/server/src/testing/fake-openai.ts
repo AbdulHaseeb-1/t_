@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { AppConfig } from '../config/app-config.js';
 import { type Env, validateEnv } from '../config/env.js';
@@ -12,7 +12,26 @@ export interface FakeReply {
   usage?: Record<string, unknown>;
 }
 
-/** Minimal OpenAI-compatible /chat/completions server for tests. */
+/** A streamed chat completion: text in a few chunks, then tool calls, then usage, as the real API sends them. */
+function streamReply(res: ServerResponse, body: Record<string, unknown>, r: FakeReply): void {
+  res.setHeader('content-type', 'text/event-stream');
+  const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+    res.write(
+      `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 0, model: body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
+    );
+  chunk({ role: 'assistant', content: '' });
+  for (const piece of (r.content ?? '').match(/[\s\S]{1,12}/g) ?? []) chunk({ content: piece });
+  r.toolCalls?.forEach((t, index) =>
+    chunk({ tool_calls: [{ index, id: t.id, type: 'function', function: { name: t.name, arguments: t.arguments } }] }),
+  );
+  chunk({}, r.toolCalls ? 'tool_calls' : 'stop');
+  res.write(
+    `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 0, model: body.model, choices: [], usage: { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110, ...r.usage } })}\n\n`,
+  );
+  res.end('data: [DONE]\n\n');
+}
+
+/** Minimal OpenAI-compatible /chat/completions server for tests (JSON or streamed). */
 export class FakeOpenAI {
   readonly requests: Record<string, unknown>[] = [];
   private server?: Server;
@@ -52,6 +71,10 @@ export class FakeOpenAI {
               error: { message: r.errorMessage ?? `fake ${r.status}`, param: r.param ?? null },
             }),
           );
+          return;
+        }
+        if (body.stream === true) {
+          streamReply(res, body, r);
           return;
         }
         res.end(

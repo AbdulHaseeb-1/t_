@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { SchemaCatalogService } from '../database/schema/schema-catalog.service.js';
 import { LlmService } from '../llm/llm.service.js';
 import { ModelPricingService } from '../llm/model-pricing.service.js';
+import { AnalystService } from '../query/analyst/analyst.service.js';
 import { AskService } from '../query/ask.service.js';
 import { ExamplesService } from '../query/examples.service.js';
 import { QueryCacheService } from '../query/query-cache.service.js';
@@ -16,6 +17,8 @@ export interface Pipeline {
   llm: LlmService;
   examples: ExamplesService;
   ask: AskService;
+  /** The chat agent over the same services. */
+  analyst: AnalystService;
   close(): Promise<void>;
 }
 
@@ -31,14 +34,9 @@ export function buildPipeline(raw: Record<string, string | undefined>): Pipeline
   const catalog = new SchemaCatalogService(config, db);
   const llm = new LlmService(config, new ModelPricingService(config));
   const examples = new ExamplesService(config);
-  const ask = new AskService(
-    config,
-    db,
-    catalog,
-    llm,
-    new QueryCacheService(config),
-    examples,
-    new TranslatorService(llm),
-  );
-  return { env, db, catalog, llm, examples, ask, close: () => db.onApplicationShutdown() };
+  const cache = new QueryCacheService(config);
+  const translator = new TranslatorService(llm);
+  const ask = new AskService(config, db, catalog, llm, cache, examples, translator);
+  const analyst = new AnalystService(config, db, catalog, llm, cache, translator);
+  return { env, db, catalog, llm, examples, ask, analyst, close: () => db.onApplicationShutdown() };
 }

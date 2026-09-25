@@ -1,4 +1,4 @@
-import type { QueryResult } from './api';
+import type { ChartKind, QueryResult } from './api';
 
 /**
  * Chooses how a result is shown. The data's job picks the form:
@@ -8,6 +8,7 @@ import type { QueryResult } from './api';
  *   categories, "share of" intent -> donut (<= 6 positive parts)
  *   categories                    -> ranked bars (grouped when 2-3 measures)
  * Anything that would mislead (ids, ambiguous labels, too many points) stays a table.
+ * The assistant's preferred form (line, column, bar, donut) wins whenever the data fits it.
  */
 export interface Series {
   name: string;
@@ -45,6 +46,8 @@ const MAX_POINTS = 40;
 const MAX_BARS = 15;
 const MAX_DONUT = 6;
 const COLUMNS_MAX = 12;
+/** When columns were asked for: a month of days still reads, with thinned labels. */
+const COLUMNS_PREFERRED_MAX = 31;
 
 const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_UR = ['جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون', 'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر'];
@@ -116,7 +119,7 @@ export function growthOf(values: number[]): Growth {
   };
 }
 
-export function inferChart(r: QueryResult | null | undefined, question = '', lang: 'en' | 'ur' = 'en'): VizSpec | null {
+export function inferChart(r: QueryResult | null | undefined, question = '', lang: 'en' | 'ur' = 'en', prefer?: ChartKind): VizSpec | null {
   if (!r || r.rows.length === 0 || r.columns.length === 0) return null;
   const cols = r.columns.map((col, i) => ({
     name: col.name,
@@ -159,7 +162,8 @@ export function inferChart(r: QueryResult | null | undefined, question = '', lan
     if (year && finest > GRAIN.year && new Set(r.rows.map((row) => row[year.i])).size > 1) {
       labels = labels.map((l, k) => `${l} ${String(r.rows[k][year.i] ?? '').slice(-2)}`);
     }
-    if (series.length === 1 && labels.length <= COLUMNS_MAX && series[0].values.every((v) => v >= 0)) {
+    const fitsColumns = series.length === 1 && series[0].values.every((v) => v >= 0) && labels.length <= (prefer === 'column' || prefer === 'bar' ? COLUMNS_PREFERRED_MAX : COLUMNS_MAX);
+    if (fitsColumns && prefer !== 'line') {
       return { kind: 'columns', labels, series: series[0], growth: growthOf(series[0].values) };
     }
     return { kind: 'trend', labels, series, growth: series.length === 1 ? growthOf(series[0].values) : undefined };
@@ -169,7 +173,8 @@ export function inferChart(r: QueryResult | null | undefined, question = '', lan
   if (labels.length > MAX_BARS) return null;
   const positive = series.every((s) => s.values.every((v) => v >= 0));
   const total = series.length === 1 && positive ? series[0].values.reduce((a, b) => a + b, 0) : undefined;
-  const wantsShare = SHARE_WORDS.test(question) || all.some((m) => SHARE_COLUMN.test(m.name));
+  const wantsShare =
+    prefer === 'donut' || (prefer !== 'bar' && (SHARE_WORDS.test(question) || all.some((m) => SHARE_COLUMN.test(m.name))));
   if (series.length === 1 && positive && total && labels.length >= 2 && labels.length <= MAX_DONUT && wantsShare) {
     // A share column from the query is relative to the whole table, not to these
     // rows (top 5 of many): rebuild the whole and show the rest as "Other", so the

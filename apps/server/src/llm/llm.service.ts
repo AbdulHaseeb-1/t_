@@ -1,12 +1,23 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { type Model, type ModelRequest, type ModelSettings, OpenAIChatCompletionsModel, OpenAIResponsesModel } from '@openai/agents';
 import OpenAI, { APIConnectionError, APIError } from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 import { AppConfig } from '../config/app-config.js';
 import type { ProviderMode, ProviderName } from '../config/env.js';
 import { LlmRequestError, LlmUnavailableError } from '../common/errors.js';
+import { type AgentRoute, type AgentRouteHooks, FailoverAgentModel, type TurnUsage, withoutParams } from './agent-model.js';
 import { CircuitBreaker } from './circuit-breaker.js';
 import { ModelPricingService } from './model-pricing.service.js';
-import type { CallUsage, ChatRequest, ChatResult, Tier, UsageMeter } from './llm.types.js';
+import type { CallPurpose, CallUsage, ChatRequest, ChatResult, Tier, UsageMeter } from './llm.types.js';
+
+export interface AgentModelOptions {
+  tier: Tier;
+  /** Overrides the tier's reasoning effort. */
+  reasoningEffort?: string;
+  /** Routes runs sharing a prompt prefix to the same cache shard (OpenAI). */
+  cacheKey?: string;
+  purpose?: CallPurpose;
+}
 
 interface Provider {
   name: ProviderName;
@@ -32,13 +43,17 @@ const DROPPABLE_PARAMS = new Set([
   'reasoning',
   'prompt_cache_key',
   'provider',
+  'include',
+  'store',
+  'parallel_tool_calls',
 ]);
 
 /** Returns the rejected optional parameter, if the error is an "unsupported parameter/value" 400. */
 export function rejectedParam(err: unknown): string | undefined {
   if (!(err instanceof APIError) || err.status !== 400) return undefined;
   // OpenAI phrases it several ways: param field set, 'quoted' name, or "Unrecognized request argument supplied: reasoning_effort".
-  const candidate = err.param ?? /'(\w+)'/.exec(err.message)?.[1] ?? /argument supplied:\s*(\w+)/i.exec(err.message)?.[1];
+  // Nested settings are reported by path (reasoning.effort): the whole setting is what we can drop.
+  const candidate = (err.param ?? /'(\w+)'/.exec(err.message)?.[1] ?? /argument supplied:\s*(\w+)/i.exec(err.message)?.[1])?.split('.')[0];
   if (!candidate || !DROPPABLE_PARAMS.has(candidate)) return undefined;
   return /unsupported|not supported|does not support|unrecognized|unknown/i.test(err.message)
     ? candidate
@@ -201,6 +216,137 @@ export class LlmService {
     throw new LlmUnavailableError(`All LLM providers failed: ${(lastError as Error)?.message ?? 'unknown'}`);
   }
 
+  /**
+   * A model for the Agents SDK over the same providers, in the same failover order.
+   * OpenAI goes through the Responses API, so the model keeps reasoning across tool
+   * calls (Chat Completions forces reasoning off whenever tools are sent to some
+   * models); OpenRouter goes through Chat Completions. Circuit breakers, learned
+   * parameter fixes, stats and the per-request meter are shared with `chat()`.
+   */
+  agentModel(opts: AgentModelOptions, meter?: UsageMeter): Model {
+    const routes = this.candidates().map((p) => this.agentRoute(p, opts));
+    if (routes.length === 0) {
+      throw new LlmUnavailableError('No LLM provider configured. Set OPENAI_API_KEY and/or OPENROUTER_API_KEY.');
+    }
+    const hooks: AgentRouteHooks = {
+      prepare: (route, request) => this.prepareAgentRequest(route, request),
+      learn: (route, err, withTools) => this.learn(`${route.provider}:${route.model}`, err, withTools),
+      succeeded: async (route, usage, latencyMs) => {
+        const provider = this.providers.get(route.provider)!;
+        provider.breaker.success();
+        const call = await this.agentCallUsage(route, usage, latencyMs, opts.purpose ?? 'agent');
+        meter?.add(call);
+      },
+      failed: (route, err) => {
+        const provider = this.providers.get(route.provider)!;
+        this.bump(route.provider, { failures: 1 });
+        if (!isFailoverError(err)) return false;
+        provider.breaker.failure();
+        this.logger.warn(`${route.provider} failed (${(err as Error).message}); trying next provider`);
+        return true;
+      },
+      toError: (err, route, exhausted) => {
+        if (exhausted) return new LlmUnavailableError(`All LLM providers failed: ${(err as Error)?.message ?? 'unknown'}`);
+        if (err instanceof APIError) return new LlmRequestError(route?.provider ?? 'openai', err.message);
+        return err instanceof Error ? err : new Error(String(err));
+      },
+    };
+    return new FailoverAgentModel(routes, hooks);
+  }
+
+  private agentRoute(p: Provider, opts: AgentModelOptions): AgentRoute {
+    const model = p.models[opts.tier];
+    const effort = opts.reasoningEffort ?? p.reasoning[opts.tier];
+    const responses = p.name === 'openai' && this.config.get('AGENT_OPENAI_API') === 'responses';
+    const settings: ModelSettings = {
+      maxTokens: this.config.get('LLM_MAX_OUTPUT_TOKENS') + reasoningHeadroom(effort),
+      preserveRawUsage: true,
+      providerData: {},
+    };
+    if (p.name === 'openai') {
+      if (effort) settings.reasoning = { effort: effort as NonNullable<ModelSettings['reasoning']>['effort'] };
+      if (opts.cacheKey) settings.providerData!.prompt_cache_key = opts.cacheKey;
+      if (responses) {
+        // Nothing is kept on OpenAI's side; the encrypted reasoning travels with the conversation instead.
+        settings.store = false;
+        settings.providerData!.include = ['reasoning.encrypted_content'];
+      }
+    } else {
+      settings.providerData!.usage = { include: true }; // exact per-call cost in the response
+      const sort = this.config.get('OPENROUTER_PROVIDER_SORT');
+      if (sort) settings.providerData!.provider = { sort };
+      if (effort) settings.providerData!.reasoning = { effort };
+    }
+    return {
+      provider: p.name,
+      model,
+      adapter: responses ? new OpenAIResponsesModel(p.client, model) : new OpenAIChatCompletionsModel(p.client, model),
+      settings,
+    };
+  }
+
+  private prepareAgentRequest(route: AgentRoute, request: ModelRequest): ModelRequest {
+    const key = `${route.provider}:${route.model}`;
+    let settings: ModelSettings = {
+      ...request.modelSettings,
+      ...route.settings,
+      providerData: { ...request.modelSettings.providerData, ...route.settings.providerData },
+    };
+    if (request.tools.length && this.noReasoningWithTools.has(key)) {
+      settings = withoutParams(settings, ['reasoning']);
+      settings.providerData!.reasoning_effort = 'none';
+    }
+    return { ...request, modelSettings: withoutParams(settings, this.unsupported.get(key) ?? []) };
+  }
+
+  /**
+   * Records what a 400 says the model does not accept; true when a retry without it can help.
+   * A parallel call may have learned the fix while this one was in flight, so a known fix still
+   * says retry; callers bound their attempts, so the same error cannot repeat forever.
+   */
+  private learn(key: string, err: unknown, withTools: boolean): boolean {
+    if (withTools && toolsNeedNoReasoning(err)) {
+      if (!this.noReasoningWithTools.has(key)) {
+        this.noReasoningWithTools.add(key);
+        this.logger.warn(`${key} needs reasoning_effort=none with tools; applying from now on`);
+      }
+      return true;
+    }
+    const param = rejectedParam(err);
+    if (!param) return false;
+    const known = this.unsupported.get(key) ?? new Set<string>();
+    if (!known.has(param)) {
+      known.add(param);
+      this.unsupported.set(key, known);
+      this.logger.warn(`${key} rejects "${param}"; omitting it from now on`);
+    }
+    return true;
+  }
+
+  private async agentCallUsage(route: AgentRoute, u: TurnUsage, latencyMs: number, purpose: CallPurpose): Promise<CallUsage> {
+    const costUsd =
+      u.costUsd ?? (await this.pricing.estimate(route.provider, route.model, u.promptTokens, u.cachedPromptTokens, u.completionTokens));
+    this.bump(route.provider, {
+      calls: 1,
+      promptTokens: u.promptTokens,
+      cachedPromptTokens: u.cachedPromptTokens,
+      completionTokens: u.completionTokens,
+      costUsd: costUsd ?? 0,
+    });
+    const usage: CallUsage = {
+      provider: route.provider,
+      model: route.model,
+      purpose,
+      promptTokens: u.promptTokens,
+      cachedPromptTokens: u.cachedPromptTokens,
+      completionTokens: u.completionTokens,
+      costUsd,
+      latencyMs,
+    };
+    this.logger.debug(usage);
+    return usage;
+  }
+
   private candidates(): Provider[] {
     if (this.mode !== 'auto') {
       const p = this.providers.get(this.mode);
@@ -220,24 +366,8 @@ export class LlmService {
       try {
         return await this.send(p, req);
       } catch (err) {
-        // A parallel call may have learned the fix while this one was in flight: retry either way.
-        // The next attempt omits what was learned, so the same error cannot repeat forever.
-        if (attempt >= DROPPABLE_PARAMS.size) throw err;
-        if (req.tools?.length && toolsNeedNoReasoning(err)) {
-          if (!this.noReasoningWithTools.has(key)) {
-            this.noReasoningWithTools.add(key);
-            this.logger.warn(`${key} needs reasoning_effort=none with tools; applying from now on`);
-          }
-          continue;
-        }
-        const param = rejectedParam(err);
-        if (!param) throw err;
-        const known = this.unsupported.get(key) ?? new Set<string>();
-        if (!known.has(param)) {
-          known.add(param);
-          this.unsupported.set(key, known);
-          this.logger.warn(`${key} rejects "${param}"; omitting it from now on`);
-        }
+        // The next attempt omits what was learned; the attempt cap stops a fix that does not help.
+        if (attempt >= DROPPABLE_PARAMS.size || !this.learn(key, err, !!req.tools?.length)) throw err;
       }
     }
   }

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AgentService } from './agent.service.js';
+import { AnalystService } from './analyst/analyst.service.js';
 import { AskService } from './ask.service.js';
 import { ExamplesService } from './examples.service.js';
 import { QueryCacheService } from './query-cache.service.js';
@@ -11,7 +11,7 @@ import { TemplatesService } from '../reports/templates.service.js';
 
 @Module({
   controllers: [QueryController, TemplatesController],
-  providers: [AskService, AgentService, QueryCacheService, ExamplesService, TranslatorService, MediaService, TemplatesService],
-  exports: [AskService, MediaService, TemplatesService],
+  providers: [AskService, AnalystService, QueryCacheService, ExamplesService, TranslatorService, MediaService, TemplatesService],
+  exports: [AskService, AnalystService, MediaService, TemplatesService],
 })
 export class QueryModule {}

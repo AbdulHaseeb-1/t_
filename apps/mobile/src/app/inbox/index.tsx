@@ -12,7 +12,7 @@ import { formatWhen } from '../../lib/format';
 import { leave } from '../../lib/nav';
 import { useReports } from '../../state/reports';
 import { useSettings } from '../../state/settings';
-import { fonts, type, usePalette } from '../../theme';
+import { layout, type, usePalette, weight } from '../../theme';
 
 /** Scheduled reports as they arrive, newest first. */
 export default function InboxScreen() {
@@ -71,10 +71,10 @@ export default function InboxScreen() {
               </View>
               <View style={styles.flex}>
                 <View style={[row(rtl), styles.titleRow]}>
-                  <Text style={[scriptStyle(r.title, { ...type.label, fontFamily: r.read ? fonts.sans : fonts.sansSemibold }, r.read ? undefined : 'bold'), styles.flex, { color: p.text, textAlign: rtl ? 'right' : 'left' }]} numberOfLines={1}>
+                  <Text style={[scriptStyle(r.title, { ...type.title, ...(r.read ? weight.regular : weight.semibold) }, r.read ? undefined : 'bold'), styles.flex, { color: p.text, textAlign: rtl ? 'right' : 'left' }]} numberOfLines={1}>
                     {r.title}
                   </Text>
-                  <Text style={[type.meta, { color: p.faint }]}>{formatWhen(r.createdAt, lang)}</Text>
+                  <Text style={[type.caption, { color: p.muted }]}>{formatWhen(r.createdAt, lang)}</Text>
                 </View>
                 <Text style={[scriptStyle(line, type.meta), { color: r.status === 'failed' ? p.danger : p.muted, textAlign: rtl ? 'right' : 'left' }]} numberOfLines={2}>
                   {line}
@@ -91,7 +91,7 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1, gap: 2 },
-  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 14, gap: 10 },
+  body: { paddingBottom: 40, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter, gap: 12 },
   action: { paddingHorizontal: 10, height: 34, justifyContent: 'center' },
   pad: { padding: 16 },
   item: { alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 18 },

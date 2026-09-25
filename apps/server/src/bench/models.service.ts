@@ -9,6 +9,7 @@ export interface ModelInfo {
   name: string;
   /** A key for this provider is configured, so the model can be benchmarked. */
   available: boolean;
+  priceStatus: 'free' | 'paid' | 'unknown';
   /** USD per million tokens. */
   promptPerM?: number;
   completionPerM?: number;
@@ -35,7 +36,6 @@ interface OpenRouterModel {
   pricing?: { prompt?: string; completion?: string; input_cache_read?: string };
 }
 
-const TTL_MS = 60 * 60 * 1000;
 /** OpenAI ids that are not chat-completion text models. */
 const OPENAI_NON_CHAT = /audio|realtime|transcribe|tts|image|search|embedding|moderation|dall-e|whisper|babbage|davinci|instruct|computer-use/i;
 
@@ -53,13 +53,11 @@ const perM = (v?: string) => {
 @Injectable()
 export class ModelsService {
   private readonly logger = new Logger(ModelsService.name);
-  private cache?: { at: number; value: ModelCatalog };
   private inflight?: Promise<ModelCatalog>;
 
   constructor(private readonly config: AppConfig) {}
 
-  list(refresh = false): Promise<ModelCatalog> {
-    if (!refresh && this.cache && Date.now() - this.cache.at < TTL_MS) return Promise.resolve(this.cache.value);
+  list(): Promise<ModelCatalog> {
     this.inflight ??= this.load().finally(() => (this.inflight = undefined));
     return this.inflight;
   }
@@ -90,6 +88,10 @@ export class ModelsService {
       provider,
       name: m.name ?? id,
       available,
+      priceStatus: m.pricing?.prompt !== undefined && m.pricing?.completion !== undefined &&
+        Number.isFinite(Number(m.pricing.prompt)) && Number.isFinite(Number(m.pricing.completion))
+        ? Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0 ? 'free' : 'paid'
+        : 'unknown',
       promptPerM: perM(m.pricing?.prompt),
       completionPerM: perM(m.pricing?.completion),
       cachedPerM: m.pricing?.input_cache_read ? perM(m.pricing.input_cache_read) : undefined,
@@ -112,7 +114,7 @@ export class ModelsService {
       models.push(
         m
           ? { ...fromRouter(m, 'openai', id, hasOpenAi), name: (m.name ?? id).replace(/^OpenAI:\s*/, '') }
-          : { id, provider: 'openai', name: id, available: hasOpenAi, current: tier('openai', id) },
+          : { id, provider: 'openai', name: id, available: hasOpenAi, priceStatus: 'unknown', current: tier('openai', id) },
       );
     }
     for (const m of router) {
@@ -128,13 +130,11 @@ export class ModelsService {
     );
     const value = { models, errors, loadedAt: new Date().toISOString() };
     for (const e of errors) this.logger.warn(e);
-    // A failed load is retried on the next request rather than cached for an hour.
-    if (!errors.length) this.cache = { at: Date.now(), value };
     return value;
   }
 
   private async openRouterCatalog(): Promise<OpenRouterModel[]> {
-    const res = await fetch(`${this.config.get('OPENROUTER_BASE_URL')}/models`, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(`${this.config.get('OPENROUTER_BASE_URL')}/models`, { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return ((await res.json()) as { data: OpenRouterModel[] }).data;
   }
@@ -144,6 +144,7 @@ export class ModelsService {
     if (!key) return [];
     const base = this.config.get('OPENAI_BASE_URL') ?? 'https://api.openai.com/v1';
     const res = await fetch(`${base.replace(/\/$/, '')}/models`, {
+      cache: 'no-store',
       headers: { authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(10_000),
     });
@@ -151,3 +152,4 @@ export class ModelsService {
     return ((await res.json()) as { data: { id: string }[] }).data.map((m) => m.id);
   }
 }
+

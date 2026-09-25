@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
 import { Header } from '../components/Header';
 import { MessageRow } from '../components/MessageRow';
+import { PromptStarters } from '../components/PromptStarters';
 import { ReportChips } from '../components/ReportParts';
 import { RouteMark } from '../components/RouteMark';
 import { useOpenReport } from '../components/useOpenReport';
@@ -15,7 +16,7 @@ import { type Message, usageTotals } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
 import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
-import { fonts, type, usePalette } from '../theme';
+import { layout, type, usePalette } from '../theme';
 
 const EMPTY: Message[] = [];
 const keyExtractor = (m: Message) => m.id;
@@ -24,12 +25,14 @@ const Gap = () => <View style={styles.gap} />;
 
 export default function ChatScreen() {
   const p = usePalette();
+  const { height: windowHeight } = useWindowDimensions();
   const { t } = useI18n();
   const state = useChatState();
   const actions = useChatActions();
   const chat = useActiveChat();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [starter, setStarter] = useState<{ id: number; text: string }>();
   const openUsage = useCallback(() => setUsageOpen(true), []);
   const list = useRef<FlatList<Message>>(null);
   const { server, ready } = useSettings();
@@ -75,28 +78,31 @@ export default function ChatScreen() {
     setDrawerOpen(false);
     router.push('/settings');
   }, []);
+  const pickStarter = useCallback((text: string) => setStarter((current) => ({ id: (current?.id ?? 0) + 1, text })), []);
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Header
-          title={chat ? chat.title || t.voiceMessage : t.appNewChat}
-          onMenu={openDrawer}
-          onNewChat={newChat}
-          canStartNew={!!chat}
-          tokens={totals.tokens}
-          onUsage={openUsage}
-          unread={unread}
-          onInbox={openInbox}
-        />
+        <View style={styles.headerFrame}>
+          <Header
+            title={chat ? chat.title || t.voiceMessage : t.appNewChat}
+            onMenu={openDrawer}
+            onNewChat={newChat}
+            canStartNew={!!chat}
+            tokens={totals.tokens}
+            onUsage={openUsage}
+            unread={unread}
+            onInbox={openInbox}
+          />
+        </View>
         <View style={styles.fill}>
           {messages.length === 0 ? (
-            <View style={styles.empty}>
+            <ScrollView contentContainerStyle={[styles.empty, windowHeight < 700 && styles.emptyCompact]} keyboardShouldPersistTaps="handled">
               <RouteMark size={52} />
               {needsServer ? (
                 <>
                   <Text style={[scriptStyle(t.setupTitle, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.setupTitle}</Text>
-                  <Text style={[scriptStyle(t.setupBody, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.setupBody}</Text>
+                  <Text style={[scriptStyle(t.setupBody, type.body), styles.emptyHint, { color: p.muted, textAlign: 'center' }]}>{t.setupBody}</Text>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t.setupAction}
@@ -109,11 +115,12 @@ export default function ChatScreen() {
               ) : (
                 <>
                   <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
-                  <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+                  <Text style={[scriptStyle(t.greetingHint, type.body), styles.emptyHint, { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+                  {templates.some((template) => template.id === 'top-products' && template.builtIn) && <PromptStarters onPick={pickStarter} />}
                   <ReportChips templates={templates} onPick={openReport} onAll={openReports} />
                 </>
               )}
-            </View>
+            </ScrollView>
           ) : (
             <FlatList
               ref={list}
@@ -133,8 +140,10 @@ export default function ChatScreen() {
             />
           )}
         </View>
-        <View style={styles.composer}>
-          <Composer busy={busy} onSend={send} onStop={actions.stop} />
+        <View style={[styles.composerDock, { backgroundColor: p.bg, borderTopColor: p.border }]}>
+          <View style={styles.composer}>
+            <Composer key={starter?.id ?? 0} busy={busy} initialText={starter?.text} onSend={send} onStop={actions.stop} />
+          </View>
         </View>
       </KeyboardAvoidingView>
       {usageOpen && <UsageSheet totals={totals} visible={usageOpen} onClose={() => setUsageOpen(false)} />}
@@ -159,11 +168,15 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingVertical: 16, maxWidth: 760, width: '100%', alignSelf: 'center' },
-  gap: { height: 22 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
-  greeting: { fontFamily: fonts.serif, fontSize: 28, lineHeight: 36, textAlign: 'center', marginTop: 8 },
+  headerFrame: { width: '100%', maxWidth: layout.pageWidth, alignSelf: 'center' },
+  content: { paddingHorizontal: layout.gutter, paddingVertical: 20, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  gap: { height: 20 },
+  empty: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 32, gap: 12, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  emptyCompact: { paddingVertical: 14, gap: 8 },
+  greeting: { ...type.display, textAlign: 'center', marginTop: 8 },
+  emptyHint: { maxWidth: 460 },
   setup: { marginTop: 10, borderRadius: 22, paddingHorizontal: 20, height: 44, justifyContent: 'center' },
   pressed: { opacity: 0.85 },
-  composer: { paddingHorizontal: 12, paddingTop: 4, paddingBottom: 8, maxWidth: 784, width: '100%', alignSelf: 'center' },
+  composerDock: { borderTopWidth: StyleSheet.hairlineWidth },
+  composer: { paddingHorizontal: layout.gutter, paddingTop: 10, paddingBottom: 12, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
 });

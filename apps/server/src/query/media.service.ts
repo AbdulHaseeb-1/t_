@@ -5,9 +5,11 @@ import { AppConfig } from '../config/app-config.js';
 import { LlmUnavailableError } from '../common/errors.js';
 import { LlmService } from '../llm/llm.service.js';
 import { UsageMeter, type UsageSummary } from '../llm/llm.types.js';
+import { AnalystService, type ChatOptions, type ChatResponse } from './analyst/analyst.service.js';
+import type { Emit } from './analyst/analyst.run.js';
 import { AskService, type AskResponse } from './ask.service.js';
 import { detectLanguage, type Lang } from './language.js';
-import type { Turn } from './query.dto.js';
+import type { ChatTurn, Turn } from './query.dto.js';
 
 export interface UploadedMedia {
   buffer: Buffer;
@@ -24,13 +26,33 @@ export interface MediaAskInput {
   image?: UploadedMedia;
 }
 
-export interface MediaAskResponse extends AskResponse {
+export interface MediaChatInput {
+  question: string;
+  context: ChatTurn[];
+  language: Lang | 'auto';
+  audio?: UploadedMedia;
+  image?: UploadedMedia;
+}
+
+interface MediaFields {
   /** What was heard in the voice message. */
   transcript?: string;
   /** Which speech-to-text model heard it. */
   speech?: { provider: string; model: string };
   /** What was read from the image: the question in English (used for SQL) and in the user's language. */
   image?: { question: string; display: string; extracted: string };
+}
+
+export type MediaAskResponse = AskResponse & MediaFields;
+export type MediaChatResponse = ChatResponse & MediaFields;
+
+interface Understood extends MediaFields {
+  question: string;
+  englishQuestion?: string;
+  language: Lang;
+  noCache: boolean;
+  meter: UsageMeter;
+  mediaMs: number;
 }
 
 export const AUDIO_TYPES = new Set([
@@ -87,6 +109,7 @@ export class MediaService {
     private readonly config: AppConfig,
     private readonly llm: LlmService,
     private readonly asker: AskService,
+    private readonly analyst: AnalystService,
   ) {
     const key = config.get('OPENAI_API_KEY');
     const openai = key
@@ -110,9 +133,40 @@ export class MediaService {
   }
 
   async ask(input: MediaAskInput): Promise<MediaAskResponse> {
+    const heard = await this.understand(input);
+    const res = await this.asker.ask(
+      {
+        question: heard.question,
+        context: input.context,
+        language: heard.language,
+        answer: input.answer,
+        tier: 'fast',
+        noCache: heard.noCache,
+      },
+      heard.englishQuestion ? { englishQuestion: heard.englishQuestion } : {},
+    );
+    return this.withMedia(heard, res);
+  }
+
+  /** The same input for the chat agent; `emit` reports listening/reading before the answer streams. */
+  async chat(input: MediaChatInput, opts: Omit<ChatOptions, 'englishQuestion'> = {}): Promise<MediaChatResponse> {
+    const heard = await this.understand(input, opts.emit);
+    const res = await this.analyst.chat(
+      { question: heard.question, context: input.context, language: heard.language, tier: 'fast', noCache: heard.noCache },
+      { ...opts, ...(heard.englishQuestion ? { englishQuestion: heard.englishQuestion } : {}) },
+    );
+    return this.withMedia(heard, res);
+  }
+
+  /** Voice and photo turned into the question to answer, in the user's language. */
+  private async understand(
+    input: Pick<MediaAskInput, 'question' | 'language' | 'audio' | 'image'>,
+    emit?: Emit,
+  ): Promise<Understood> {
     const started = performance.now();
     const meter = new UsageMeter();
 
+    if (input.audio) emit?.({ type: 'status', stage: 'listening' });
     const heard = input.audio ? await this.transcribe(input.audio, meter) : undefined;
     const transcript = heard?.text;
     const userText = [input.question.trim(), transcript].filter(Boolean).join('\n');
@@ -123,6 +177,7 @@ export class MediaService {
     /** A question written in the image, used verbatim when the user sent nothing else. */
     let written: string | undefined;
     if (input.image) {
+      emit?.({ type: 'status', stage: 'reading' });
       const read = await this.readImage(input.image, userText, meter);
       written = userText ? undefined : read.written;
       image = { question: read.question, display: written ?? read.display, extracted: read.extracted };
@@ -131,26 +186,27 @@ export class MediaService {
 
     // A transcribed written question goes through the regular text pipeline unparaphrased:
     // the vision model otherwise tends to fold unrelated image content (tables) into it.
-    const res = await this.asker.ask(
-      {
-        question: written ?? (userText || image!.display),
-        context: input.context,
-        language: lang ?? 'en',
-        answer: input.answer,
-        tier: 'fast',
-        noCache: !!input.image && !written,
-      },
-      written ? {} : { englishQuestion: image?.question },
-    );
-
-    const mediaMs = Math.round(performance.now() - started) - res.timings.totalMs;
     return {
-      ...res,
+      question: written ?? (userText || image!.display),
+      englishQuestion: written ? undefined : image?.question,
+      language: lang ?? 'en',
+      noCache: !!input.image && !written,
       transcript,
-      ...(heard ? { speech: { provider: heard.provider, model: heard.model } } : {}),
+      speech: heard ? { provider: heard.provider, model: heard.model } : undefined,
       image,
-      timings: { ...res.timings, totalMs: res.timings.totalMs + mediaMs, llmMs: res.timings.llmMs + mediaMs, mediaMs },
-      usage: mergeUsage(meter.summary(), res.usage),
+      meter,
+      mediaMs: Math.round(performance.now() - started),
+    };
+  }
+
+  private withMedia<T extends AskResponse | ChatResponse>(u: Understood, res: T): T & MediaFields {
+    return <T & MediaFields>{
+      ...res,
+      transcript: u.transcript,
+      ...(u.speech ? { speech: u.speech } : {}),
+      image: u.image,
+      timings: { ...res.timings, totalMs: res.timings.totalMs + u.mediaMs, llmMs: res.timings.llmMs + u.mediaMs, mediaMs: u.mediaMs },
+      usage: mergeUsage(u.meter.summary(), res.usage),
     };
   }
 

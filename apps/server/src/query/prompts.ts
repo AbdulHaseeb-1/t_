@@ -9,10 +9,8 @@ import { LANGUAGE_NAME, type Lang } from './language.js';
  * keeping volatile content last makes repeat traffic up to ~90% cheaper on
  * input tokens and noticeably faster.
  */
-export const SQL_RULES = `You translate questions into ONE Microsoft SQL Server (T-SQL) query.
-Output format: a single \`\`\`sql fenced block and nothing else.
-Rules:
-- Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE/MERGE, INTO, DECLARE, SET, EXEC, temp tables, or multiple statements.
+/** T-SQL writing rules, shared by the one-shot SQL prompt and the chat agent. */
+export const TSQL_RULE_LINES = `- Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE/MERGE, INTO, DECLARE, SET, EXEC, temp tables, or multiple statements.
 - Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
@@ -30,16 +28,20 @@ Rules:
 - Return a readable identifier (e.g. the name) next to each measure, not only an id.
 - Filter dates with half-open ranges (col >= '2024-01-01' AND col < '2025-01-01'); use YEAR()/MONTH() only in SELECT/GROUP BY.
 - Use NULLIF to avoid division by zero. Give computed columns readable English snake_case aliases (net_sales, month), even for Urdu questions.
-- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
-- Only if no reasonable query exists, output: \`\`\`sql
+- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.`;
+
+const CANNOT_ANSWER_RULE = `- Only if no reasonable query exists, output: \`\`\`sql
 -- CANNOT_ANSWER: <short reason>
 \`\`\``;
 
-/** The same rules for a DuckDB file converted from an .mdf (DB_ENGINE=duckdb). */
-export const DUCKDB_SQL_RULES = `You translate questions into ONE DuckDB SQL query.
+export const SQL_RULES = `You translate questions into ONE Microsoft SQL Server (T-SQL) query.
 Output format: a single \`\`\`sql fenced block and nothing else.
 Rules:
-- Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE, CREATE, COPY, ATTACH, PRAGMA, SET, INSTALL/LOAD, file functions (read_csv, read_parquet, glob) or multiple statements.
+${TSQL_RULE_LINES}
+${CANNOT_ANSWER_RULE}`;
+
+/** DuckDB writing rules (DB_ENGINE=duckdb, a file converted from an .mdf). */
+export const DUCKDB_RULE_LINES = `- Read-only: SELECT, or WITH ... SELECT. Never INSERT/UPDATE/DELETE, CREATE, COPY, ATTACH, PRAGMA, SET, INSTALL/LOAD, file functions (read_csv, read_parquet, glob) or multiple statements.
 - Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
 - Use only objects and columns listed in the schema. Schema-qualify tables (dbo.Orders) and alias them. Double-quote a column whose name is a reserved word ("limit", "order", "group").
 - Join along the "->" foreign keys.
@@ -57,13 +59,21 @@ Rules:
 - Return a readable identifier (e.g. the name) next to each measure, not only an id.
 - Filter dates with half-open ranges (col >= DATE '2024-01-01' AND col < DATE '2025-01-01'). Group with year(col), month(col), date_trunc('month', col); today is current_date.
 - Use NULLIF to avoid division by zero. Give computed columns readable English snake_case aliases (net_sales, month), even for Urdu questions.
-- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
-- Only if no reasonable query exists, output: \`\`\`sql
--- CANNOT_ANSWER: <short reason>
-\`\`\``;
+- Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.`;
+
+/** The same rules for a DuckDB file converted from an .mdf (DB_ENGINE=duckdb). */
+export const DUCKDB_SQL_RULES = `You translate questions into ONE DuckDB SQL query.
+Output format: a single \`\`\`sql fenced block and nothing else.
+Rules:
+${DUCKDB_RULE_LINES}
+${CANNOT_ANSWER_RULE}`;
 
 export function sqlRules(dialect: SqlDialect): string {
   return dialect === 'duckdb' ? DUCKDB_SQL_RULES : SQL_RULES;
+}
+
+export function sqlRuleLines(dialect: SqlDialect): string {
+  return dialect === 'duckdb' ? DUCKDB_RULE_LINES : TSQL_RULE_LINES;
 }
 
 export interface FewShot {
@@ -110,19 +120,19 @@ export function sqlMessages(
 export const EMPTY_RESULT_RECHECK = `That query ran but returned no rows. Re-check it: text filters against the {stored values} in the schema (codes vs names, spelling, case), date ranges, and join paths (e.g. parent/child hierarchies where the rows sit at the child level). If zero rows is genuinely correct, return the same query unchanged. Reply with a single \`\`\`sql block.`;
 
 export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's question using ONLY the SQL result provided.
-- Lead with the direct answer in one sentence, then the key figures.
+- Lead with the direct answer in one sentence. State the measure and period when the question or SQL gives them.
 - Questions may be in Urdu or Roman Urdu; the user turn says which language to answer in (default English).
-- The full result is shown as a chart and a table right under your answer: never repeat it as a table or list every row. Name only the few figures that matter (leaders, total, peak, change) in 1-3 sentences or at most 3 short bullets.
+- The app shows the result rows under your answer, as a number, chart or table depending on their shape. Never claim a specific widget is shown. Do not copy the result into a Markdown table or list every row. In 1-3 sentences, explain only the few figures that matter: leader, total, peak, change or an exception.
 - If several rows tie for first place, name all of them.
-- If the result was sampled or capped, say so. Never invent or extrapolate numbers, and never add a currency symbol the question or data does not state.
+- If there are no matching rows, say so plainly. If the result was sampled or capped, say so. Never invent or extrapolate numbers, describe a historical result as a forecast, or add a currency symbol the question or data does not state.
 - When only the first rows are shown, take counts and totals from the "stats over all rows" line (zero_rows counts rows equal to 0); never count the shown rows as if they were all.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
-const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).
+export const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).
 Always start with at least one complete Urdu sentence, even when a list follows or the answer is a single number.
 Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.`;
 
-const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu, the casual way Pakistanis text, for example:
+export const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu, the casual way Pakistanis text, for example:
 "Ap k 1,050 customers hain." / "Is mahine 320 orders aaye, jin mein se 12 cancel hue."
 Keep everyday business words in English (customers, orders, sales, revenue, stock, invoice, products).
 Short, friendly sentences with "ap". Always start with at least one full sentence, even when a list follows.
@@ -134,11 +144,13 @@ export function answerMessages(
   sql: string,
   table: string,
   lang: Lang = 'en',
+  guidance?: string,
 ): ChatCompletionMessageParam[] {
   const style = lang === 'ur' ? `\n\n${URDU_STYLE}` : lang === 'ur-Latn' ? `\n\n${ROMAN_URDU_STYLE}` : '';
+  const context = guidance?.trim() ? `Report guidance: ${guidance.trim()}\n\n` : '';
   return [
     { role: 'system', content: ANSWER_SYSTEM },
-    { role: 'user', content: `Question: ${question}\n\nSQL:\n${sql}\n\nResult (TSV):\n${table}${style}` },
+    { role: 'user', content: `${context}Question: ${question}\n\nSQL:\n${sql}\n\nResult (TSV):\n${table}${style}` },
   ];
 }
 
@@ -147,25 +159,6 @@ export function sqlQuestion(question: string, lang: Lang): string {
   if (lang === 'en') return question;
   return `${question}\n\n(If you must refuse, write the CANNOT_ANSWER reason in ${LANGUAGE_NAME[lang]}.)`;
 }
-
-export function agentSystem(dialect: SqlDialect = 'tsql'): string {
-  const engine =
-    dialect === 'duckdb'
-      ? 'a DuckDB database (converted from SQL Server)'
-      : 'a Microsoft SQL Server database';
-  const sqlStyle =
-    dialect === 'duckdb'
-      ? '- DuckDB SQL only, SELECT/WITH only, schema-qualified tables, QUALIFY rank() OVER (...) <= n for rankings, no file functions.'
-      : '- T-SQL only, SELECT/WITH only, bracketed schema-qualified identifiers, TOP (n) WITH TIES for rankings.';
-  return `You are a senior data analyst with read-only access to ${engine}.
-Work efficiently: every tool call costs time and money.
-- The schema excerpt below is usually enough. Only call search_schema/describe_tables when a needed table or column is missing.
-- Prefer one well-aggregated query over many small ones. Run independent queries in parallel tool calls.
-${sqlStyle}
-- When you have enough evidence, stop calling tools and write the final answer: direct answer first, then supporting figures, then brief caveats. Use markdown. Never invent numbers.`;
-}
-
-export const AGENT_SYSTEM = agentSystem('tsql');
 
 export function extractSql(text: string): string {
   const fenced = /```(?:sql|tsql)?\s*([\s\S]*?)```/i.exec(text);

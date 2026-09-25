@@ -1,4 +1,4 @@
-import type { AskResponse, CallUsage, ParamValues, QueryResult, Turn } from '../lib/api';
+import type { AskResponse, CallUsage, ChatStage, ChatTurn, ParamValues, QueryResult, ShownResult } from '../lib/api';
 
 export interface UserMessage {
   id: string;
@@ -15,10 +15,15 @@ export interface AssistantMessage {
   role: 'assistant';
   /** The question this message answers (used for retry and follow-up context). */
   question: string;
+  /** `pending` until the answer is complete; text may already be streaming in. */
   status: 'pending' | 'done' | 'error' | 'stopped';
   text?: string;
+  /** What the assistant is doing while no text has arrived yet. */
+  progress?: { stage: ChatStage; label?: string };
   sql?: string | null;
   result?: QueryResult | null;
+  /** Results to show under the text, each with how the assistant chose to show it (chat answers). */
+  results?: ShownResult[];
   error?: string;
   /** The error is fixed in Settings (server address or API key). */
   fixInSettings?: boolean;
@@ -72,11 +77,16 @@ export type ChatAction =
       report?: ReportRef;
     }
   | { type: 'retry'; chatId: string; assistantId: string }
+  | { type: 'progress'; chatId: string; assistantId: string; stage: ChatStage; label?: string }
+  | { type: 'delta'; chatId: string; assistantId: string; text: string }
+  | { type: 'reset'; chatId: string; assistantId: string }
   | { type: 'answer'; chatId: string; assistantId: string; response: AskResponse }
   | { type: 'fail'; chatId: string; assistantId: string; error: string; stopped?: boolean; fixInSettings?: boolean };
 
-/** Stored results keep enough rows to render the preview; the full result is always re-askable. */
-export const STORED_ROWS = 100;
+/** The server returns at most 1000 rows by default; retain them for table paging. */
+export const STORED_ROWS = 1000;
+/** Enough of an earlier answer for follow-ups to resolve ("and last month?"). */
+const CONTEXT_ANSWER_CHARS = 1500;
 const TITLE_CHARS = 60;
 
 export const initialState: ChatState = { hydrated: false, chats: {}, order: [], activeId: null };
@@ -163,6 +173,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         },
       };
     }
+    case 'progress':
+    case 'delta':
+    case 'reset': {
+      const chat = state.chats[action.chatId];
+      if (!chat) return state;
+      const patch = (m: AssistantMessage): AssistantMessage => {
+        if (m.status !== 'pending') return m; // a late event after Stop
+        if (action.type === 'progress') return { ...m, progress: { stage: action.stage, label: action.label } };
+        if (action.type === 'delta') return { ...m, text: (m.text ?? '') + action.text };
+        return { ...m, text: '' };
+      };
+      return { ...state, chats: { ...state.chats, [chat.id]: updateMessage(chat, action.assistantId, patch) } };
+    }
     case 'answer': {
       const chat = state.chats[action.chatId];
       if (!chat) return state;
@@ -176,8 +199,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         question: heard || m.question || r.image?.display || r.image?.question || '',
         status: 'done',
         text: r.answer ?? '',
+        progress: undefined,
         sql: r.sql,
         result: r.result ? { ...r.result, rows: r.result.rows.slice(0, STORED_ROWS) } : null,
+        results: r.results?.map((x) => ({ ...x, result: { ...x.result, rows: x.result.rows.slice(0, STORED_ROWS) } })),
         error: undefined,
         fixInSettings: undefined,
         meta: { totalMs: r.timings.totalMs, costUsd: r.usage.costUsd, cached: r.cache !== null },
@@ -210,13 +235,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
-/** Earlier answered turns, oldest first, for follow-up questions. */
-export function contextFor(chat: Chat | undefined, beforeId?: string, limit = 4): Turn[] {
+/** Earlier answered turns, oldest first, for follow-up questions: the answer text and the SQL behind it. */
+export function contextFor(chat: Chat | undefined, beforeId?: string, limit = 6): ChatTurn[] {
   if (!chat) return [];
-  const turns: Turn[] = [];
+  const turns: ChatTurn[] = [];
   for (const m of chat.messages) {
     if (m.id === beforeId) break;
-    if (m.role === 'assistant' && m.status === 'done' && m.sql) turns.push({ question: m.question, sql: m.sql });
+    if (m.role !== 'assistant' || m.status !== 'done' || !m.question) continue;
+    turns.push({
+      question: m.question,
+      ...(m.text ? { answer: m.text.slice(0, CONTEXT_ANSWER_CHARS) } : {}),
+      ...(m.sql ? { sql: m.sql } : {}),
+    });
   }
   return turns.slice(-limit);
 }

@@ -15,6 +15,7 @@ const createSchema = z.object({
   title: z.string().trim().min(2).max(80),
   titleUr: z.string().trim().max(80).optional(),
   description: z.string().trim().max(300).optional(),
+  prompt: z.string().trim().max(1200).optional(),
   category: z.enum(CATEGORIES).optional(),
   question: z.string().trim().min(3).max(2000),
   sql: z.string().min(1).max(20_000).optional(),

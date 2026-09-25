@@ -6,7 +6,7 @@ import { PageHeader, Section, SettingsRow } from '../../components/SettingsUI';
 import { useI18n } from '../../i18n';
 import { leave } from '../../lib/nav';
 import { useSettings } from '../../state/settings';
-import { usePalette } from '../../theme';
+import { layout, usePalette } from '../../theme';
 
 export default function SettingsScreen() {
   const p = usePalette();
@@ -47,5 +47,5 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  body: { paddingBottom: 32, gap: 22, maxWidth: 640, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
+  body: { paddingBottom: 32, gap: 24, maxWidth: layout.formWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter },
 });

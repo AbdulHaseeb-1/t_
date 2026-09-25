@@ -10,10 +10,9 @@ const SOURCES = {
   start: require('../../assets/sounds/rec-start.wav'),
   send: require('../../assets/sounds/rec-send.wav'),
   cancel: require('../../assets/sounds/rec-cancel.wav'),
-  answer: require('../../assets/sounds/answer.wav'),
 } as const;
 
-export type Cue = keyof typeof SOURCES;
+export type Cue = keyof typeof SOURCES | 'answer';
 
 /** Length of the start cue; recording begins after it so the chirp isn't captured. */
 export const START_CUE_MS = 220;
@@ -26,11 +25,12 @@ export function setFeedbackEnabled(on: boolean): void {
 }
 
 function player(cue: Cue): AudioPlayer | undefined {
+  if (cue === 'answer') return undefined;
   try {
     let p = players.get(cue);
     if (!p) {
       p = createAudioPlayer(SOURCES[cue]);
-      p.volume = cue === 'answer' ? 0.5 : 0.8;
+      p.volume = 0.8;
       players.set(cue, p);
     }
     return p;

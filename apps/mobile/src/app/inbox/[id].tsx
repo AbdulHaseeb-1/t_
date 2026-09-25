@@ -7,6 +7,7 @@ import { Chart } from '../../components/Chart';
 import { DataPanel } from '../../components/DataPanel';
 import { Markdown } from '../../components/Markdown';
 import { PageHeader } from '../../components/SettingsUI';
+import { asksForTable } from '../../components/ResultWidget';
 import { row, scriptStyle, useI18n } from '../../i18n';
 import { getInboxReport, type InboxReport, markInboxRead } from '../../lib/api';
 import { inferChart } from '../../lib/chart';
@@ -16,7 +17,7 @@ import { leave } from '../../lib/nav';
 import { useChatActions } from '../../state/chats';
 import { useReports } from '../../state/reports';
 import { useSettings } from '../../state/settings';
-import { card, type, usePalette } from '../../theme';
+import { card, layout, type, usePalette } from '../../theme';
 
 /** One delivered report: summary, chart, data, where it was sent. Opening it marks it read. */
 export default function InboxReportScreen() {
@@ -45,7 +46,8 @@ export default function InboxReportScreen() {
   }, [id, server, t, refreshInbox]);
 
   const res = report?.response;
-  const chart = useMemo(() => (res?.result ? inferChart(res.result, res.question, lang) : null), [res, lang]);
+  const list = asksForTable(res?.question ?? '');
+  const chart = useMemo(() => (res?.result && !list ? inferChart(res.result, res.question, lang) : null), [res, lang, list]);
   const again = () => {
     const tpl = res?.template;
     if (!tpl) return;
@@ -70,7 +72,7 @@ export default function InboxReportScreen() {
             )}
             {!!res?.answer && <Markdown text={res.answer} />}
             {chart && <Chart spec={chart} />}
-            {res?.result && res.sql && <DataPanel sql={showSql ? res.sql : undefined} result={res.result} />}
+            {res?.result && <DataPanel sql={showSql ? res.sql ?? undefined : undefined} result={res.result} defaultOpen={list || (!chart && res.result.rowCount > 1)} />}
             {report.deliveries.some((d) => d.channel === 'whatsapp') && (
               <View style={styles.deliveries}>
                 {report.deliveries
@@ -101,7 +103,7 @@ export default function InboxReportScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
+  body: { paddingBottom: 40, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter },
   content: { gap: 14, paddingHorizontal: 8 },
   failed: { borderRadius: 12, padding: 12 },
   deliveries: { gap: 4 },

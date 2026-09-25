@@ -144,7 +144,7 @@ describe('OpenAiTranscriber', () => {
 
 describe('MediaService speech-to-text routing', () => {
   const service = (env: Record<string, string>) =>
-    new MediaService(testConfig(env), {} as never, {} as never);
+    new MediaService(testConfig(env), {} as never, {} as never, {} as never);
   const transcribe = (s: MediaService, meter = new UsageMeter()) =>
     (
       s as unknown as {

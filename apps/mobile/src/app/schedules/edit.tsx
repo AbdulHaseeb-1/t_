@@ -13,7 +13,7 @@ import { ensureNotificationPermission } from '../../lib/notifications';
 import { defaultParams, templateTitle } from '../../lib/reports';
 import { useReports } from '../../state/reports';
 import { useSettings } from '../../state/settings';
-import { card, fonts, type, usePalette } from '../../theme';
+import { card, layout, type, usePalette, weight } from '../../theme';
 
 type Kind = 'daily' | 'weekly' | 'monthly';
 const TIMES = ['08:00', '09:00', '13:00', '18:00', '21:00'];
@@ -198,7 +198,7 @@ export default function ScheduleEditor() {
               onPress={save}
               style={({ pressed }) => [styles.save, { backgroundColor: p.primary, opacity: !canSave || busy ? 0.4 : pressed ? 0.85 : 1 }]}
             >
-              <Text style={[scriptStyle(t.save, { ...type.label, fontFamily: fonts.sansSemibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
+              <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
             </Pressable>
           }
         />
@@ -210,7 +210,7 @@ export default function ScheduleEditor() {
         )}
 
         <Section title={t.scheduleName}>
-          <TextInput value={shownName} onChangeText={setName} accessibilityLabel={t.scheduleName} placeholder={t.scheduleName} placeholderTextColor={p.faint} style={[text(shownName, styles.input)]} />
+          <TextInput value={shownName} onChangeText={setName} accessibilityLabel={t.scheduleName} placeholder={t.scheduleName} placeholderTextColor={p.muted} style={[text(shownName, styles.input)]} />
         </Section>
 
         <Section title={t.whatToRun}>
@@ -235,7 +235,7 @@ export default function ScheduleEditor() {
                 multiline
                 accessibilityLabel={t.orQuestion}
                 placeholder={t.placeholder}
-                placeholderTextColor={p.faint}
+                placeholderTextColor={p.muted}
                 style={[text(question, [styles.input, styles.multiline, { backgroundColor: p.sunken }])]}
               />
             )}
@@ -285,7 +285,7 @@ export default function ScheduleEditor() {
                 autoFocus={customTime}
                 accessibilityLabel={t.atTime}
                 placeholder="HH:MM"
-                placeholderTextColor={p.faint}
+                placeholderTextColor={p.muted}
                 keyboardType="numbers-and-punctuation"
                 maxLength={5}
                 style={[type.body, styles.time, { color: p.text, backgroundColor: timeOk ? p.sunken : p.dangerSoft }]}
@@ -313,7 +313,7 @@ export default function ScheduleEditor() {
               keyboardType="phone-pad"
               accessibilityLabel={t.deliverWhatsApp}
               placeholder="923001234567"
-              placeholderTextColor={p.faint}
+              placeholderTextColor={p.muted}
               style={[type.body, styles.input, styles.multiline, { color: p.text, backgroundColor: numbersOk ? p.sunken : p.dangerSoft, fontVariant: ['tabular-nums'] }]}
             />
           </View>
@@ -364,8 +364,8 @@ export default function ScheduleEditor() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1 },
-  body: { paddingBottom: 48, gap: 20, maxWidth: 640, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
-  save: { paddingHorizontal: 16, height: 34, borderRadius: 17, justifyContent: 'center', marginHorizontal: 4 },
+  body: { paddingBottom: 48, gap: 24, maxWidth: layout.formWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter },
+  save: { paddingHorizontal: 16, height: 40, borderRadius: 20, justifyContent: 'center' },
   message: { borderRadius: 12, padding: 12, marginHorizontal: 4 },
   input: { paddingHorizontal: 14, paddingVertical: 12, outlineStyle: 'none' } as never,
   multiline: { minHeight: 76, borderRadius: 12, textAlignVertical: 'top' },

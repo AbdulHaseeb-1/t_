@@ -64,7 +64,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   config: () => call<BenchConfig>('/config'),
-  models: (refresh = false) => call<ModelCatalog>(`/models${refresh ? '?refresh=1' : ''}`),
+  models: () => call<ModelCatalog>('/models', { cache: 'no-store' }),
   datasets: () => call<DatasetInfo[]>('/datasets'),
   dataset: (file: string) => call<{ name: string; cases: DatasetCase[] }>(`/datasets/${encodeURIComponent(file)}`),
   runs: () => call<RunListEntry[]>('/runs'),

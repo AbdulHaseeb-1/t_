@@ -11,9 +11,8 @@ import {
   useRef,
 } from 'react';
 import { useI18n } from '../i18n';
-import { ApiError, ask, askMedia, type MediaFile, type ParamValues, runTemplate } from '../lib/api';
+import { ApiError, chat, chatMedia, type ChatHandlers, type MediaFile, type ParamValues, runTemplate } from '../lib/api';
 import { describeError, needsSettings } from '../lib/errors';
-import { cue } from '../lib/feedback';
 import { newId } from '../lib/id';
 import { storage } from '../lib/storage';
 import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState, type ReportRef } from './chat-reducer';
@@ -82,18 +81,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const files = media.current.get(assistantId);
     // Reports answer in the reply language, or the app's language when replies follow the question.
     const reportLang = replyRef.current === 'auto' ? langRef.current : replyRef.current;
+    // Progress and answer text stream into the message as the assistant works.
+    const on: ChatHandlers = {
+      status: (stage, label) => dispatchFn({ type: 'progress', chatId, assistantId, stage, label }),
+      delta: (text) => dispatchFn({ type: 'delta', chatId, assistantId, text }),
+      reset: () => dispatchFn({ type: 'reset', chatId, assistantId }),
+    };
     const request = report
       ? runTemplate(serverRef.current, report.id, report.params, reportLang, controller.signal)
       : files?.audio || files?.image
-        ? askMedia(
+        ? chatMedia(
             serverRef.current,
             { question, context, audio: files.audio, image: files.image, language: replyRef.current },
+            on,
             controller.signal,
           )
-        : ask(serverRef.current, question, context, controller.signal, replyRef.current);
+        : chat(serverRef.current, question, context, on, controller.signal, replyRef.current);
     request
       .then((response) => {
-        cue('answer');
         dispatchFn({ type: 'answer', chatId, assistantId, response });
       })
       .catch((err: unknown) => {

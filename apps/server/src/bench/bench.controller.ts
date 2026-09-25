@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Injectable,
   NotFoundException,
@@ -67,8 +68,9 @@ export class BenchController {
   }
 
   @Get('models')
-  listModels(@Query('refresh') refresh?: string) {
-    return this.models.list(refresh === '1' || refresh === 'true');
+  @Header('Cache-Control', 'no-store')
+  listModels() {
+    return this.models.list();
   }
 
   @Get('datasets')

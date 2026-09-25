@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Ask Data",
-    "slug": "ask-data",
+    "name": "Datalink",
+    "slug": "datalink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#C96442",
+        "backgroundColor": "#282722",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -62,10 +62,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FAF9F5",
+          "backgroundColor": "#F6F4EF",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#262624"
+            "backgroundColor": "#1E1D1A"
           }
         }
       ],
@@ -86,7 +86,7 @@
       [
         "expo-notifications",
         {
-          "color": "#C96442"
+          "color": "#9B6647"
         }
       ]
     ],

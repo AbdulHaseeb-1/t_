@@ -1,4 +1,5 @@
 /** Typed client for the db-intelligence server. Pure fetch plus FormData: runs in the app and Jest. */
+import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 export interface ResultColumn {
@@ -35,6 +36,55 @@ export interface AskResponse {
   trace?: { repairs: number; escalated: boolean; emptyRecheck: boolean };
   /** Voice messages: which speech-to-text model heard it. */
   speech?: { provider: string; model: string };
+  /** Chat answers: every result to show under the text, each with how to show it. */
+  results?: ShownResult[];
+  /** Chat answers: every tool call the assistant made. */
+  steps?: AgentStep[];
+}
+
+/** How the assistant wants a result shown, from what was asked ("as a table", "trend"...). */
+export type ResultView = 'number' | 'table' | 'chart';
+export type ChartKind = 'line' | 'column' | 'bar' | 'donut';
+
+export interface Display {
+  view: ResultView;
+  chart?: ChartKind;
+}
+
+export interface ShownResult {
+  id: string;
+  title: string;
+  sql: string;
+  result: QueryResult;
+  display: Display;
+}
+
+export interface AgentStep {
+  tool: string;
+  label: string;
+  ok: boolean;
+  rowCount?: number;
+  elapsedMs?: number;
+  error?: string;
+}
+
+/** What the assistant is doing before the answer text starts. */
+export type ChatStage = 'thinking' | 'listening' | 'reading' | 'schema' | 'query';
+
+/** An earlier chat turn: what was asked, what was answered, and the SQL behind it (if any). */
+export interface ChatTurn {
+  question: string;
+  answer?: string;
+  sql?: string;
+}
+
+export interface ChatHandlers {
+  status?(stage: ChatStage, label?: string): void;
+  step?(step: AgentStep): void;
+  /** More answer text. */
+  delta?(text: string): void;
+  /** The text so far was a preamble, not the answer: drop it. */
+  reset?(): void;
 }
 
 export interface CallUsage {
@@ -103,6 +153,14 @@ function messageFor(status: number, body: { message?: unknown; code?: string } |
   return new ApiError('server', detail || `The server returned an error (${status}).`, status);
 }
 
+/**
+ * A request can fail before it leaves the phone (e.g. a body the fetch implementation
+ * cannot encode); the user sees "can't reach the server", the developer sees why.
+ */
+function logSendFailure(path: string, err: unknown): void {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) console.warn(`Request to ${path} failed before a response:`, err);
+}
+
 async function request<T>(
   cfg: ServerConfig,
   path: string,
@@ -131,9 +189,10 @@ async function request<T>(
       },
       signal: controller.signal,
     });
-  } catch {
+  } catch (err) {
     if (signal?.aborted) throw new ApiError('aborted', 'Stopped.');
     if (timedOut) throw new ApiError('timeout', 'The server took too long to answer. Try a narrower question.');
+    logSendFailure(path, err);
     throw new ApiError('network', `Can't reach the server at ${normalizeBaseUrl(cfg.baseUrl)}. Check the address in Settings.`);
   } finally {
     clearTimeout(timer);
@@ -175,10 +234,208 @@ export async function askMedia(
   input: { question: string; context: Turn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage },
   signal?: AbortSignal,
 ): Promise<AskResponse> {
+  const form = await mediaForm({ ...input, context: input.context.slice(-4) });
+  form.append('answer', 'true');
+  return request<AskResponse>(cfg, '/query/ask/media', { method: 'POST', body: form, timeoutMs: 120_000 }, signal);
+}
+
+// ── Chat: the assistant, streamed as Server-Sent Events ─────────────────────
+
+/** A quiet stream this long means the connection is gone (the server pings every 15 s). */
+const STREAM_IDLE_MS = 60_000;
+
+type StreamEvent =
+  | { type: 'status'; stage: ChatStage; label?: string }
+  | { type: 'step'; step: AgentStep }
+  | { type: 'delta'; text: string }
+  | { type: 'reset' }
+  | { type: 'done'; response: AskResponse }
+  | { type: 'error'; status: number; message: string };
+
+/** UTF-8 across chunk boundaries (Urdu is multi-byte), for runtimes without TextDecoder. */
+export function utf8Decoder(): (bytes: Uint8Array) => string {
+  if (typeof TextDecoder !== 'undefined') {
+    const d = new TextDecoder();
+    return (bytes) => d.decode(bytes, { stream: true });
+  }
+  let pending: number[] = [];
+  return (bytes) => {
+    const all = pending.length ? [...pending, ...bytes] : Array.from(bytes);
+    let out = '';
+    let i = 0;
+    while (i < all.length) {
+      const b = all[i];
+      const len = b < 0x80 ? 1 : b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : b >= 0xc0 ? 2 : 1;
+      if (i + len > all.length) break; // the rest of this character is in the next chunk
+      let cp = len === 1 ? b : b & (0xff >> (len + 1));
+      for (let k = 1; k < len; k++) cp = (cp << 6) | (all[i + k] & 0x3f);
+      out += String.fromCodePoint(cp);
+      i += len;
+    }
+    pending = all.slice(i);
+    return out;
+  };
+}
+
+/** Splits an SSE text stream into the JSON payloads of its events (comments are keepalives). */
+export function sseParser(onEvent: (data: string) => void): (chunk: string) => void {
+  let buffer = '';
+  return (chunk) => {
+    buffer += chunk.replace(/\r\n?/g, '\n');
+    let end = buffer.indexOf('\n\n');
+    while (end >= 0) {
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      const data = block
+        .split('\n')
+        .filter((l) => l.startsWith('data:'))
+        .map((l) => l.slice(l.startsWith('data: ') ? 6 : 5))
+        .join('\n');
+      if (data) onEvent(data);
+      end = buffer.indexOf('\n\n');
+    }
+  };
+}
+
+/**
+ * POSTs to a chat endpoint and follows its event stream until `done`. A server
+ * that answers with plain JSON (older versions) is accepted too, and runtimes
+ * without response streaming get the same events once the body is complete.
+ */
+async function streamChat(
+  cfg: ServerConfig,
+  path: string,
+  body: string | FormData,
+  on: ChatHandlers,
+  signal?: AbortSignal,
+): Promise<AskResponse> {
+  if (!cfg.baseUrl.trim()) throw new ApiError('unconfigured', 'No server address is set. Add it in Settings.');
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, STREAM_IDLE_MS);
+  };
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort);
+  const failed = () =>
+    signal?.aborted
+      ? new ApiError('aborted', 'Stopped.')
+      : timedOut
+        ? new ApiError('timeout', 'The server took too long to answer. Try a narrower question.')
+        : new ApiError('network', `Can't reach the server at ${normalizeBaseUrl(cfg.baseUrl)}. Check the address in Settings.`);
+
+  try {
+    arm();
+    let res: Response;
+    try {
+      res = await fetch(`${normalizeBaseUrl(cfg.baseUrl)}${path}`, {
+        method: 'POST',
+        body,
+        headers: {
+          Accept: 'text/event-stream',
+          ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}),
+          ...(cfg.apiKey ? { 'x-api-key': cfg.apiKey } : {}),
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (!signal?.aborted && !timedOut) logSendFailure(path, err);
+      throw failed();
+    }
+    if (!res.ok) throw messageFor(res.status, (await res.json().catch(() => null)) as { message?: unknown } | null);
+    if (!/event-stream/i.test(res.headers.get('content-type') ?? '')) return (await res.json()) as AskResponse;
+
+    let done: AskResponse | undefined;
+    let error: ApiError | undefined;
+    const handle = (data: string) => {
+      arm();
+      let e: StreamEvent;
+      try {
+        e = JSON.parse(data) as StreamEvent;
+      } catch {
+        return;
+      }
+      if (e.type === 'status') on.status?.(e.stage, e.label);
+      else if (e.type === 'step') on.step?.(e.step);
+      else if (e.type === 'delta') on.delta?.(e.text);
+      else if (e.type === 'reset') on.reset?.();
+      else if (e.type === 'done') done = e.response;
+      else if (e.type === 'error') error ??= messageFor(e.status, { message: e.message });
+    };
+    const parse = sseParser(handle);
+    try {
+      const reader = res.body?.getReader?.();
+      if (reader) {
+        const decode = utf8Decoder();
+        for (;;) {
+          const { value, done: end } = await reader.read();
+          if (end) break;
+          if (value) parse(decode(value));
+          if (done || error) break;
+        }
+        void reader.cancel().catch(() => undefined);
+      } else {
+        parse(await res.text());
+      }
+    } catch {
+      throw failed();
+    }
+    if (error) throw error;
+    if (!done) throw signal?.aborted || timedOut ? failed() : new ApiError('server', 'The answer was cut off. Try again.');
+    return done;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** The assistant: talks, queries when needed, and streams its answer. */
+export function chat(
+  cfg: ServerConfig,
+  question: string,
+  context: ChatTurn[],
+  on: ChatHandlers,
+  signal?: AbortSignal,
+  language: ReplyLanguage = 'auto',
+): Promise<AskResponse> {
+  return streamChat(cfg, '/query/chat', JSON.stringify({ question, context, language }), on, signal);
+}
+
+/** `chat` for voice and/or photo messages. */
+export async function chatMedia(
+  cfg: ServerConfig,
+  input: { question: string; context: ChatTurn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage },
+  on: ChatHandlers,
+  signal?: AbortSignal,
+): Promise<AskResponse> {
+  return streamChat(cfg, '/query/chat/media', await mediaForm(input), on, signal);
+}
+
+/**
+ * On iOS and Android the global fetch is expo/fetch (unless EXPO_PUBLIC_USE_RN_FETCH is
+ * set). Its multipart encoder rejects React Native's `{ uri, name, type }` file parts
+ * ("Unsupported FormDataPart implementation") before anything is sent, so every voice
+ * and photo question failed as "can't reach the server". It accepts parts that hand
+ * over their bytes: the file is read through expo-file-system, with an explicit name
+ * and type (the server checks the type; the platform's guess for .m4a differs).
+ */
+const expoFetchUploads = Platform.OS !== 'web' && !['1', 'true'].includes(process.env.EXPO_PUBLIC_USE_RN_FETCH ?? '');
+
+function nativeFilePart(file: MediaFile): Blob {
+  if (!expoFetchUploads) return file as unknown as Blob; // React Native's fetch streams `{ uri }` parts itself
+  const source = new File(file.uri);
+  return { name: file.name, type: file.type, bytes: () => source.bytes() } as unknown as Blob;
+}
+
+async function mediaForm(input: { question: string; context: (Turn | ChatTurn)[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage }) {
   const form = new FormData();
   form.append('question', input.question);
-  form.append('context', JSON.stringify(input.context.slice(-4)));
-  form.append('answer', 'true');
+  form.append('context', JSON.stringify(input.context));
   form.append('language', input.language ?? 'auto');
   for (const [field, file] of [['audio', input.audio], ['image', input.image]] as const) {
     if (!file) continue;
@@ -186,10 +443,10 @@ export async function askMedia(
       const blob = await (await fetch(file.uri)).blob();
       form.append(field, new Blob([blob], { type: file.type }), file.name);
     } else {
-      form.append(field, file as unknown as Blob);
+      form.append(field, nativeFilePart(file));
     }
   }
-  return request<AskResponse>(cfg, '/query/ask/media', { method: 'POST', body: form, timeoutMs: 120_000 }, signal);
+  return form;
 }
 
 export interface Health {
@@ -234,6 +491,7 @@ export interface ReportTemplate {
   titleUr?: string;
   description?: string;
   descriptionUr?: string;
+  prompt?: string;
   category: ReportCategory;
   icon?: string;
   params: TemplateParam[];

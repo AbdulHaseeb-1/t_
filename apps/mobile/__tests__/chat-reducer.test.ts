@@ -39,12 +39,12 @@ describe('chatReducer', () => {
     expect(after[3]).not.toBe(before[3]);
   });
 
-  it('caps stored rows', () => {
+  it('retains all default server rows for paging and caps oversized responses', () => {
     let s = askOnce(hydrated, 'c1', 1);
-    s = chatReducer(s, { type: 'answer', chatId: 'c1', assistantId: 'a1', response: response('SELECT 1', 500) });
+    s = chatReducer(s, { type: 'answer', chatId: 'c1', assistantId: 'a1', response: response('SELECT 1', 1500) });
     const m = s.chats.c1.messages[1];
     expect(m.role === 'assistant' && m.result?.rows.length).toBe(STORED_ROWS);
-    expect(m.role === 'assistant' && m.result?.rowCount).toBe(500);
+    expect(m.role === 'assistant' && m.result?.rowCount).toBe(1500);
   });
 
   it('handles failure, stop and retry', () => {
@@ -90,7 +90,7 @@ describe('contextFor', () => {
       s = askOnce(s, 'c1', i);
       if (i !== 3) s = chatReducer(s, { type: 'answer', chatId: 'c1', assistantId: `a${i}`, response: response(`SELECT ${i}`) });
     }
-    expect(contextFor(s.chats.c1).map((t) => t.sql)).toEqual(['SELECT 2', 'SELECT 4', 'SELECT 5', 'SELECT 6']);
+    expect(contextFor(s.chats.c1).map((t) => t.sql)).toEqual(['SELECT 1', 'SELECT 2', 'SELECT 4', 'SELECT 5', 'SELECT 6']);
     expect(contextFor(s.chats.c1, 'a4').map((t) => t.sql)).toEqual(['SELECT 1', 'SELECT 2']);
   });
 });
@@ -106,7 +106,7 @@ describe('voice and photo messages', () => {
     expect(s.chats.c1.messages[1]).toMatchObject({ question: 'کتنے آرڈر ہیں؟', language: 'ur' });
     expect(s.chats.c1.title).toBe('کتنے آرڈر ہیں؟');
     // Follow-ups use what was heard.
-    expect(contextFor(s.chats.c1)).toEqual([{ question: 'کتنے آرڈر ہیں؟', sql: 'SELECT 1' }]);
+    expect(contextFor(s.chats.c1)).toEqual([{ question: 'کتنے آرڈر ہیں؟', answer: 'The answer', sql: 'SELECT 1' }]);
   });
 
   it('keeps what was read from a photo', () => {

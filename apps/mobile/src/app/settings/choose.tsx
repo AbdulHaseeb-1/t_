@@ -6,7 +6,7 @@ import { type UiLanguage, useI18n } from '../../i18n';
 import type { ReplyLanguage } from '../../lib/api';
 import { leave } from '../../lib/nav';
 import { useSettings } from '../../state/settings';
-import { usePalette } from '../../theme';
+import { layout, usePalette } from '../../theme';
 
 /** One choice per page, checkmark on the current one; picking applies instantly. */
 export default function ChooseScreen() {
@@ -46,5 +46,5 @@ export default function ChooseScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  body: { paddingBottom: 32, gap: 22, maxWidth: 640, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
+  body: { paddingBottom: 32, gap: 24, maxWidth: layout.formWidth, width: '100%', alignSelf: 'center', paddingHorizontal: layout.gutter },
 });

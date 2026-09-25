@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { card, fonts, type, usePalette } from '../theme';
+import { card, type, usePalette, weight } from '../theme';
 import { OnCard } from './surface';
 import { IconButton } from './IconButton';
 
@@ -28,7 +28,7 @@ export function PageHeader({ title, onBack, back, action }: { title: string; onB
         <View style={styles.flex} />
         {action}
       </View>
-      <Text style={[scriptStyle(title, styles.bigTitle), { color: p.text }]} accessibilityRole="header">
+      <Text style={[scriptStyle(title, styles.bigTitle, 'bold'), { color: p.text }]} accessibilityRole="header">
         {title}
       </Text>
     </View>
@@ -39,13 +39,13 @@ export function Section({ title, children, footer }: { title?: string; children:
   const p = usePalette();
   return (
     <View style={styles.section}>
-      {!!title && <Text style={[scriptStyle(title, { ...type.meta, fontFamily: fonts.sansMedium }), styles.sectionTitle, { color: p.muted }]}>{title}</Text>}
+      {!!title && <Text style={[scriptStyle(title, { ...type.meta, ...weight.medium }), styles.sectionTitle, { color: p.muted }]}>{title}</Text>}
       <View style={[styles.shell, card(p)]}>
         <View style={styles.card}>
           <OnCard.Provider value>{children}</OnCard.Provider>
         </View>
       </View>
-      {!!footer && <Text style={[scriptStyle(footer, type.meta), styles.footer, { color: p.faint }]}>{footer}</Text>}
+      {!!footer && <Text style={[scriptStyle(footer, type.meta), styles.footer, { color: p.muted }]}>{footer}</Text>}
     </View>
   );
 }
@@ -68,14 +68,14 @@ export function SettingsRow({ icon, label, value, onPress, toggle, checked, last
     <>
       {icon && (
         <View style={[styles.iconWrap, { backgroundColor: p.sunken }]}>
-          <Feather name={icon} size={15} color={p.text} />
+          <Feather name={icon} size={16} color={p.text} />
         </View>
       )}
       <Text style={[scriptStyle(label, type.body), styles.flex, { color: p.text }]} numberOfLines={2}>
         {label}
       </Text>
       {!!value && (
-        <Text style={[scriptStyle(value, type.body), styles.value, { color: p.muted }]} numberOfLines={1}>
+        <Text style={[scriptStyle(value, type.meta), styles.value, { color: p.muted }]} numberOfLines={1}>
           {value}
         </Text>
       )}
@@ -118,14 +118,14 @@ export function SettingsRow({ icon, label, value, onPress, toggle, checked, last
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  bar: { alignItems: 'center', paddingHorizontal: 8, height: 52 },
-  bigTitle: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 38, paddingHorizontal: 20, paddingBottom: 8 },
-  section: { gap: 6 },
-  sectionTitle: { paddingHorizontal: 16, textTransform: 'none' },
+  bar: { alignItems: 'center', height: 56 },
+  bigTitle: { ...type.page, paddingHorizontal: 4, paddingTop: 4, paddingBottom: 12 },
+  section: { gap: 8 },
+  sectionTitle: { paddingHorizontal: 12 },
   shell: { borderRadius: 18 },
   card: { borderRadius: 18, overflow: 'hidden' },
-  footer: { paddingHorizontal: 16 },
-  row: { alignItems: 'center', gap: 12, paddingHorizontal: 14, minHeight: 50, paddingVertical: 8 },
-  iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  footer: { paddingHorizontal: 12 },
+  row: { alignItems: 'center', gap: 12, paddingHorizontal: 14, minHeight: 56, paddingVertical: 10 },
+  iconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   value: { maxWidth: '45%' },
 });

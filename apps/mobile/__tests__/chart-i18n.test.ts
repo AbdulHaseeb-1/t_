@@ -167,7 +167,7 @@ describe('Urdu typography', () => {
   it('sets Nastaliq with room for its diagonal stacking', () => {
     const [base, urdu] = scriptStyle('آپ کیا جاننا چاہتے ہیں؟', { fontFamily: 'X', fontSize: 16, lineHeight: 23 });
     expect(base.fontFamily).toBe('X');
-    expect(urdu).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular', fontSize: 17, lineHeight: 36, writingDirection: 'rtl', textAlign: 'right' });
+    expect(urdu).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular', fontSize: 18, lineHeight: 36, writingDirection: 'rtl', textAlign: 'right' });
     expect(scriptStyle('Hello', { fontSize: 16 })).toHaveLength(1);
     expect(scriptStyle('بولڈ', { fontSize: 16 }, 'bold')[1].fontFamily).toBe('NotoNastaliqUrdu_700Bold');
   });
