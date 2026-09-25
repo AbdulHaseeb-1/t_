@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
-import OpenAI, { toFile } from 'openai';
+import OpenAI from 'openai';
+import { GeminiTranscriber, OpenAiTranscriber, type Transcriber } from './transcriber.js';
 import { AppConfig } from '../config/app-config.js';
 import { LlmUnavailableError } from '../common/errors.js';
 import { LlmService } from '../llm/llm.service.js';
@@ -26,6 +27,8 @@ export interface MediaAskInput {
 export interface MediaAskResponse extends AskResponse {
   /** What was heard in the voice message. */
   transcript?: string;
+  /** Which speech-to-text model heard it. */
+  speech?: { provider: string; model: string };
   /** What was read from the image: the question in English (used for SQL) and in the user's language. */
   image?: { question: string; display: string; extracted: string };
 }
@@ -65,6 +68,7 @@ function mergeUsage(a: UsageSummary, b: UsageSummary): UsageSummary {
     costUsd: Number((a.costUsd + b.costUsd).toFixed(6)),
     costComplete: a.costComplete && b.costComplete,
     models: [...new Set([...a.models, ...b.models])],
+    calls: [...a.calls, ...b.calls],
   };
 }
 
@@ -76,7 +80,8 @@ function mergeUsage(a: UsageSummary, b: UsageSummary): UsageSummary {
 @Injectable()
 export class MediaService {
   private readonly logger = new Logger(MediaService.name);
-  private readonly openai?: OpenAI;
+  /** In preference order; the next one is tried when a provider fails. */
+  readonly transcribers: Transcriber[] = [];
 
   constructor(
     private readonly config: AppConfig,
@@ -84,21 +89,32 @@ export class MediaService {
     private readonly asker: AskService,
   ) {
     const key = config.get('OPENAI_API_KEY');
-    if (key) {
-      this.openai = new OpenAI({
-        apiKey: key,
-        baseURL: config.get('OPENAI_BASE_URL'),
-        timeout: config.get('LLM_TIMEOUT_MS'),
-        maxRetries: config.get('LLM_MAX_RETRIES'),
-      });
-    }
+    const openai = key
+      ? new OpenAiTranscriber(
+          new OpenAI({
+            apiKey: key,
+            baseURL: config.get('OPENAI_BASE_URL'),
+            timeout: config.get('LLM_TIMEOUT_MS'),
+            maxRetries: config.get('LLM_MAX_RETRIES'),
+          }),
+          config.get('TRANSCRIBE_MODEL'),
+        )
+      : undefined;
+    const geminiKey = config.get('GEMINI_API_KEY');
+    const gemini = geminiKey
+      ? new GeminiTranscriber(geminiKey, config.get('GEMINI_TRANSCRIBE_MODEL'), config.get('GEMINI_BASE_URL'), config.get('LLM_TIMEOUT_MS'))
+      : undefined;
+    const mode = config.get('TRANSCRIBE_PROVIDER');
+    const order: (Transcriber | undefined)[] = mode === 'openai' ? [openai, gemini] : [gemini, openai];
+    this.transcribers = order.filter((t): t is Transcriber => !!t);
   }
 
   async ask(input: MediaAskInput): Promise<MediaAskResponse> {
     const started = performance.now();
     const meter = new UsageMeter();
 
-    const transcript = input.audio ? await this.transcribe(input.audio, meter) : undefined;
+    const heard = input.audio ? await this.transcribe(input.audio, meter) : undefined;
+    const transcript = heard?.text;
     const userText = [input.question.trim(), transcript].filter(Boolean).join('\n');
     let lang: Lang | undefined =
       input.language !== 'auto' ? input.language : userText ? detectLanguage(userText) : undefined;
@@ -131,42 +147,46 @@ export class MediaService {
     return {
       ...res,
       transcript,
+      ...(heard ? { speech: { provider: heard.provider, model: heard.model } } : {}),
       image,
-      timings: { ...res.timings, totalMs: res.timings.totalMs + mediaMs, llmMs: res.timings.llmMs + mediaMs },
+      timings: { ...res.timings, totalMs: res.timings.totalMs + mediaMs, llmMs: res.timings.llmMs + mediaMs, mediaMs },
       usage: mergeUsage(meter.summary(), res.usage),
     };
   }
 
-  private async transcribe(audio: UploadedMedia, meter: UsageMeter): Promise<string> {
-    if (!this.openai) {
-      throw new LlmUnavailableError(
-        'Voice messages need OPENAI_API_KEY: speech-to-text uses the OpenAI audio API.',
-      );
+  private async transcribe(audio: UploadedMedia, meter: UsageMeter): Promise<{ text: string; provider: string; model: string }> {
+    if (!this.transcribers.length) {
+      throw new LlmUnavailableError('Voice messages need GEMINI_API_KEY or OPENAI_API_KEY for speech-to-text.');
     }
-    const model = this.config.get('TRANSCRIBE_MODEL');
-    const t0 = performance.now();
-    // No language hint: the model keeps Urdu in Urdu script and still handles English speech.
-    const res = await this.openai.audio.transcriptions.create({
-      file: await toFile(audio.buffer, audio.filename, { type: audio.mimetype }),
-      model,
-    });
-    const usage = (res as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
-    meter.add({
-      provider: 'openai',
-      model,
-      promptTokens: usage?.input_tokens ?? 0,
-      cachedPromptTokens: 0,
-      completionTokens: usage?.output_tokens ?? 0,
-      costUsd: undefined,
-      latencyMs: Math.round(performance.now() - t0),
-    });
-    const text = res.text.trim();
-    if (!text)
-      throw new HttpException(
-        { message: "Couldn't hear a question in the recording.", code: 'EMPTY_AUDIO' },
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      );
-    return text;
+    let lastError: unknown;
+    for (const t of this.transcribers) {
+      try {
+        const r = await t.transcribe(audio);
+        meter.add({
+          provider: t.provider,
+          model: r.model,
+          purpose: 'transcribe',
+          promptTokens: r.inputTokens,
+          cachedPromptTokens: 0,
+          completionTokens: r.outputTokens,
+          costUsd: r.costUsd,
+          latencyMs: r.latencyMs,
+        });
+        if (!r.text) {
+          throw new HttpException(
+            { message: "Couldn't hear a question in the recording.", code: 'EMPTY_AUDIO' },
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+        return { text: r.text, provider: r.provider, model: r.model };
+      } catch (err) {
+        // Silence is an answer, not a provider failure.
+        if (err instanceof HttpException) throw err;
+        lastError = err;
+        this.logger.warn(`${t.provider} transcription failed, trying next: ${(err as Error).message}`);
+      }
+    }
+    throw new LlmUnavailableError(`Speech-to-text failed: ${(lastError as Error)?.message ?? 'unknown error'}`);
   }
 
   private async readImage(
@@ -177,6 +197,7 @@ export class MediaService {
     const res = await this.llm.chat(
       {
         tier: 'fast',
+        purpose: 'vision',
         reasoningEffort: this.config.get('VISION_REASONING_EFFORT'),
         maxTokens: 800,
         messages: [

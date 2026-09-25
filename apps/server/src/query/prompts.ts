@@ -16,7 +16,7 @@ Rules:
 - Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
 - Use only objects and columns listed in the schema. Schema-qualify and bracket identifiers: [dbo].[Orders].[OrderId].
 - Join along the "->" foreign keys. Alias tables.
-- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line. Follow any table or column notes (-- or "quoted").
+- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line; this includes joining a header to its lines. Measures by a line-level attribute (product, company) come from the line amount. Follow any table or column notes (-- or "quoted").
 - Questions may come from Urdu or Roman Urdu speakers (with an English translation). Map Urdu words for places, statuses and categories to the stored values (e.g. پاکستان -> 'PK', منسوخ -> 'Cancelled').
 - Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled').
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
@@ -29,7 +29,7 @@ Rules:
 - Never return more than {maxRows} rows.
 - Return a readable identifier (e.g. the name) next to each measure, not only an id.
 - Filter dates with half-open ranges (col >= '2024-01-01' AND col < '2025-01-01'); use YEAR()/MONTH() only in SELECT/GROUP BY.
-- Use NULLIF to avoid division by zero. Give computed columns readable aliases.
+- Use NULLIF to avoid division by zero. Give computed columns readable English snake_case aliases (net_sales, month), even for Urdu questions.
 - Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
 - Only if no reasonable query exists, output: \`\`\`sql
 -- CANNOT_ANSWER: <short reason>
@@ -43,7 +43,7 @@ Rules:
 - Never use SELECT * or alias.*: list the columns the question needs (COUNT(*) is fine).
 - Use only objects and columns listed in the schema. Schema-qualify tables (dbo.Orders) and alias them. Double-quote a column whose name is a reserved word ("limit", "order", "group").
 - Join along the "->" foreign keys.
-- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line. Follow any table or column notes (-- or "quoted").
+- Mind the grain: never SUM a header-level amount (an invoice or order total) over line-level rows, where it repeats once per line; this includes joining a header to its lines. Measures by a line-level attribute (product, company) come from the line amount. Follow any table or column notes (-- or "quoted").
 - Questions may come from Urdu or Roman Urdu speakers (with an English translation). Map Urdu words for places, statuses and categories to the stored values (e.g. پاکستان -> 'PK', منسوخ -> 'Cancelled').
 - Values in {braces} are the actual values stored in that column. Filter with those exact values, mapping words in the question to them (e.g. a country name to its code, "cancelled" to 'Cancelled'). Text comparison is case-insensitive.
 - Aggregate in SQL (COUNT, SUM, AVG, GROUP BY) instead of returning raw rows the question does not need.
@@ -56,7 +56,7 @@ Rules:
 - Never return more than {maxRows} rows.
 - Return a readable identifier (e.g. the name) next to each measure, not only an id.
 - Filter dates with half-open ranges (col >= DATE '2024-01-01' AND col < DATE '2025-01-01'). Group with year(col), month(col), date_trunc('month', col); today is current_date.
-- Use NULLIF to avoid division by zero. Give computed columns readable aliases.
+- Use NULLIF to avoid division by zero. Give computed columns readable English snake_case aliases (net_sales, month), even for Urdu questions.
 - Derive standard business metrics from columns that carry that meaning (e.g. revenue = quantity * unit price) instead of refusing. Never substitute a different concept: a signup or order date is not a birth date.
 - Only if no reasonable query exists, output: \`\`\`sql
 -- CANNOT_ANSWER: <short reason>
@@ -112,20 +112,20 @@ export const EMPTY_RESULT_RECHECK = `That query ran but returned no rows. Re-che
 export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's question using ONLY the SQL result provided.
 - Lead with the direct answer in one sentence, then the key figures.
 - Questions may be in Urdu or Roman Urdu; the user turn says which language to answer in (default English).
-- Use a compact markdown table only when several rows matter.
+- The full result is shown as a chart and a table right under your answer: never repeat it as a table or list every row. Name only the few figures that matter (leaders, total, peak, change) in 1-3 sentences or at most 3 short bullets.
 - If several rows tie for first place, name all of them.
-- If the result was sampled or capped, say so. Never invent or extrapolate numbers.
+- If the result was sampled or capped, say so. Never invent or extrapolate numbers, and never add a currency symbol the question or data does not state.
+- When only the first rows are shown, take counts and totals from the "stats over all rows" line (zero_rows counts rows equal to 0); never count the shown rows as if they were all.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
 const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).
-Always start with at least one complete Urdu sentence, even when a table follows or the answer is a single number.
-Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.
-Translate table headings into Urdu.`;
+Always start with at least one complete Urdu sentence, even when a list follows or the answer is a single number.
+Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.`;
 
 const ROMAN_URDU_STYLE = `Write the whole answer in Roman Urdu, the casual way Pakistanis text, for example:
 "Ap k 1,050 customers hain." / "Is mahine 320 orders aaye, jin mein se 12 cancel hue."
 Keep everyday business words in English (customers, orders, sales, revenue, stock, invoice, products).
-Short, friendly sentences with "ap". Always start with at least one full sentence, even when a table follows.
+Short, friendly sentences with "ap". Always start with at least one full sentence, even when a list follows.
 Keep numbers, names, codes and IDs from the data exactly as they appear.`;
 
 /** Language instruction goes in the user turn, so the system prompt stays identical (cacheable) for every language. */

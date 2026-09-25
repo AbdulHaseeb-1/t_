@@ -59,6 +59,8 @@ describe('SQL guard, DuckDB dialect', () => {
   it.each([
     ["SELECT * FROM read_parquet('x.parquet')", /read_parquet/],
     ["SELECT a FROM 'data.csv'", /reading files/],
+    ["SELECT t.a FROM dbo.T t, 'data.csv' f", /reading files/],
+    ["SELECT a FROM dbo.T JOIN 'x.parquet' p ON true", /reading files/],
     ["SELECT getenv('HOME') AS h", /getenv/],
     ["SELECT * FROM query('SELECT 1')", /query/],
     ["SELECT $$x$$ AS a", /dollar-quoted/],
@@ -72,6 +74,13 @@ describe('SQL guard, DuckDB dialect', () => {
   it('accepts ordinary analytics SQL, including lists and QUALIFY', () => {
     const sql = `SELECT b.bName, sum(i.net_amt) AS s, [1, 2] AS l FROM dbo.InvoiceLine i JOIN dbo.BookingMan b ON b.bId = i.bId
       WHERE i.inv_date >= DATE '2026-01-01' GROUP BY b.bName QUALIFY rank() OVER (ORDER BY sum(i.net_amt) DESC) <= 3`;
+    expect(assertReadOnlySql(sql, 'duckdb')).toBe(sql);
+  });
+
+  it('accepts string literals in expressions (IN lists, COALESCE, CASE)', () => {
+    const sql = `SELECT COALESCE(b.bName, 'Unknown') AS booking_man, CASE WHEN i.inv_src IN ('MDS', 'QB') THEN 'known' ELSE 'other' END AS src,
+      sum(i.net_amt) AS s FROM dbo.InvoiceLine i LEFT JOIN dbo.BookingMan b ON b.bId = i.bId
+      WHERE i.inv_src NOT IN ('X', 'Y') GROUP BY 1, 2 ORDER BY s DESC, 'x'`;
     expect(assertReadOnlySql(sql, 'duckdb')).toBe(sql);
   });
 });

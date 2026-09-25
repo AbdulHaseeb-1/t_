@@ -6,7 +6,7 @@ Ask questions of a SQL Server database in plain language and get correct numbers
 apps/
   server/   NestJS 12 + Fastify API: question -> SQL -> answer, voice and photo input
   mobile/   Ask Data: Expo SDK 57 app (Android APK, iOS, web), Urdu-first
-  web/      placeholder for a separate web frontend (the mobile app also builds for web)
+  web/      Model Bench: web tool to benchmark models on your database (served at /bench)
 infra/
   docker-compose.yml               SQL Server 2022 (+ optional API container)
   mssql/attach.sh                  attaches MDS_EPD_SQL16.mdf and creates a read-only login
@@ -85,7 +85,90 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | GET/POST/DELETE | `/query/examples` | verified question→SQL pairs (few-shot library; SQL must run) | none |
 | GET | `/health` | DB + LLM status (no API key needed) | none |
 
-Every `/query/ask` and `/query/analyze` response includes `usage` (calls, prompt/cached/completion tokens, `costUsd`, models) and `timings`.
+Every `/query/ask` and `/query/analyze` response includes `usage` (prompt/cached/completion tokens, `costUsd`, models, and a per-call breakdown tagged `sql`, `answer`, `recheck`, `translate`, `transcribe`, `vision` or `agent`) and `timings` (`llmMs`, `dbMs`, `mediaMs`). `/query/ask` also reports the `schema` context sent (whole schema or retrieved tables, with its token size) and the conversation `context` (earlier turns, engine).
+
+## Reports, schedules and WhatsApp
+
+**Report templates** are one-tap reports whose SQL was written and verified in advance, so they return the same figures every time and use no model to write SQL (only an optional short summary). `TEMPLATES_FILE` loads them. [`infra/mssql/mds-epd.templates.json`](infra/mssql/mds-epd.templates.json) ships 17 for MDS_EPD:
+
+- **Sales:** today's sales, sales for a period, daily trend, monthly trend, top products, sales by company, sales returns
+- **Stock:** stock shortage by days of cover\*, expiring stock\*, expired stock\*, purchases
+- **Customers:** top customers, customers who stopped buying\*
+- **Finance:** receivables, customers over their credit limit\*, cash received
+- **Team:** sales by booking man
+
+\* Alert reports: a schedule sends them only when there is something to act on.
+
+Each has T-SQL and DuckDB versions that return identical rows on the real database. Parameters are typed:
+
+- dates as `today`, `yesterday`, `week_start`, `month_start`, `prev_month_start`, `prev_month_end`, `year_start`, `-7d` or `2026-09-01`
+- numbers with minimum and maximum limits
+
+They are rendered as literals only after validation, never spliced in as free text. "Today" follows `REPORT_TIMEZONE`. Users can also save any answered question as a report from the app. Saved SQL passes the read-only guard and a trial run first.
+
+**Schedules** run a report or a free-form question on a timetable:
+
+- daily, on chosen weekdays, on a day of the month (or its last day), or by cron
+- in `REPORT_TIMEZONE`
+- delivered to the app's report inbox, to WhatsApp numbers, or both
+
+*Only if rows* (on by default for alert reports) keeps alerts quiet on days with nothing to report. A server that was down past a run time marks that run *missed* rather than replaying a batch of stale reports. Only one server replica should run with `SCHEDULER_ENABLED=true`.
+
+**Notifications:** the app polls `/inbox` (on open, every minute while in use, every ~15 minutes in the background) and shows new reports as local notifications. With an EAS project and FCM credentials, the server also sends Expo push notifications.
+
+**WhatsApp:** the same assistant answers WhatsApp messages (text, voice notes and photos) from allow-listed numbers. It offers a tap-to-run report menu and receives scheduled reports. Setup, security and the 24-hour messaging rule: [docs/WHATSAPP.md](docs/WHATSAPP.md).
+
+| Method | Path | Purpose | LLM cost |
+|---|---|---|---|
+| GET | `/templates` | `{timezone, today, templates}`: reports this engine can run, with parameters (no SQL) | none |
+| POST | `/templates/:id/run` | `{params?, language?, answer?=true}` → same shape as `/query/ask`, plus `template` (resolved params, period) | 0–1 call (summary) |
+| POST / DELETE | `/templates`, `/templates/:id` | save an answer as a report `{title, question, sql?}` / delete a saved one (built-ins: 403) | none |
+| GET / POST | `/schedules` | `{whatsapp, schedules}` / create `{name, target: {templateId, params} \| {question}, frequency, language, deliver: {app, whatsapp[]}, onlyIfRows?, enabled}` | none |
+| PUT / DELETE | `/schedules/:id` | update / delete | none |
+| POST | `/schedules/:id/run` | run now (does not move the next run) | as the report |
+| GET | `/inbox?since=`, `/inbox/:id` | delivered reports and unread count / one report with its full result | none |
+| POST / DELETE | `/inbox/read`, `/inbox/:id/read`, `/inbox/:id` | mark all or one read / delete | none |
+| POST | `/devices` | register an Expo push token | none |
+| GET / POST | `/whatsapp/webhook` | Meta webhook: verification handshake / signed messages (no API key; checked by signature) | as a question |
+
+## Model benchmark (web)
+
+`/bench` is a browser tool for choosing the model behind the app. Enable it with `BENCH_ENABLED=true`, after `pnpm --filter web build`. It runs a question set with verified gold SQL through up to six models from your OpenAI account or OpenRouter's catalog, using the production pipeline, and compares them:
+
+- accuracy with 95% confidence intervals
+- first-try rate and stability
+- median and p95 time
+- cost per question and per correct answer
+- an accuracy-vs-cost frontier
+- accuracy by topic and difficulty
+- failure types
+- a case-by-case drill-down: gold vs each model's SQL and rows
+
+Its **Playground** asks one question of several models side by side and reports which ones returned the same data. Runs are saved next to CLI eval reports. See [apps/web/README.md](apps/web/README.md).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/bench/api/config`, `/models`, `/datasets`, `/datasets/:file` | engine, keys, model catalog with prices, question sets |
+| POST | `/bench/api/runs` | `{dataset, models: [{provider, model, reasoningEffort?}], repeats, concurrency, caseIds?, features?}` → starts a run |
+| GET | `/bench/api/runs`, `/runs/:id?since=n` | history; live progress (only results after index n) |
+| POST / DELETE | `/bench/api/runs/:id/cancel`, `/runs/:id` | cancel a run, delete a saved report |
+| POST | `/bench/api/compare` | `{question, models}` → each model's SQL, rows, time, cost, and which agree |
+
+## Speech to text
+
+Voice questions are transcribed before they are answered. The provider is chosen by `TRANSCRIBE_PROVIDER`:
+
+| Setting | Provider order | Notes |
+|---|---|---|
+| `auto` (default) | Gemini if `GEMINI_API_KEY` is set, then OpenAI | the other provider is the automatic fallback |
+| `gemini` / `openai` | that one first | |
+
+- **`gemini-3.5-flash-lite`** (default `GEMINI_TRANSCRIBE_MODEL`): about $0.001 per minute of audio (1,920 audio tokens at $0.30/M plus the transcript at $2.50/M). It is prompted to write Urdu speech in Urdu script (never Hindi Devanagari), to keep English business words and numbers as spoken, and not to translate.
+- **`gemini-3.8-flash`**: more accurate on noisy audio, about $0.0065 per minute.
+- **`gemini-3.5-transcribe`**: Google's dedicated speech model. Not the default, because Urdu is not among its supported languages.
+- **OpenAI `gpt-4o-transcribe`**: used when no Gemini key is set, and as the fallback. About $0.006 per minute.
+
+The provider and model that transcribed a question are returned as `speech` and appear in the app's answer details.
 
 ## LLM providers
 

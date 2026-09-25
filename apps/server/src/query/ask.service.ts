@@ -8,7 +8,7 @@ import type { QueryResult } from '../database/database.types.js';
 import { SchemaCatalogService } from '../database/schema/schema-catalog.service.js';
 import type { SchemaContext } from '../database/schema/schema.types.js';
 import { LlmService } from '../llm/llm.service.js';
-import { type Tier, UsageMeter, type UsageSummary } from '../llm/llm.types.js';
+import { type CallPurpose, type Tier, UsageMeter, type UsageSummary } from '../llm/llm.types.js';
 import { ExamplesService } from './examples.service.js';
 import { detectLanguage, type Lang, PHRASES } from './language.js';
 import {
@@ -56,8 +56,14 @@ export interface AskResponse {
     escalated: boolean;
     examples: number;
   };
-  schema: { tables: string[]; full: boolean };
-  timings: { totalMs: number; llmMs: number; dbMs: number };
+  /**
+   * Schema context the model saw: whole schema (full) or retrieved tables,
+   * its size, and how many earlier conversation turns were sent.
+   */
+  schema: { tables: string[]; full: boolean; tableCount: number; chars: number; approxTokens: number };
+  context: { turns: number; engine: 'mssql' | 'duckdb' };
+  /** llmMs: waiting on the model; dbMs: running SQL; mediaMs: speech-to-text/vision. */
+  timings: { totalMs: number; llmMs: number; dbMs: number; mediaMs?: number };
   usage: UsageSummary;
 }
 
@@ -257,7 +263,7 @@ export class AskService {
       );
       // Needs actual reasoning about the data model: use the smart tier.
       trace.escalated ||= input.tier !== 'smart';
-      const recheck = await this.round(messages, 'smart', 1, maxRows, cacheKey, meter, timings);
+      const recheck = await this.round(messages, 'smart', 1, maxRows, cacheKey, meter, timings, 'recheck');
       trace.candidates += recheck.tried;
       if (recheck.winner?.result && recheck.winner.sql.trim() !== chosen.sql.trim()) chosen = recheck.winner;
     }
@@ -281,12 +287,13 @@ export class AskService {
     cacheKey: string,
     meter: UsageMeter,
     timings: Timings,
+    purpose: CallPurpose = 'sql',
   ): Promise<{ winner?: Attempt; agreement?: number; refusal?: string; failure?: Attempt; tried: number }> {
     const texts = await this.timed(timings, 'llmMs', () =>
       Promise.all(
         Array.from({ length: n }, () =>
           this.llm
-            .chat({ tier, messages, temperature: n > 1 ? 0.7 : 0, maxTokens: 800, cacheKey }, meter)
+            .chat({ tier, messages, temperature: n > 1 ? 0.7 : 0, maxTokens: 800, cacheKey, purpose }, meter)
             .then((r) => r.message.content ?? ''),
         ),
       ),
@@ -330,6 +337,19 @@ export class AskService {
     return { winner: best[0], agreement: best.length, tried: n };
   }
 
+  /** The prose answer for a result produced elsewhere (report templates), metered on its own. */
+  async describe(
+    question: string,
+    sql: string,
+    result: QueryResult,
+    lang: Lang,
+  ): Promise<{ answer: string; usage: UsageSummary; llmMs: number }> {
+    const meter = new UsageMeter();
+    const timings: Timings = { llmMs: 0, dbMs: 0 };
+    const answer = await this.phrase(question, sql, result, meter, timings, lang);
+    return { answer, usage: meter.summary(), llmMs: Math.round(timings.llmMs) };
+  }
+
   private async phrase(
     question: string,
     sql: string,
@@ -351,6 +371,7 @@ export class AskService {
           messages: answerMessages(question, sql, table, lang),
           temperature: 0.2,
           maxTokens: 900,
+          purpose: 'answer',
         },
         meter,
       ),
@@ -375,7 +396,15 @@ export class AskService {
       question: input.question,
       ...r,
       trace,
-      schema: { tables: ctx.full ? [] : ctx.tables, full: ctx.full },
+      schema: {
+        tables: ctx.full ? [] : ctx.tables,
+        full: ctx.full,
+        tableCount: ctx.tables.length,
+        chars: ctx.text.length,
+        // ~3.5 characters per token for compact schema text
+        approxTokens: Math.round(ctx.text.length / 3.5),
+      },
+      context: { turns: input.context.length, engine: this.db.dialect === 'duckdb' ? 'duckdb' : 'mssql' },
       timings: {
         totalMs: this.ms(started),
         llmMs: Math.round(timings.llmMs),

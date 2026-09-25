@@ -1,0 +1,238 @@
+{
+  "$comment": "One-tap reports for MDS_EPD. Loaded with TEMPLATES_FILE. SQL is verified on SQL Server (sql) and on the converted .mdf in DuckDB (sqlDuckdb when the syntax differs). Placeholders: {{date}}, {{date+1}}, {{today-30}}, {{today-days}}, {{limit}}; see apps/server/src/reports/template.ts.",
+  "templates": [
+    {
+      "id": "sales-today",
+      "title": "Today's sales",
+      "titleUr": "آج کی سیل",
+      "description": "Invoices, net sales and customers for one day.",
+      "descriptionUr": "ایک دن کی انوائسز، نیٹ سیل اور گاہک۔",
+      "category": "sales",
+      "icon": "sun",
+      "params": [{ "name": "day", "label": "Day", "labelUr": "دن", "type": "date", "default": "today" }],
+      "sql": "SELECT COUNT(*) AS invoices, COALESCE(SUM(net_amt), 0) AS net_sales, COUNT(DISTINCT cust_id) AS customers FROM dbo.InvoiceLine WHERE inv_date >= {{day}} AND inv_date < {{day+1}}"
+    },
+    {
+      "id": "sales-period",
+      "title": "Sales at a glance",
+      "titleUr": "سیل کا خلاصہ",
+      "description": "Invoices, net sales and customers for a period (this month by default).",
+      "descriptionUr": "کسی مدت کی انوائسز، نیٹ سیل اور گاہک (پہلے سے اس مہینے کی)۔",
+      "category": "sales",
+      "icon": "bar-chart-2",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" }
+      ],
+      "sql": "SELECT COUNT(*) AS invoices, COALESCE(SUM(net_amt), 0) AS net_sales, COUNT(DISTINCT cust_id) AS customers FROM dbo.InvoiceLine WHERE inv_date >= {{from}} AND inv_date < {{to+1}}"
+    },
+    {
+      "id": "sales-daily",
+      "title": "Daily sales",
+      "titleUr": "روزانہ سیل",
+      "description": "Net sales day by day (this month by default).",
+      "descriptionUr": "دن بہ دن نیٹ سیل (پہلے سے اس مہینے کی)۔",
+      "category": "sales",
+      "icon": "activity",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" }
+      ],
+      "sql": "SELECT CAST(inv_date AS DATE) AS day, SUM(net_amt) AS net_sales, COUNT(*) AS invoices FROM dbo.InvoiceLine WHERE inv_date >= {{from}} AND inv_date < {{to+1}} GROUP BY CAST(inv_date AS DATE) ORDER BY day"
+    },
+    {
+      "id": "sales-monthly",
+      "title": "Monthly sales",
+      "titleUr": "ماہانہ سیل",
+      "description": "Net sales month by month with growth (this year by default).",
+      "descriptionUr": "مہینہ وار نیٹ سیل اور اضافہ (پہلے سے اس سال کی)۔",
+      "category": "sales",
+      "icon": "trending-up",
+      "params": [{ "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "year_start" }],
+      "sql": "SELECT YEAR(inv_date) AS year, MONTH(inv_date) AS month, SUM(net_amt) AS net_sales, COUNT(*) AS invoices FROM dbo.InvoiceLine WHERE inv_date >= {{from}} AND inv_date < {{today+1}} GROUP BY YEAR(inv_date), MONTH(inv_date) ORDER BY year, month"
+    },
+    {
+      "id": "top-customers",
+      "title": "Top customers",
+      "titleUr": "بڑے گاہک",
+      "description": "Customers ranked by net sales (this month by default).",
+      "descriptionUr": "نیٹ سیل کے لحاظ سے بڑے گاہک (پہلے سے اس مہینے کے)۔",
+      "category": "customers",
+      "icon": "award",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" },
+        { "name": "limit", "label": "How many", "labelUr": "کتنے", "type": "number", "default": 10, "min": 1, "max": 100 }
+      ],
+      "sql": "SELECT TOP ({{limit}}) c.cust_name AS customer, SUM(i.net_amt) AS net_sales, COUNT(*) AS invoices FROM dbo.InvoiceLine AS i JOIN dbo.Customer AS c ON c.cust_id = i.cust_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY c.cust_id, c.cust_name ORDER BY net_sales DESC",
+      "sqlDuckdb": "SELECT c.cust_name AS customer, SUM(i.net_amt) AS net_sales, COUNT(*) AS invoices FROM dbo.InvoiceLine AS i JOIN dbo.Customer AS c ON c.cust_id = i.cust_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY c.cust_id, c.cust_name ORDER BY net_sales DESC LIMIT {{limit}}"
+    },
+    {
+      "id": "top-products",
+      "title": "Best-selling products",
+      "titleUr": "سب سے زیادہ بکنے والی مصنوعات",
+      "description": "Products ranked by units sold (this month by default).",
+      "descriptionUr": "بکنے والی اکائیوں کے لحاظ سے مصنوعات (پہلے سے اس مہینے کی)۔",
+      "category": "sales",
+      "icon": "shopping-bag",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" },
+        { "name": "limit", "label": "How many", "labelUr": "کتنے", "type": "number", "default": 10, "min": 1, "max": 100 }
+      ],
+      "sql": "SELECT TOP ({{limit}}) p.name AS product, co.comp_name AS company, SUM(d.sale_qty) AS units, SUM(d.total_net) AS net_sales FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no JOIN dbo.Product AS p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id JOIN dbo.Company AS co ON co.comp_id = d.comp_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY p.comp_id, p.group_id, p.prod_id, p.name, co.comp_name ORDER BY units DESC",
+      "sqlDuckdb": "SELECT p.name AS product, co.comp_name AS company, SUM(d.sale_qty) AS units, SUM(d.total_net) AS net_sales FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no JOIN dbo.Product AS p ON p.comp_id = d.comp_id AND p.group_id = d.group_id AND p.prod_id = d.prod_id JOIN dbo.Company AS co ON co.comp_id = d.comp_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY p.comp_id, p.group_id, p.prod_id, p.name, co.comp_name ORDER BY units DESC LIMIT {{limit}}"
+    },
+    {
+      "id": "company-sales",
+      "title": "Sales by company",
+      "titleUr": "کمپنی وار سیل",
+      "description": "Net sales per principal company (this month by default).",
+      "descriptionUr": "ہر کمپنی کی نیٹ سیل (پہلے سے اس مہینے کی)۔",
+      "category": "sales",
+      "icon": "briefcase",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" },
+        { "name": "limit", "label": "How many", "labelUr": "کتنی", "type": "number", "default": 15, "min": 1, "max": 100 }
+      ],
+      "sql": "SELECT TOP ({{limit}}) co.comp_name AS company, SUM(d.total_net) AS net_sales, SUM(d.sale_qty) AS units FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no JOIN dbo.Company AS co ON co.comp_id = d.comp_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY co.comp_id, co.comp_name ORDER BY net_sales DESC",
+      "sqlDuckdb": "SELECT co.comp_name AS company, SUM(d.total_net) AS net_sales, SUM(d.sale_qty) AS units FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no JOIN dbo.Company AS co ON co.comp_id = d.comp_id WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY co.comp_id, co.comp_name ORDER BY net_sales DESC LIMIT {{limit}}"
+    },
+    {
+      "id": "booking-men",
+      "title": "Sales by booking man",
+      "titleUr": "بکنگ مین وار سیل",
+      "description": "Net sales and invoices per salesman (this month by default).",
+      "descriptionUr": "ہر بکنگ مین کی نیٹ سیل اور انوائسز (پہلے سے اس مہینے کی)۔",
+      "category": "team",
+      "icon": "users",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" }
+      ],
+      "sql": "SELECT b.bName AS booking_man, SUM(i.net_amt) AS net_sales, COUNT(*) AS invoices, COUNT(DISTINCT i.cust_id) AS customers FROM dbo.InvoiceLine AS i JOIN dbo.BookingMan AS b ON b.bId = i.bId WHERE i.inv_date >= {{from}} AND i.inv_date < {{to+1}} GROUP BY b.bId, b.bName ORDER BY net_sales DESC"
+    },
+    {
+      "id": "stock-shortage",
+      "title": "Stock shortage",
+      "titleUr": "اسٹاک کی کمی",
+      "description": "Products that are selling but will run out within the given days at the last 30 days' sales rate. Out-of-stock items first.",
+      "descriptionUr": "بکنے والی مصنوعات جن کا اسٹاک پچھلے 30 دن کی رفتار سے دیے گئے دنوں میں ختم ہو جائے گا۔ ختم شدہ پہلے۔",
+      "category": "stock",
+      "icon": "alert-triangle",
+      "alert": true,
+      "summary": true,
+      "params": [{ "name": "days", "label": "Days of stock left under", "labelUr": "باقی دنوں سے کم", "type": "number", "default": 7, "min": 1, "max": 90 }],
+      "sql": "WITH sold AS (SELECT d.comp_id, d.group_id, d.prod_id, SUM(d.sale_qty) AS qty FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no WHERE i.inv_date >= {{today-30}} AND i.inv_date < {{today+1}} GROUP BY d.comp_id, d.group_id, d.prod_id) SELECT TOP (500) p.name AS product, co.comp_name AS company, p.stock AS in_stock, s.qty AS sold_30_days, CAST(CASE WHEN p.stock <= 0 THEN 0 ELSE p.stock * 30.0 / s.qty END AS DECIMAL(10, 1)) AS days_left FROM sold AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = p.comp_id WHERE s.qty > 0 AND ISNULL(p.del, 0) = 0 AND p.stock * 30.0 / s.qty < {{days}} ORDER BY days_left, sold_30_days DESC, product, p.comp_id, p.group_id, p.prod_id",
+      "sqlDuckdb": "WITH sold AS (SELECT d.comp_id, d.group_id, d.prod_id, SUM(d.sale_qty) AS qty FROM dbo.InvoiceDetail AS d JOIN dbo.InvoiceLine AS i ON i.inv_no = d.inv_no WHERE i.inv_date >= {{today-30}} AND i.inv_date < {{today+1}} GROUP BY d.comp_id, d.group_id, d.prod_id) SELECT p.name AS product, co.comp_name AS company, p.stock AS in_stock, s.qty AS sold_30_days, CAST(CASE WHEN p.stock <= 0 THEN 0 ELSE p.stock * 30.0 / s.qty END AS DECIMAL(10, 1)) AS days_left FROM sold AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = p.comp_id WHERE s.qty > 0 AND NOT COALESCE(p.del, false) AND p.stock * 30.0 / s.qty < {{days}} ORDER BY days_left, sold_30_days DESC, product, p.comp_id, p.group_id, p.prod_id LIMIT 500"
+    },
+    {
+      "id": "expiring-stock",
+      "title": "Stock expiring soon",
+      "titleUr": "جلد ختم ہونے والی میعاد",
+      "description": "Batches in stock that expire before the given date (90 days by default), soonest first.",
+      "descriptionUr": "اسٹاک کے وہ بیچ جن کی میعاد دی گئی تاریخ سے پہلے ختم ہو رہی ہے۔",
+      "category": "stock",
+      "icon": "clock",
+      "alert": true,
+      "params": [{ "name": "until", "label": "Expiring before", "labelUr": "اس تاریخ سے پہلے", "type": "date", "default": "+90d" }],
+      "sql": "SELECT TOP (200) p.name AS product, co.comp_name AS company, s.batchNo AS batch, s.qty AS units, CAST(s.expdate AS DATE) AS expires, DATEDIFF(day, {{today}}, s.expdate) AS days_left, CAST(s.qty * s.purchaseprice AS DECIMAL(15, 2)) AS stock_value FROM dbo.StockDetail AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = s.comp_id WHERE s.qty > 0 AND s.expdate >= {{today}} AND s.expdate < {{until+1}} ORDER BY s.expdate, p.name",
+      "sqlDuckdb": "SELECT p.name AS product, co.comp_name AS company, s.batchNo AS batch, s.qty AS units, CAST(s.expdate AS DATE) AS expires, date_diff('day', {{today}}, CAST(s.expdate AS DATE)) AS days_left, CAST(s.qty * s.purchaseprice AS DECIMAL(15, 2)) AS stock_value FROM dbo.StockDetail AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = s.comp_id WHERE s.qty > 0 AND s.expdate >= {{today}} AND s.expdate < {{until+1}} ORDER BY s.expdate, p.name LIMIT 200"
+    },
+    {
+      "id": "expired-stock",
+      "title": "Expired stock on hand",
+      "titleUr": "میعاد ختم شدہ اسٹاک",
+      "description": "Batches still in stock past their expiry date, largest value first.",
+      "descriptionUr": "وہ بیچ جو میعاد ختم ہونے کے بعد بھی اسٹاک میں ہیں۔",
+      "category": "stock",
+      "icon": "x-octagon",
+      "alert": true,
+      "sql": "SELECT TOP (200) p.name AS product, co.comp_name AS company, s.batchNo AS batch, s.qty AS units, CAST(s.expdate AS DATE) AS expired_on, CAST(s.qty * s.purchaseprice AS DECIMAL(15, 2)) AS stock_value FROM dbo.StockDetail AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = s.comp_id WHERE s.qty > 0 AND s.expdate < {{today}} ORDER BY stock_value DESC, p.name",
+      "sqlDuckdb": "SELECT p.name AS product, co.comp_name AS company, s.batchNo AS batch, s.qty AS units, CAST(s.expdate AS DATE) AS expired_on, CAST(s.qty * s.purchaseprice AS DECIMAL(15, 2)) AS stock_value FROM dbo.StockDetail AS s JOIN dbo.Product AS p ON p.comp_id = s.comp_id AND p.group_id = s.group_id AND p.prod_id = s.prod_id JOIN dbo.Company AS co ON co.comp_id = s.comp_id WHERE s.qty > 0 AND s.expdate < {{today}} ORDER BY stock_value DESC, p.name LIMIT 200"
+    },
+    {
+      "id": "receivables",
+      "title": "Customers who owe the most",
+      "titleUr": "سب سے زیادہ بقایا والے گاہک",
+      "description": "Outstanding receivable balance per customer, largest first.",
+      "descriptionUr": "ہر گاہک کا بقایا، سب سے زیادہ پہلے۔",
+      "category": "finance",
+      "icon": "credit-card",
+      "params": [{ "name": "limit", "label": "How many", "labelUr": "کتنے", "type": "number", "default": 20, "min": 1, "max": 200 }],
+      "sql": "SELECT TOP ({{limit}}) c.cust_name AS customer, a.name AS area, c.cust_rec_balance AS balance, c.credit_limit FROM dbo.Customer AS c LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE c.cust_rec_balance > 0 AND ISNULL(c.del, 0) = 0 ORDER BY balance DESC",
+      "sqlDuckdb": "SELECT c.cust_name AS customer, a.name AS area, c.cust_rec_balance AS balance, c.credit_limit FROM dbo.Customer AS c LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE c.cust_rec_balance > 0 AND NOT COALESCE(c.del, false) ORDER BY balance DESC LIMIT {{limit}}"
+    },
+    {
+      "id": "over-credit-limit",
+      "title": "Over credit limit",
+      "titleUr": "کریڈٹ حد سے زیادہ",
+      "description": "Customers whose balance is above their credit limit.",
+      "descriptionUr": "وہ گاہک جن کا بقایا ان کی کریڈٹ حد سے زیادہ ہے۔",
+      "category": "finance",
+      "icon": "alert-circle",
+      "alert": true,
+      "sql": "SELECT c.cust_name AS customer, a.name AS area, c.cust_rec_balance AS balance, c.credit_limit, c.cust_rec_balance - c.credit_limit AS over_by FROM dbo.Customer AS c LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE c.credit_limit > 0 AND c.cust_rec_balance > c.credit_limit AND ISNULL(c.del, 0) = 0 ORDER BY over_by DESC",
+      "sqlDuckdb": "SELECT c.cust_name AS customer, a.name AS area, c.cust_rec_balance AS balance, c.credit_limit, c.cust_rec_balance - c.credit_limit AS over_by FROM dbo.Customer AS c LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE c.credit_limit > 0 AND c.cust_rec_balance > c.credit_limit AND NOT COALESCE(c.del, false) ORDER BY over_by DESC"
+    },
+    {
+      "id": "cash-received",
+      "title": "Cash received",
+      "titleUr": "وصول شدہ رقم",
+      "description": "Cash collected from customers day by day (this month by default).",
+      "descriptionUr": "گاہکوں سے روزانہ وصول ہونے والی رقم (پہلے سے اس مہینے کی)۔",
+      "category": "finance",
+      "icon": "dollar-sign",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" }
+      ],
+      "sql": "SELECT CAST([date] AS DATE) AS day, SUM(amt) AS received, COUNT(*) AS receipts FROM dbo.CashRecieved WHERE [date] >= {{from}} AND [date] < {{to+1}} GROUP BY CAST([date] AS DATE) ORDER BY day",
+      "sqlDuckdb": "SELECT CAST(\"date\" AS DATE) AS day, SUM(amt) AS received, COUNT(*) AS receipts FROM dbo.CashRecieved WHERE \"date\" >= {{from}} AND \"date\" < {{to+1}} GROUP BY CAST(\"date\" AS DATE) ORDER BY day"
+    },
+    {
+      "id": "sales-returns",
+      "title": "Sales returns by customer",
+      "titleUr": "گاہک وار واپسی",
+      "description": "Returned value per customer (this month by default).",
+      "descriptionUr": "ہر گاہک کی واپس کی گئی مالیت (پہلے سے اس مہینے کی)۔",
+      "category": "sales",
+      "icon": "corner-up-left",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" },
+        { "name": "limit", "label": "How many", "labelUr": "کتنے", "type": "number", "default": 15, "min": 1, "max": 100 }
+      ],
+      "sql": "SELECT TOP ({{limit}}) c.cust_name AS customer, SUM(r.netamount) AS returned, COUNT(*) AS returns FROM dbo.SalesReturnLine AS r JOIN dbo.Customer AS c ON c.cust_id = r.cust_id WHERE r.srdate >= {{from}} AND r.srdate < {{to+1}} GROUP BY c.cust_id, c.cust_name ORDER BY returned DESC",
+      "sqlDuckdb": "SELECT c.cust_name AS customer, SUM(r.netamount) AS returned, COUNT(*) AS returns FROM dbo.SalesReturnLine AS r JOIN dbo.Customer AS c ON c.cust_id = r.cust_id WHERE r.srdate >= {{from}} AND r.srdate < {{to+1}} GROUP BY c.cust_id, c.cust_name ORDER BY returned DESC LIMIT {{limit}}"
+    },
+    {
+      "id": "lapsed-customers",
+      "title": "Customers who stopped buying",
+      "titleUr": "خریداری بند کرنے والے گاہک",
+      "description": "Customers who bought in the last 180 days but not in the last N days, biggest buyers first.",
+      "descriptionUr": "وہ گاہک جنہوں نے پچھلے 180 دن میں خریدا مگر حالیہ دنوں میں نہیں۔",
+      "category": "customers",
+      "icon": "user-x",
+      "alert": true,
+      "params": [{ "name": "days", "label": "No purchase for (days)", "labelUr": "کتنے دن سے خریداری نہیں", "type": "number", "default": 30, "min": 7, "max": 170 }],
+      "sql": "SELECT TOP (50) c.cust_name AS customer, a.name AS area, CAST(MAX(i.inv_date) AS DATE) AS last_invoice, DATEDIFF(day, MAX(i.inv_date), {{today}}) AS days_since, SUM(i.net_amt) AS sales_180_days FROM dbo.InvoiceLine AS i JOIN dbo.Customer AS c ON c.cust_id = i.cust_id LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE i.inv_date >= {{today-180}} GROUP BY c.cust_id, c.cust_name, a.name HAVING MAX(i.inv_date) < {{today-days}} ORDER BY sales_180_days DESC",
+      "sqlDuckdb": "SELECT c.cust_name AS customer, a.name AS area, CAST(MAX(i.inv_date) AS DATE) AS last_invoice, date_diff('day', CAST(MAX(i.inv_date) AS DATE), {{today}}) AS days_since, SUM(i.net_amt) AS sales_180_days FROM dbo.InvoiceLine AS i JOIN dbo.Customer AS c ON c.cust_id = i.cust_id LEFT JOIN dbo.TblArea AS a ON a.area_id = c.area_id WHERE i.inv_date >= {{today-180}} GROUP BY c.cust_id, c.cust_name, a.name HAVING MAX(i.inv_date) < {{today-days}} ORDER BY sales_180_days DESC LIMIT 50"
+    },
+    {
+      "id": "purchases",
+      "title": "Purchases by company",
+      "titleUr": "کمپنی وار خریداری",
+      "description": "Purchase invoices from each principal (this month by default).",
+      "descriptionUr": "ہر کمپنی سے خریداری (پہلے سے اس مہینے کی)۔",
+      "category": "stock",
+      "icon": "truck",
+      "params": [
+        { "name": "from", "label": "From", "labelUr": "سے", "type": "date", "default": "month_start" },
+        { "name": "to", "label": "To", "labelUr": "تک", "type": "date", "default": "today" }
+      ],
+      "sql": "SELECT co.comp_name AS company, SUM(pl.netamount) AS purchased, COUNT(*) AS invoices FROM dbo.PurchaseLine AS pl JOIN dbo.Company AS co ON co.comp_id = pl.comp_id WHERE pl.pdate >= {{from}} AND pl.pdate < {{to+1}} GROUP BY co.comp_id, co.comp_name ORDER BY purchased DESC"
+    }
+  ]
+}

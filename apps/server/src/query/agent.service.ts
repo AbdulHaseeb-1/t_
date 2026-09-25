@@ -134,6 +134,7 @@ export class AgentService {
           tier: input.tier,
           messages,
           tools: TOOLS,
+          purpose: 'agent',
           temperature: 0,
           cacheKey: `agent:${schemaHash}`,
         },

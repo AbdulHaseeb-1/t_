@@ -21,6 +21,10 @@ const light = {
   danger: '#B3261E',
   dangerSoft: '#F9E3E1',
   scrim: 'rgba(20, 19, 17, 0.32)',
+  /** Cards float on a soft, warm two-layer shadow instead of a border. */
+  shadow: '0px 1px 2px rgba(60, 50, 30, 0.05), 0px 4px 16px rgba(60, 50, 30, 0.07)',
+  /** Small controls (chips): a lighter lift. */
+  shadowSm: '0px 1px 2px rgba(60, 50, 30, 0.06), 0px 2px 8px rgba(60, 50, 30, 0.05)',
 };
 
 const dark: typeof light = {
@@ -39,9 +43,38 @@ const dark: typeof light = {
   danger: '#F2B8B5',
   dangerSoft: '#3B2322',
   scrim: 'rgba(0, 0, 0, 0.5)',
+  // Dark surfaces are lighter than the page, so a deeper shadow only adds depth.
+  shadow: '0px 1px 2px rgba(0, 0, 0, 0.22), 0px 6px 18px rgba(0, 0, 0, 0.20)',
+  shadowSm: '0px 1px 2px rgba(0, 0, 0, 0.20), 0px 2px 8px rgba(0, 0, 0, 0.16)',
 };
 
 export type Palette = typeof light;
+
+/**
+ * Chart colors: the validated categorical order (fixed, never cycled; checked
+ * with the dataviz validator against this app's surfaces in both modes), a
+ * de-emphasis gray for "context" marks, and status colors reserved for
+ * up/down deltas (always shown with an arrow and a sign, never color alone).
+ */
+const chartLight = {
+  series: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'],
+  context: '#D5D2C8',
+  grid: '#ECEAE3',
+  good: '#0ca30c',
+  bad: '#d03b3b',
+};
+const chartDark: typeof chartLight = {
+  series: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300'],
+  context: '#55544F',
+  grid: '#3A3936',
+  good: '#0ca30c',
+  bad: '#d03b3b',
+};
+export type ChartPalette = typeof chartLight;
+
+export function useChartPalette(): ChartPalette {
+  return useColorScheme() === 'dark' ? chartDark : chartLight;
+}
 
 export const fonts = {
   sans: 'DMSans_400Regular',
@@ -66,6 +99,11 @@ export const type = {
 } as const;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
+
+/** A borderless, softly shadowed card: continuous (squircle) corners on iOS. */
+export function card(p: Palette, size: 'md' | 'sm' = 'md') {
+  return { backgroundColor: p.surface, boxShadow: size === 'sm' ? p.shadowSm : p.shadow, borderCurve: 'continuous' as const };
+}
 
 export function usePalette(): Palette {
   return useColorScheme() === 'dark' ? dark : light;

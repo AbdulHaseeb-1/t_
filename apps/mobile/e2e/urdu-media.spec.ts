@@ -92,13 +92,15 @@ test('charts: grouped results draw as bars, time series as lines', async ({ page
   await page.getByRole('textbox', { name: 'Message' }).fill('ہر سیلز چینل کی کل خالص آمدنی کتنی ہے؟');
   await page.getByRole('button', { name: 'بھیجیں' }).click();
   await done(page);
-  await expect(page.getByLabel('Bar chart')).toBeVisible();
+  await expect(page.getByTestId(/^chart-(bars|donut)$/)).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Message' }).fill('2025 کی ماہانہ خالص آمدنی مہینے کے نمبر کے ساتھ دکھائیں');
   await page.getByRole('button', { name: 'بھیجیں' }).click();
   await done(page);
-  await expect(page.getByLabel('Line chart')).toBeVisible();
-  await page.getByLabel('Line chart').scrollIntoViewIfNeeded();
+  // Twelve months or fewer read as growth columns: latest month highlighted, change vs the previous one.
+  const growth = page.getByTestId(/^chart-(columns|trend)$/);
+  await expect(growth).toBeVisible();
+  await growth.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/urdu-charts.png` });
 });
 
@@ -106,10 +108,12 @@ test('switching to English applies instantly and persists', async ({ page }) => 
   await fresh(page);
   await page.getByRole('button', { name: 'گفتگوئیں کھولیں' }).click();
   await page.getByRole('button', { name: 'سیٹنگز' }).click();
-  // The first "English" is the interface language (the reply-language group has one too).
-  await page.getByRole('radio', { name: 'English' }).first().click();
-  await expect(page.getByText('Language', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.getByRole('button', { name: 'ایپ کی زبان, اردو' }).click();
+  await page.getByRole('radio', { name: 'English' }).click();
+  // Applies instantly: this page is already in English.
+  await expect(page.getByRole('heading', { name: 'App language' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('button', { name: 'Close settings' }).click();
   await expect(page.getByText('What would you like to know?')).toBeVisible();
   await page.reload();
   await expect(page.getByText('What would you like to know?')).toBeVisible();

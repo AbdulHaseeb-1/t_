@@ -1,5 +1,8 @@
+import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { rm } from 'node:fs/promises';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import sql from 'mssql';
@@ -14,11 +17,24 @@ const host = process.env.E2E_DB_HOST;
 const password = process.env.E2E_DB_PASSWORD ?? '';
 const DB = 'E2E_Shop';
 const CACHE_FILE = '.cache/e2e-schema.json';
+const STATE = ['.cache/e2e-templates.json', '.cache/e2e-schedules.json', '.cache/e2e-inbox.json', '.cache/e2e-devices.json'];
+const OWNER = '923001112222';
 
 describe.skipIf(!host)('server e2e (SQL Server)', () => {
   let app: NestFastifyApplication;
   let llm: FakeOpenAI;
   let transcript = '';
+  /** Fake WhatsApp Graph API: records what the bot sends. */
+  const sent: Record<string, any>[] = [];
+  const graph: Server = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      sent.push(JSON.parse(raw || '{}'));
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ messages: [{ id: 'wamid.out' }] }));
+    });
+  });
   let script: (body: Record<string, unknown>) => {
     content?: string;
     toolCalls?: { id: string; name: string; arguments: string }[];
@@ -29,7 +45,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       .getHttpAdapter()
       .getInstance()
       .inject({ method, url, payload, headers: { 'x-api-key': 'secret' } });
-    return { status: res.statusCode, body: res.json() as Record<string, any> };
+    return { status: res.statusCode, body: (res.body ? res.json() : undefined) as Record<string, any> };
   };
 
   beforeAll(async () => {
@@ -77,11 +93,24 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       OPENAI_BASE_URL: await llm.start(),
       LLM_PROVIDER: 'openai',
       MEDIA_MAX_AUDIO_MB: '1',
+      TEMPLATES_FILE: 'test/fixtures/templates.json',
+      USER_TEMPLATES_FILE: STATE[0],
+      SCHEDULES_FILE: STATE[1],
+      INBOX_FILE: STATE[2],
+      DEVICES_FILE: STATE[3],
+      SCHEDULER_ENABLED: 'false',
+      WHATSAPP_TOKEN: 'wa-token',
+      WHATSAPP_PHONE_NUMBER_ID: '555',
+      WHATSAPP_VERIFY_TOKEN: 'verify-me',
+      WHATSAPP_APP_SECRET: 'app-secret',
+      WHATSAPP_ALLOWED_NUMBERS: OWNER,
+      WHATSAPP_GRAPH_URL: await new Promise<string>((ok) => graph.listen(0, '127.0.0.1', () => ok(`http://127.0.0.1:${(graph.address() as AddressInfo).port}/v25.0`))),
     });
+    for (const f of STATE) await rm(f, { force: true });
 
     const { AppModule } = await import('../src/app.module.js');
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { rawBody: true });
     await configureApp(app);
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -92,6 +121,90 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     await llm?.stop();
     await rm(CACHE_FILE, { force: true });
     await rm('.cache/e2e-examples.json', { force: true });
+    for (const f of STATE) await rm(f, { force: true });
+    await new Promise((ok) => graph.close(ok));
+  });
+
+  it('runs report templates with typed parameters and saves answers as reports', async () => {
+    const list = await inject('GET', '/templates');
+    expect(list.body.templates.map((t: { id: string }) => t.id)).toEqual(['orders-on-day', 'top-customers']);
+    expect(list.body.templates[0]).not.toHaveProperty('sql');
+
+    const day = await inject('POST', '/templates/orders-on-day/run', { params: { day: '2025-01-05' } });
+    expect(day.status).toBe(200);
+    expect(day.body.sql).toContain("'20250105'"); // SQL Server date literal no DATEFORMAT can misread
+    expect(day.body.result.rows).toEqual([[1]]);
+    expect(day.body.template).toMatchObject({ id: 'orders-on-day', period: '5 Jan 2025' });
+
+    const top = await inject('POST', '/templates/top-customers/run', { params: { limit: 2 } });
+    expect(top.body.result.rows).toHaveLength(2);
+    const bad = await inject('POST', '/templates/top-customers/run', { params: { limit: '2; DROP TABLE dbo.Orders' } });
+    expect(bad.status).toBe(400);
+
+    const saved = await inject('POST', '/templates', { title: 'Order count', question: 'How many orders?', sql: 'SELECT COUNT(*) AS n FROM dbo.Orders' });
+    expect(saved.status).toBe(201);
+    expect((await inject('POST', `/templates/${saved.body.id}/run`, {})).body.result.rows).toEqual([[500]]);
+    const rejected = await inject('POST', '/templates', { title: 'Wipe', question: 'wipe it', sql: 'DELETE FROM dbo.Orders' });
+    expect(rejected.status).toBe(400);
+    expect((await inject('DELETE', `/templates/${saved.body.id}`)).status).toBe(204);
+    expect((await inject('DELETE', '/templates/top-customers')).status).toBe(403);
+  });
+
+  it('schedules a report, runs it now, and files it in the inbox', async () => {
+    const created = await inject('POST', '/schedules', {
+      name: 'Top customers',
+      target: { templateId: 'top-customers', params: { limit: 3 } },
+      frequency: { type: 'weekly', time: '08:30', weekdays: [1] },
+      deliver: { app: true, whatsapp: [`+${OWNER}`] },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ timezone: 'Asia/Karachi', deliver: { whatsapp: [OWNER] } });
+    expect(new Date(created.body.nextRunAt).getUTCDay()).toBe(1); // 08:30 Monday Karachi is 03:30 UTC Monday
+
+    sent.length = 0;
+    const run = await inject('POST', `/schedules/${created.body.id}/run`);
+    expect(run.body).toMatchObject({ status: 'ok', rows: 3 });
+    expect(sent[0]).toMatchObject({ to: OWNER, type: 'text' });
+    expect(sent[0].text.body).toContain('*📊 Top customers*');
+
+    const inbox = await inject('GET', '/inbox');
+    expect(inbox.body.unread).toBe(1);
+    expect(inbox.body.reports[0]).not.toHaveProperty('response');
+    const full = await inject('GET', `/inbox/${run.body.id}`);
+    expect(full.body.response.result.rows).toHaveLength(3);
+    await inject('POST', `/inbox/${run.body.id}/read`);
+    expect((await inject('GET', '/inbox')).body.unread).toBe(0);
+
+    const list = await inject('GET', '/schedules');
+    expect(list.body.schedules[0]).toMatchObject({ lastStatus: 'ok', description: 'Mon at 08:30' });
+    expect((await inject('DELETE', `/schedules/${created.body.id}`)).status).toBe(204);
+  });
+
+  it('answers WhatsApp messages only on signed webhook calls', async () => {
+    const http = app.getHttpAdapter().getInstance();
+    const verify = await http.inject({ method: 'GET', url: '/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=verify-me&hub.challenge=12345' });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.body).toBe('12345');
+    expect((await http.inject({ method: 'GET', url: '/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=1' })).statusCode).toBe(403);
+
+    const payload = JSON.stringify({
+      object: 'whatsapp_business_account',
+      entry: [{ changes: [{ value: { messages: [{ id: 'wamid.in1', from: OWNER, type: 'text', text: { body: 'menu' } }] } }] }],
+    });
+    const headers = { 'content-type': 'application/json' };
+    expect((await http.inject({ method: 'POST', url: '/whatsapp/webhook', payload, headers })).statusCode).toBe(403);
+    const forged = `sha256=${createHmac('sha256', 'wrong').update(payload).digest('hex')}`;
+    expect((await http.inject({ method: 'POST', url: '/whatsapp/webhook', payload, headers: { ...headers, 'x-hub-signature-256': forged } })).statusCode).toBe(403);
+
+    sent.length = 0;
+    const signature = `sha256=${createHmac('sha256', 'app-secret').update(payload).digest('hex')}`;
+    const ok = await http.inject({ method: 'POST', url: '/whatsapp/webhook', payload, headers: { ...headers, 'x-hub-signature-256': signature } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ received: 1 });
+    const { WhatsAppService } = await import('../src/whatsapp/whatsapp.service.js');
+    await app.get(WhatsAppService).idle();
+    const menu = sent.find((m) => m.type === 'interactive');
+    expect(menu?.interactive.action.sections[0].rows.map((r: { id: string }) => r.id)).toEqual(['tpl:orders-on-day', 'tpl:top-customers']);
   });
 
   it('reports health without an API key and protects everything else', async () => {
@@ -255,7 +368,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       .getHttpAdapter()
       .getInstance()
       .inject({ method: 'POST', url: '/query/ask/media', payload: form, headers: { 'x-api-key': 'secret' } });
-    return { status: res.statusCode, body: res.json() as Record<string, any> };
+    return { status: res.statusCode, body: (res.body ? res.json() : undefined) as Record<string, any> };
   };
   const role = (body: Record<string, unknown>) =>
     String((body.messages as { content: unknown }[])[0].content);
@@ -282,7 +395,10 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
     });
     expect(body.translatedQuestion).toBeUndefined(); // schema fits: the SQL model reads the Urdu directly
     expect(body.usage.models).toContain('openai:gpt-4o-transcribe');
-    expect(body.usage.costComplete).toBe(false);
+    // Transcription is priced too, so the reported cost covers every call.
+    expect(body.usage.costComplete).toBe(true);
+    expect(body.usage.calls.map((c: { purpose: string }) => c.purpose)).toContain('transcribe');
+    expect(body.speech).toMatchObject({ provider: 'openai', model: 'gpt-4o-transcribe' });
     const sent = llm.transcriptions.at(-1)!;
     expect(sent).toContain('name="model"');
     expect(sent).toContain('gpt-4o-transcribe');

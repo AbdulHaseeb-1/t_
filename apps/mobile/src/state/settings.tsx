@@ -9,6 +9,7 @@ const API_KEY = 'settings.apiKey';
 const LANG_KEY = 'settings.language';
 const REPLY_KEY = 'settings.replyLanguage';
 const SOUNDS_KEY = 'settings.sounds';
+const SHOW_SQL_KEY = 'settings.showSql';
 
 /**
  * Release builds ship with no server: the address is set in the app on first run.
@@ -26,10 +27,13 @@ interface SettingsValue {
   /** Language of answers: auto follows each question; ur-Latn = Roman Urdu ("Ap k 20 customers hain"). */
   replyLanguage: ReplyLanguage;
   sounds: boolean;
+  /** Show the SQL behind answers (off: answers show text, chart and data only). */
+  showSql: boolean;
   save(next: ServerConfig): Promise<void>;
   setLanguage(lang: UiLanguage): void;
   setReplyLanguage(lang: ReplyLanguage): void;
   setSounds(on: boolean): void;
+  setShowSql(on: boolean): void;
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null);
@@ -39,6 +43,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [language, setLang] = useState<UiLanguage>(DEFAULT_LANGUAGE);
   const [replyLanguage, setReply] = useState<ReplyLanguage>('auto');
   const [sounds, setSoundsState] = useState(true);
+  const [showSql, setShowSqlState] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -49,12 +54,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       storage.get<UiLanguage>(LANG_KEY),
       storage.get<ReplyLanguage>(REPLY_KEY),
       storage.get<boolean>(SOUNDS_KEY),
-    ]).then(([url, key, lang, reply, snd]) => {
+      storage.get<boolean>(SHOW_SQL_KEY),
+    ]).then(([url, key, lang, reply, snd, sql]) => {
       if (!alive) return;
       setServer({ baseUrl: url || DEFAULT_API_URL, apiKey: key || undefined });
       if (lang === 'ur' || lang === 'en') setLang(lang);
       if (reply && REPLY_LANGUAGES.includes(reply)) setReply(reply);
       if (snd === false) setSoundsState(false);
+      if (sql === true) setShowSqlState(true);
       setFeedbackEnabled(snd !== false);
       if (snd !== false) preloadFeedback();
       setReady(true);
@@ -85,11 +92,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void storage.set(SOUNDS_KEY, on);
   }, []);
 
+  const setShowSql = useCallback((on: boolean) => {
+    setShowSqlState(on);
+    void storage.set(SHOW_SQL_KEY, on);
+  }, []);
+
   const value = useMemo(
-    () => ({ ready, server, language, replyLanguage, sounds, save, setLanguage, setReplyLanguage, setSounds }),
-    [ready, server, language, replyLanguage, sounds, save, setLanguage, setReplyLanguage, setSounds],
+    () => ({ ready, server, language, replyLanguage, sounds, showSql, save, setLanguage, setReplyLanguage, setSounds, setShowSql }),
+    [ready, server, language, replyLanguage, sounds, showSql, save, setLanguage, setReplyLanguage, setSounds, setShowSql],
   );
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+}
+
+/** The saved server outside React (background tasks run without the provider). */
+export async function loadServerConfig(): Promise<ServerConfig> {
+  const [url, key] = await Promise.all([storage.get<string>(URL_KEY), secrets.get(API_KEY)]);
+  return { baseUrl: url || DEFAULT_API_URL, apiKey: key || undefined };
 }
 
 export function useSettings(): SettingsValue {

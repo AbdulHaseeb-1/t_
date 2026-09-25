@@ -25,6 +25,7 @@ const r = (id: string, repeat: number, ok: boolean, extra: Partial<CaseResult> =
     costUsd: 0.001,
     costComplete: true,
     models: [],
+    calls: [],
   },
   ...extra,
 });

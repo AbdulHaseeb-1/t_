@@ -11,12 +11,12 @@ import {
   useRef,
 } from 'react';
 import { useI18n } from '../i18n';
-import { ApiError, ask, askMedia, type MediaFile } from '../lib/api';
+import { ApiError, ask, askMedia, type MediaFile, type ParamValues, runTemplate } from '../lib/api';
 import { describeError, needsSettings } from '../lib/errors';
 import { cue } from '../lib/feedback';
 import { newId } from '../lib/id';
 import { storage } from '../lib/storage';
-import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState } from './chat-reducer';
+import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState, type ReportRef } from './chat-reducer';
 import { useSettings } from './settings';
 
 const STORAGE_KEY = 'chats.v1';
@@ -30,6 +30,8 @@ export interface Outgoing {
 
 interface ChatActions {
   send(input: Outgoing | string): void;
+  /** Runs a report template as a chat turn: `label` is what the user bubble shows. */
+  runReport(id: string, params: ParamValues, label: string): void;
   retry(assistantId: string): void;
   stop(): void;
   newChat(): void;
@@ -43,8 +45,9 @@ const ActionsContext = createContext<ChatActions | null>(null);
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { server, replyLanguage } = useSettings();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const tRef = useRef(t);
+  const langRef = useRef(lang);
   /** Voice/photo payloads by assistant message, so Retry can resend them this session. */
   const media = useRef(new Map<string, Pick<Outgoing, 'audio' | 'image'>>());
   const inflight = useRef(new Map<string, { chatId: string; controller: AbortController }>());
@@ -58,7 +61,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     serverRef.current = server;
     replyRef.current = replyLanguage;
     tRef.current = t;
-  }, [state, server, replyLanguage, t]);
+    langRef.current = lang;
+  }, [state, server, replyLanguage, t, lang]);
 
   useEffect(() => {
     void storage.get<Chat[]>(STORAGE_KEY).then((chats) => dispatch({ type: 'hydrate', chats: chats ?? [] }));
@@ -71,13 +75,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [state.chats, state.order, state.hydrated]);
 
-  const run = useCallback((chatId: string, assistantId: string, question: string, dispatchFn: Dispatch<ChatAction>) => {
+  const run = useCallback((chatId: string, assistantId: string, question: string, dispatchFn: Dispatch<ChatAction>, report?: ReportRef) => {
     const controller = new AbortController();
     inflight.current.set(assistantId, { chatId, controller });
     const context = contextFor(stateRef.current.chats[chatId], assistantId);
     const files = media.current.get(assistantId);
-    const request =
-      files?.audio || files?.image
+    // Reports answer in the reply language, or the app's language when replies follow the question.
+    const reportLang = replyRef.current === 'auto' ? langRef.current : replyRef.current;
+    const request = report
+      ? runTemplate(serverRef.current, report.id, report.params, reportLang, controller.signal)
+      : files?.audio || files?.image
         ? askMedia(
             serverRef.current,
             { question, context, audio: files.audio, image: files.image, language: replyRef.current },
@@ -121,12 +128,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           },
         });
       },
+      runReport(id, params, label) {
+        const chatId = stateRef.current.activeId ?? newId();
+        const assistantId = newId();
+        const report = { id, params };
+        run(chatId, assistantId, label, dispatch, report);
+        dispatch({ type: 'ask', chatId, userId: newId(), assistantId, question: label, now: Date.now(), report });
+      },
       retry(assistantId) {
         const chatId = stateRef.current.activeId;
         const msg = chatId ? stateRef.current.chats[chatId]?.messages.find((m) => m.id === assistantId) : undefined;
         if (!chatId || !msg || msg.role !== 'assistant' || inflight.current.has(assistantId)) return;
         dispatch({ type: 'retry', chatId, assistantId });
-        run(chatId, assistantId, msg.question, dispatch);
+        run(chatId, assistantId, msg.question, dispatch, msg.report);
       },
       stop() {
         for (const { controller } of inflight.current.values()) controller.abort();

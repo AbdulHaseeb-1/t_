@@ -108,6 +108,10 @@ export const envSchema = z.object({
 
   /** Speech-to-text model (OpenAI audio API). */
   TRANSCRIBE_MODEL: z.string().default('gpt-4o-transcribe'),
+  /** auto: Gemini when GEMINI_API_KEY is set, else OpenAI; the other one is the fallback. */
+  TRANSCRIBE_PROVIDER: z.enum(['auto', 'gemini', 'openai']).default('auto'),
+  GEMINI_TRANSCRIBE_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  GEMINI_BASE_URL: z.string().default('https://generativelanguage.googleapis.com'),
   /** Reading images: high detail + a little reasoning was needed to read small Urdu text reliably. */
   VISION_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).default('low'),
   MEDIA_MAX_AUDIO_MB: z.coerce.number().positive().default(10),
@@ -144,6 +148,7 @@ export const envSchema = z.object({
   LLM_BREAKER_COOLDOWN_MS: z.coerce.number().int().positive().default(60_000),
 
   OPENAI_API_KEY: optionalString,
+  GEMINI_API_KEY: optionalString,
   OPENAI_BASE_URL: optionalString,
   OPENAI_MODEL_FAST: z.string().default('gpt-6-luna'),
   OPENAI_MODEL_SMART: z.string().default('gpt-6-sol'),
@@ -161,6 +166,48 @@ export const envSchema = z.object({
   CACHE_SQL_TTL_S: z.coerce.number().int().nonnegative().default(86_400),
   /** Question -> full answer. Short-lived because data changes. */
   CACHE_ANSWER_TTL_S: z.coerce.number().int().nonnegative().default(120),
+
+  /** One-tap report templates (JSON, see infra/mssql/mds-epd.templates.json); empty = none built in. */
+  TEMPLATES_FILE: z.string().default(''),
+  /** Templates users save from the app. */
+  USER_TEMPLATES_FILE: z.string().default('.cache/templates.json'),
+  /** Time zone for "today" in reports and for schedule times. */
+  REPORT_TIMEZONE: z.string().default('Asia/Karachi'),
+
+  /** Runs scheduled reports in this process (turn off on extra replicas so each report runs once). */
+  SCHEDULER_ENABLED: bool(true),
+  SCHEDULES_FILE: z.string().default('.cache/schedules.json'),
+  INBOX_FILE: z.string().default('.cache/inbox.json'),
+  DEVICES_FILE: z.string().default('.cache/devices.json'),
+  /** Expo push service (app builds with FCM credentials); the app also polls the inbox without it. */
+  EXPO_PUSH_URL: z.string().default('https://exp.host/--/api/v2/push/send'),
+  EXPO_ACCESS_TOKEN: optionalString,
+
+  /** WhatsApp Cloud API (Meta). All of token, phone number id, verify token and app secret are needed. */
+  WHATSAPP_TOKEN: optionalString,
+  WHATSAPP_PHONE_NUMBER_ID: optionalString,
+  /** Any secret string; entered again in Meta's webhook settings. */
+  WHATSAPP_VERIFY_TOKEN: optionalString,
+  /** Meta app secret: every webhook call is checked against its X-Hub-Signature-256. */
+  WHATSAPP_APP_SECRET: optionalString,
+  /** Numbers allowed to query the database (international digits, comma-separated). Empty = nobody. */
+  WHATSAPP_ALLOWED_NUMBERS: csv,
+  WHATSAPP_GRAPH_URL: z.string().default('https://graph.facebook.com/v25.0'),
+  /** Approved template for scheduled reports sent outside the 24-hour window ({{1}} title, {{2}} summary). */
+  WHATSAPP_REPORT_TEMPLATE: optionalString,
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().default('en'),
+
+  /**
+   * Web model benchmark at /bench (runs the eval harness from the browser and
+   * spends API credits), off by default. Protected by API_KEY like every route.
+   */
+  BENCH_ENABLED: bool(false),
+  BENCH_DATASETS_DIR: z.string().default('eval/datasets'),
+  BENCH_REPORTS_DIR: z.string().default('eval/reports'),
+  /** Built web UI (apps/web/dist), served at /bench when present. */
+  BENCH_UI_DIR: z.string().default('../web/dist'),
+  /** Upper bound on cases x repeats x models per run, to cap spend. */
+  BENCH_MAX_CASE_RUNS: z.coerce.number().int().positive().default(2000),
 
   ASK_MAX_REPAIRS: z.coerce.number().int().nonnegative().default(2),
   ASK_ANSWER_MAX_ROWS: z.coerce.number().int().positive().default(60),

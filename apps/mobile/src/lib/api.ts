@@ -27,8 +27,35 @@ export interface AskResponse {
   result: QueryResult | null;
   cache: 'answer' | 'sql' | null;
   attempts: number;
-  timings: { totalMs: number; llmMs: number; dbMs: number };
-  usage: { llmCalls: number; costUsd?: number };
+  timings: { totalMs: number; llmMs: number; dbMs: number; mediaMs?: number };
+  usage: Usage;
+  /** Schema context the model saw (older servers omit the size fields). */
+  schema?: { tables: string[]; full: boolean; tableCount?: number; chars?: number; approxTokens?: number };
+  context?: { turns: number; engine: 'mssql' | 'duckdb' };
+  trace?: { repairs: number; escalated: boolean; emptyRecheck: boolean };
+  /** Voice messages: which speech-to-text model heard it. */
+  speech?: { provider: string; model: string };
+}
+
+export interface CallUsage {
+  purpose: string;
+  model: string;
+  promptTokens: number;
+  cachedPromptTokens: number;
+  completionTokens: number;
+  latencyMs: number;
+  costUsd?: number;
+}
+
+export interface Usage {
+  llmCalls: number;
+  promptTokens?: number;
+  cachedPromptTokens?: number;
+  completionTokens?: number;
+  costUsd?: number;
+  costComplete?: boolean;
+  models?: string[];
+  calls?: CallUsage[];
 }
 
 /** Answer language: auto follows the question; ur-Latn is Roman Urdu. */
@@ -82,6 +109,7 @@ async function request<T>(
   init: RequestInit & { timeoutMs?: number },
   signal?: AbortSignal,
 ): Promise<T> {
+  if (!cfg.baseUrl.trim()) throw new ApiError('unconfigured', 'No server address is set. Add it in Settings.');
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -90,8 +118,6 @@ async function request<T>(
   }, init.timeoutMs ?? ASK_TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort);
-
-  if (!cfg.baseUrl.trim()) throw new ApiError('unconfigured', 'No server address is set. Add it in Settings.');
 
   let res: Response;
   try {
@@ -186,4 +212,132 @@ export async function checkConnection(cfg: ServerConfig): Promise<Health & { aut
     if (err instanceof ApiError && err.kind === 'auth') return { ...h, authorized: false };
     throw err;
   }
+}
+
+// ── Reports: templates, schedules, inbox ─────────────────────────────────
+
+export type ReportCategory = 'sales' | 'stock' | 'customers' | 'finance' | 'team' | 'custom';
+
+export interface TemplateParam {
+  name: string;
+  label: string;
+  labelUr?: string;
+  type: 'date' | 'number';
+  default: string | number;
+  min?: number;
+  max?: number;
+}
+
+export interface ReportTemplate {
+  id: string;
+  title: string;
+  titleUr?: string;
+  description?: string;
+  descriptionUr?: string;
+  category: ReportCategory;
+  icon?: string;
+  params: TemplateParam[];
+  alert: boolean;
+  builtIn: boolean;
+  hasSql?: boolean;
+  question?: string;
+}
+
+export type ParamValues = Record<string, string | number>;
+
+export interface ReportResponse extends AskResponse {
+  template: { id: string; title: string; titleUr?: string; category: ReportCategory; alert: boolean; params: ParamValues; period: string };
+}
+
+export function listTemplates(cfg: ServerConfig, signal?: AbortSignal) {
+  return request<{ timezone: string; today: string; templates: ReportTemplate[] }>(cfg, '/templates', { method: 'GET', timeoutMs: 15_000 }, signal);
+}
+
+export function runTemplate(cfg: ServerConfig, id: string, params: ParamValues, language: 'en' | 'ur' | 'ur-Latn', signal?: AbortSignal) {
+  return request<ReportResponse>(cfg, `/templates/${encodeURIComponent(id)}/run`, { method: 'POST', body: JSON.stringify({ params, language, answer: true }) }, signal);
+}
+
+export function saveTemplate(cfg: ServerConfig, input: { title: string; question: string; sql?: string }) {
+  return request<ReportTemplate>(cfg, '/templates', { method: 'POST', body: JSON.stringify(input), timeoutMs: 30_000 });
+}
+
+export function deleteTemplate(cfg: ServerConfig, id: string) {
+  return request<void>(cfg, `/templates/${encodeURIComponent(id)}`, { method: 'DELETE', timeoutMs: 15_000 });
+}
+
+export type Frequency =
+  | { type: 'daily'; time: string }
+  | { type: 'weekly'; time: string; weekdays: number[] }
+  | { type: 'monthly'; time: string; day: number | 'last' }
+  | { type: 'cron'; expr: string };
+
+export interface ScheduleInput {
+  name: string;
+  target: { templateId: string; params?: ParamValues } | { question: string };
+  frequency: Frequency;
+  language: 'en' | 'ur' | 'ur-Latn';
+  deliver: { app: boolean; whatsapp: string[] };
+  onlyIfRows?: boolean;
+  enabled: boolean;
+}
+
+export interface Schedule extends ScheduleInput {
+  id: string;
+  timezone: string;
+  description?: string;
+  nextRunAt?: string;
+  lastRunAt?: string;
+  lastStatus?: 'ok' | 'skipped' | 'failed' | 'missed';
+  lastError?: string;
+  lastReportId?: string;
+}
+
+export function listSchedules(cfg: ServerConfig) {
+  return request<{ whatsapp: boolean; schedules: Schedule[] }>(cfg, '/schedules', { method: 'GET', timeoutMs: 15_000 });
+}
+
+export function saveSchedule(cfg: ServerConfig, input: ScheduleInput, id?: string) {
+  return request<Schedule>(cfg, id ? `/schedules/${encodeURIComponent(id)}` : '/schedules', { method: id ? 'PUT' : 'POST', body: JSON.stringify(input), timeoutMs: 20_000 });
+}
+
+export function deleteSchedule(cfg: ServerConfig, id: string) {
+  return request<void>(cfg, `/schedules/${encodeURIComponent(id)}`, { method: 'DELETE', timeoutMs: 15_000 });
+}
+
+export function runSchedule(cfg: ServerConfig, id: string) {
+  return request<InboxReport | { skipped: true; reason: string }>(cfg, `/schedules/${encodeURIComponent(id)}/run`, { method: 'POST' });
+}
+
+export interface InboxEntry {
+  id: string;
+  scheduleId?: string;
+  title: string;
+  createdAt: string;
+  read: boolean;
+  status: 'ok' | 'failed';
+  rows: number;
+  summary: string | null;
+  error?: string;
+  deliveries: { channel: 'app' | 'whatsapp'; to?: string; status: 'sent' | 'failed'; error?: string }[];
+}
+
+export interface InboxReport extends InboxEntry {
+  response?: ReportResponse;
+}
+
+export function listInbox(cfg: ServerConfig, since?: string, signal?: AbortSignal) {
+  const q = since ? `?since=${encodeURIComponent(since)}` : '';
+  return request<{ unread: number; reports: InboxEntry[] }>(cfg, `/inbox${q}`, { method: 'GET', timeoutMs: 15_000 }, signal);
+}
+
+export function getInboxReport(cfg: ServerConfig, id: string) {
+  return request<InboxReport>(cfg, `/inbox/${encodeURIComponent(id)}`, { method: 'GET', timeoutMs: 15_000 });
+}
+
+export function markInboxRead(cfg: ServerConfig, id?: string) {
+  return request<void>(cfg, id ? `/inbox/${encodeURIComponent(id)}/read` : '/inbox/read', { method: 'POST', timeoutMs: 15_000 });
+}
+
+export function registerDevice(cfg: ServerConfig, token: string, platform: 'android' | 'ios' | 'web') {
+  return request<void>(cfg, '/devices', { method: 'POST', body: JSON.stringify({ token, platform }), timeoutMs: 15_000 });
 }

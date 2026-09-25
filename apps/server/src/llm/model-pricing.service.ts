@@ -36,7 +36,9 @@ export class ModelPricingService {
     completionTokens: number,
   ): Promise<number | undefined> {
     await this.ensureLoaded();
-    const price = this.prices.get(provider === 'openai' ? `openai/${model}` : model);
+    const id = provider === 'openai' ? `openai/${model}` : model;
+    // gpt-4.1-mini-2025-04-14 is priced as its alias gpt-4.1-mini.
+    const price = this.prices.get(id) ?? this.prices.get(id.replace(/-\d{4}-\d{2}-\d{2}$/, ''));
     if (!price) return undefined;
     const cacheRead = price.cacheRead ?? price.prompt;
     return (

@@ -1,14 +1,11 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Logger } from '@nestjs/common';
 import sql from 'mssql';
-import type { QueryResult } from '../database/database.types.js';
-import { type Dataset, type EvalCase, loadDataset } from './dataset.js';
-import { flips, summarize, type Flip, type VariantSummary } from './metrics.js';
-import { buildPipeline } from './pipeline.js';
-import { renderText, type RunInfo } from './report-text.js';
-import { type CaseResult, mapLimit, runCase } from './runner.js';
+import { type Dataset, loadDataset } from './dataset.js';
+import { computeGold, evalBaseEnv, goldFor, runEval, saveReport, selectCases, type Variant } from './engine.js';
+import { renderText } from './report-text.js';
 
 const HELP = `Text-to-SQL evaluation harness
 
@@ -52,7 +49,7 @@ const ABLATION: Record<string, Record<string, string>> = {
   'default+few-shot': { ASK_FEWSHOT_K: '3', EVAL_FEWSHOT: 'dataset' },
 };
 
-function parseVariant(spec: string): [string, Record<string, string>] {
+function parseVariant(spec: string): Variant {
   const idx = spec.indexOf(':');
   const name = idx === -1 ? spec : spec.slice(0, idx);
   const body = idx === -1 ? '' : spec.slice(idx + 1);
@@ -125,139 +122,62 @@ async function main(): Promise<void> {
   Logger.overrideLogger(values.verbose ? ['error', 'warn', 'log'] : ['error']);
 
   const datasetPath = resolve(values.dataset!);
-  const dataset = await loadDataset(datasetPath);
-  // Gold SQL is written for the engine under test.
-  if (process.env.DB_ENGINE === 'duckdb') for (const c of dataset.cases) c.gold = c.goldDuckdb ?? c.gold;
+  const dataset = goldFor(await loadDataset(datasetPath), process.env.DB_ENGINE);
   if (values.seed) await seed(dataset, datasetPath);
 
-  const filter = values.filter ? new RegExp(values.filter, 'i') : undefined;
-  const cases = dataset.cases.filter(
-    (c) => !filter || filter.test(c.id) || c.tags.some((t) => filter.test(t)),
-  );
+  const cases = selectCases(dataset, values.filter);
   const repeats = Math.max(1, Number(values.repeat));
   const concurrency = Math.max(1, Number(values.concurrency));
 
-  const variants: [string, Record<string, string>][] =
+  const variants: Variant[] =
     values.preset === 'ablation'
       ? Object.entries(ABLATION)
       : values.variant?.length
         ? values.variant.map(parseVariant)
         : [['default', {}]];
 
-  const baseEnv = {
-    ...process.env,
-    NODE_ENV: 'test',
-    DB_NAME: dataset.database,
-    DB_MAX_ROWS: '5000',
-    CACHE_SQL_TTL_S: '0',
-    CACHE_ANSWER_TTL_S: '0',
-    EXAMPLES_FILE: '.cache/eval-no-examples.json',
-  };
-
-  // Gold results once, shared by every variant.
-  const goldPipe = buildPipeline({
-    ...baseEnv,
-    SCHEMA_VALUE_HINTS: 'false',
-    SCHEMA_CACHE_FILE: '.cache/eval-gold.json',
-  });
-  const gold = new Map<string, QueryResult>();
-  let goldProblems = 0;
-  for (const c of cases.filter((x) => x.gold)) {
-    try {
-      const r = await goldPipe.db.readOnlyQuery(c.gold!, 5000);
-      gold.set(c.id, r);
-      const flag = r.truncated ? 'TRUNCATED' : r.rowCount === 0 ? 'EMPTY' : '';
-      if (flag) goldProblems++;
-      if (values.check || flag) {
-        const first = r.rows[0] ? JSON.stringify(r.rows[0]).slice(0, 90) : '';
-        console.log(
-          `${c.id.padEnd(6)} ${String(r.rowCount).padStart(5)} rows × ${r.columns.length} cols ${flag.padEnd(9)} ${first}`,
-        );
-      }
-    } catch (err) {
-      goldProblems++;
-      console.log(`${c.id.padEnd(6)} GOLD SQL FAILED: ${(err as Error).message}`);
+  const baseEnv = evalBaseEnv(dataset);
+  const { gold, rows, problems } = await computeGold(cases, baseEnv);
+  for (const r of rows) {
+    if (!values.check && !r.problem) continue;
+    if (r.problem === 'failed') {
+      console.log(`${r.id.padEnd(6)} GOLD SQL FAILED: ${r.detail}`);
+      continue;
     }
+    const first = r.firstRow ? JSON.stringify(r.firstRow).slice(0, 90) : '';
+    const flag = r.problem ? r.problem.toUpperCase() : '';
+    console.log(`${r.id.padEnd(6)} ${String(r.rowCount).padStart(5)} rows × ${r.columns} cols ${flag.padEnd(9)} ${first}`);
   }
-  await goldPipe.close();
   if (values.check) {
-    console.log(`\n${cases.length} cases, ${goldProblems} problem(s).`);
-    process.exitCode = goldProblems ? 1 : 0;
+    console.log(`\n${cases.length} cases, ${problems.length} problem(s).`);
+    process.exitCode = problems.length ? 1 : 0;
     return;
   }
-  if (goldProblems)
-    throw new Error(`${goldProblems} gold queries failed or returned no rows; run with --check`);
+  if (problems.length) throw new Error(`${problems.length} gold queries failed or returned no rows; run with --check`);
 
-  const startedAt = new Date();
-  const results: CaseResult[] = [];
-  const summaries: VariantSummary[] = [];
-  const models = new Set<string>();
-
-  for (const [name, overrides] of variants) {
-    const { EVAL_FEWSHOT, ...envOverrides } = overrides;
-    const pipe = buildPipeline({
-      ...baseEnv,
-      ...envOverrides,
-      SCHEMA_CACHE_FILE: `.cache/eval-${name}.json`,
-    });
-    if (!pipe.llm.configured)
-      throw new Error('No LLM API key configured (OPENAI_API_KEY / OPENROUTER_API_KEY)');
-    await pipe.catalog.refresh();
-    if (EVAL_FEWSHOT === 'dataset') {
-      // Leave-one-out: the store never returns an example whose question equals the one being asked.
-      pipe.examples.replaceAll(
-        dataset.cases.filter((c) => c.gold).map((c) => ({ question: c.question, sql: c.gold! })),
-      );
-    }
-
-    const t0 = performance.now();
-    const variantResults: CaseResult[] = [];
-    for (let k = 0; k < repeats; k++) {
-      const batch = await mapLimit(cases, concurrency, async (c: EvalCase) => {
-        let r = await runCase(pipe, name, k, c, gold.get(c.id), values.answers!);
-        // Rate limits and outages are not accuracy: back off and retry before recording.
-        for (let retry = 1; r.category === 'llm_error' && retry <= 3; retry++) {
-          await new Promise((res) => setTimeout(res, 15_000 * retry));
-          r = await runCase(pipe, name, k, c, gold.get(c.id), values.answers!);
-        }
-        process.stdout.write(r.verdict === 'correct' ? '.' : r.verdict === 'wrong' ? 'x' : 'E');
-        return r;
-      });
-      variantResults.push(...batch);
-    }
-    await pipe.close();
-    for (const r of variantResults) for (const m of r.usage?.models ?? []) models.add(m);
-    const s = summarize(name, overrides, variantResults);
-    summaries.push(s);
-    results.push(...variantResults);
-    console.log(
-      `  ${name.padEnd(18)} ${(s.accuracy * 100).toFixed(1).padStart(5)}%  p50 ${(s.latency.p50Ms / 1000).toFixed(1)}s  $${s.cost.totalUsd.toFixed(4)}  (${((performance.now() - t0) / 1000).toFixed(0)}s)` +
-        (s.infraErrors ? `  WARNING: ${s.infraErrors} infra error(s) excluded` : ''),
-    );
-  }
-
-  const flipList: Flip[] = summaries.slice(1).flatMap((s) => flips(summaries[0].variant, s.variant, results));
-  const info: RunInfo = {
-    dataset: dataset.name,
-    database: dataset.database,
-    startedAt: startedAt.toISOString(),
-    durationS: (Date.now() - startedAt.getTime()) / 1000,
+  let t0 = performance.now();
+  const report = await runEval({
+    dataset,
+    cases,
+    variants,
     repeats,
-    cases: cases.length,
-    models: [...models],
-    withAnswers: values.answers!,
-  };
+    concurrency,
+    answers: values.answers!,
+    baseEnv,
+    gold,
+    onProgress: ({ result }) =>
+      process.stdout.write(result.verdict === 'correct' ? '.' : result.verdict === 'wrong' ? 'x' : 'E'),
+    onVariant: (s) => {
+      console.log(
+        `  ${s.variant.padEnd(18)} ${(s.accuracy * 100).toFixed(1).padStart(5)}%  p50 ${(s.latency.p50Ms / 1000).toFixed(1)}s  $${s.cost.totalUsd.toFixed(4)}  (${((performance.now() - t0) / 1000).toFixed(0)}s)` +
+          (s.infraErrors ? `  WARNING: ${s.infraErrors} infra error(s) excluded` : ''),
+      );
+      t0 = performance.now();
+    },
+  });
 
-  const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const dir = join(values.out!, `${stamp}-${dataset.name}`);
-  await mkdir(dir, { recursive: true });
-  const report = renderText(info, summaries, flipList, results);
-  await writeFile(
-    join(dir, 'results.json'),
-    JSON.stringify({ info, summaries, flips: flipList, results }, null, 2),
-  );
-  await writeFile(join(dir, 'report.txt'), report);
-  console.log(`\n\n${report}`);
+  const dir = await saveReport(report, values.out!);
+  console.log(`\n\n${renderText(report.info, report.summaries, report.flips, report.results)}`);
   console.log(`Saved: ${dir}/report.txt and results.json`);
 }
 

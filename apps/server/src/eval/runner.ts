@@ -69,13 +69,20 @@ const MISMATCH: Record<string, Category> = {
   no_result: 'wrong_rows',
 };
 
+/** Rate limits, provider 5xx, timeouts and dropped connections: worth waiting out and retrying. */
+export function isTransient(message: string): boolean {
+  return /\b(408|429|5\d\d)\b|rate.?limit|timed? ?out|timeout|ECONN|connection|overloaded|circuit|unavailable/i.test(message);
+}
+
 function errorCategory(err: unknown): { category: Category; detail: string; sql?: string } {
   const message = (err as Error)?.message ?? String(err);
   if (err instanceof HttpException) {
     const body = err.getResponse() as { code?: string; sql?: string };
     if (body?.code === 'SQL_ERROR') return { category: 'sql_error', detail: message, sql: body.sql };
     if (body?.code === 'UNSAFE_SQL') return { category: 'unsafe_sql', detail: message };
-    if (body?.code?.startsWith('LLM')) return { category: 'llm_error', detail: message };
+    // Only transient provider trouble is infrastructure (retried, excluded from accuracy); a model
+    // that rejects the request outright (400, unknown model) fails the case like any other error.
+    if (body?.code?.startsWith('LLM')) return { category: isTransient(message) ? 'llm_error' : 'other_error', detail: message };
   }
   return { category: 'other_error', detail: message };
 }

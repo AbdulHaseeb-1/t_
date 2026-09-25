@@ -1,4 +1,4 @@
-import type { AskResponse, QueryResult, Turn } from '../lib/api';
+import type { AskResponse, CallUsage, ParamValues, QueryResult, Turn } from '../lib/api';
 
 export interface UserMessage {
   id: string;
@@ -23,9 +23,18 @@ export interface AssistantMessage {
   /** The error is fixed in Settings (server address or API key). */
   fixInSettings?: boolean;
   meta?: { totalMs: number; costUsd?: number; cached: boolean };
+  /** Everything the details sheet shows: time split, tokens, cache, context. */
+  details?: AnswerDetails;
   language?: 'en' | 'ur' | 'ur-Latn';
   /** What was read from an attached photo. */
   imageNote?: string;
+  /** Set when this answer is a report template run (Retry re-runs the report). */
+  report?: ReportRef;
+}
+
+export interface ReportRef {
+  id: string;
+  params: ParamValues;
 }
 
 export type Message = UserMessage | AssistantMessage;
@@ -60,6 +69,7 @@ export type ChatAction =
       question: string;
       now: number;
       media?: Pick<UserMessage, 'audio' | 'image'>;
+      report?: ReportRef;
     }
   | { type: 'retry'; chatId: string; assistantId: string }
   | { type: 'answer'; chatId: string; assistantId: string; response: AskResponse }
@@ -137,7 +147,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: [
           ...chat.messages,
           { id: action.userId, role: 'user', text: action.question, ...action.media },
-          { id: action.assistantId, role: 'assistant', question: action.question, status: 'pending' },
+          { id: action.assistantId, role: 'assistant', question: action.question, status: 'pending', ...(action.report && { report: action.report }) },
         ],
       };
       return { ...touch(state, next), activeId: action.chatId };
@@ -149,7 +159,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         chats: {
           ...state.chats,
-          [chat.id]: updateMessage(chat, action.assistantId, (m) => ({ id: m.id, role: m.role, question: m.question, status: 'pending' })),
+          [chat.id]: updateMessage(chat, action.assistantId, (m) => ({ id: m.id, role: m.role, question: m.question, status: 'pending', report: m.report })),
         },
       };
     }
@@ -171,6 +181,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         error: undefined,
         fixInSettings: undefined,
         meta: { totalMs: r.timings.totalMs, costUsd: r.usage.costUsd, cached: r.cache !== null },
+        details: detailsFrom(r),
         language: r.language,
         imageNote: r.image?.extracted || undefined,
       }));
@@ -208,4 +219,58 @@ export function contextFor(chat: Chat | undefined, beforeId?: string, limit = 4)
     if (m.role === 'assistant' && m.status === 'done' && m.sql) turns.push({ question: m.question, sql: m.sql });
   }
   return turns.slice(-limit);
+}
+
+export interface AnswerDetails {
+  timings: AskResponse['timings'];
+  cache: AskResponse['cache'];
+  attempts: number;
+  tokens: { prompt: number; cached: number; completion: number };
+  costUsd?: number;
+  costComplete?: boolean;
+  calls: CallUsage[];
+  schema?: AskResponse['schema'];
+  context?: AskResponse['context'];
+  speech?: AskResponse['speech'];
+}
+
+/** Compact, persisted copy of the response's diagnostics (no table names: they can be long). */
+export function detailsFrom(r: AskResponse): AnswerDetails {
+  const u = r.usage;
+  return {
+    timings: r.timings,
+    cache: r.cache,
+    attempts: r.attempts,
+    tokens: { prompt: u.promptTokens ?? 0, cached: u.cachedPromptTokens ?? 0, completion: u.completionTokens ?? 0 },
+    costUsd: u.costUsd,
+    costComplete: u.costComplete,
+    calls: u.calls ?? [],
+    schema: r.schema ? { ...r.schema, tables: [] } : undefined,
+    context: r.context,
+    speech: r.speech,
+  };
+}
+
+/** Totals for a conversation (the header's usage indicator). */
+export function usageTotals(chat: Chat | undefined) {
+  let prompt = 0;
+  let cached = 0;
+  let completion = 0;
+  let costUsd = 0;
+  let answers = 0;
+  let totalMs = 0;
+  let modelMs = 0;
+  let dbMs = 0;
+  for (const m of chat?.messages ?? []) {
+    if (m.role !== 'assistant' || !m.details) continue;
+    answers++;
+    prompt += m.details.tokens.prompt;
+    cached += m.details.tokens.cached;
+    completion += m.details.tokens.completion;
+    costUsd += m.details.costUsd ?? 0;
+    totalMs += m.details.timings.totalMs;
+    modelMs += m.details.timings.llmMs;
+    dbMs += m.details.timings.dbMs;
+  }
+  return { prompt, cached, completion, tokens: prompt + completion, costUsd, answers, totalMs, modelMs, dbMs };
 }

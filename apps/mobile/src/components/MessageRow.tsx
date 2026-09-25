@@ -5,13 +5,19 @@ import { router } from 'expo-router';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { inferChart } from '../lib/chart';
-import type { AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
+import type { AnswerDetails, AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
+import { formatDuration, formatTokens } from '../lib/format';
+import { saveTemplate } from '../lib/api';
+import { useReports } from '../state/reports';
+import { useSettings } from '../state/settings';
 import { useChatActions } from '../state/chats';
-import { type, usePalette } from '../theme';
+import { card, type, usePalette } from '../theme';
 import { Chart } from './Chart';
 import { DataPanel } from './DataPanel';
+import { AnswerDetailsSheet } from './Details';
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
+import { SaveReportSheet } from './ReportParts';
 import { Thinking } from './Thinking';
 
 function clock(ms: number): string {
@@ -55,10 +61,21 @@ function UserBubble({ m }: { m: UserMessage }) {
 
 function Assistant({ m }: { m: AssistantMessage }) {
   const p = usePalette();
-  const { t, rtl } = useI18n();
+  const { t, rtl, lang } = useI18n();
   const { retry } = useChatActions();
+  const { showSql, server } = useSettings();
+  const { reload: reloadReports } = useReports();
   const [copied, setCopied] = useState(false);
-  const chart = useMemo(() => (m.status === 'done' ? inferChart(m.result) : null), [m.status, m.result]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const schedule = useCallback(() => {
+    router.push({
+      pathname: '/schedules/edit',
+      params: m.report ? { template: m.report.id, params: JSON.stringify(m.report.params) } : { question: m.question },
+    });
+  }, [m.report, m.question]);
+  const chart = useMemo(() => (m.status === 'done' ? inferChart(m.result, m.question, lang) : null), [m.status, m.result, m.question, lang]);
 
   const copy = useCallback(async () => {
     await Clipboard.setStringAsync(m.text ?? '');
@@ -81,8 +98,8 @@ function Assistant({ m }: { m: AssistantMessage }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t.openSettings}
-              onPress={() => router.push('/settings')}
-              style={({ pressed }) => [styles.fix, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+              onPress={() => router.push('/settings/server')}
+              style={({ pressed }) => [styles.fix, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}
             >
               <Feather name="settings" size={14} color={p.text} />
               <Text style={[scriptStyle(t.openSettings, type.meta), { color: p.text }]}>{t.openSettings}</Text>
@@ -102,12 +119,57 @@ function Assistant({ m }: { m: AssistantMessage }) {
           {`${t.readFromImage}: ${m.imageNote}`}
         </Text>
       )}
-      {m.sql && m.result && <DataPanel sql={m.sql} result={m.result} totalMs={m.meta?.totalMs} />}
+      {m.sql && m.result && <DataPanel sql={showSql ? m.sql : undefined} result={m.result} />}
       <View style={[styles.actions, row(rtl)]}>
         <IconButton name={copied ? 'check' : 'copy'} label={copied ? t.copied : t.copy} size={16} color={p.muted} onPress={copy} />
         <IconButton name="rotate-ccw" label={t.askAgain} size={16} color={p.muted} onPress={() => retry(m.id)} />
+        {m.sql && !m.report && (
+          <IconButton name={saved ? 'check' : 'bookmark'} label={saved ? t.savedAsReport : t.saveAsReport} size={16} color={p.muted} onPress={() => setSaving(true)} disabled={saved} />
+        )}
+        {(m.sql || m.report) && <IconButton name="clock" label={t.scheduleIt} size={16} color={p.muted} onPress={schedule} />}
+        {m.details && <MetaLine details={m.details} onPress={() => setDetailsOpen(true)} />}
       </View>
+      {detailsOpen && <AnswerDetailsSheet details={m.details} visible={detailsOpen} onClose={() => setDetailsOpen(false)} />}
+      {saving && (
+        <SaveReportSheet
+          question={m.question}
+          onClose={() => setSaving(false)}
+          onSave={async (title) => {
+            await saveTemplate(server, { title, question: m.question, sql: m.sql ?? undefined });
+            setSaving(false);
+            setSaved(true);
+            reloadReports();
+          }}
+        />
+      )}
     </View>
+  );
+}
+
+/** "1.4 s · 1.2K tokens · reused": the cost of this answer, tap for the breakdown. */
+function MetaLine({ details, onPress }: { details: AnswerDetails; onPress: () => void }) {
+  const p = usePalette();
+  const { t, lang, rtl } = useI18n();
+  const tokens = details.tokens.prompt + details.tokens.completion;
+  const parts = [
+    formatDuration(details.timings.totalMs, lang),
+    tokens ? `${formatTokens(tokens)} ${t.tokens}` : null,
+    details.cache ? t.cache : null,
+  ].filter(Boolean);
+  const text = parts.join(' · ');
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${t.details}: ${text}`}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => [styles.meta, row(rtl), pressed && { opacity: 0.6 }]}
+    >
+      <Feather name="info" size={13} color={p.faint} />
+      <Text style={[scriptStyle(text, type.meta), { color: p.faint }]} numberOfLines={1}>
+        {text}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -126,5 +188,6 @@ const styles = StyleSheet.create({
   assistant: { gap: 12 },
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   actions: { marginHorizontal: -10, marginTop: -6, alignItems: 'center', gap: 4 },
-  fix: { alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  meta: { alignItems: 'center', gap: 5, paddingHorizontal: 8, flexShrink: 1 },
+  fix: { alignItems: 'center', gap: 6, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
 });

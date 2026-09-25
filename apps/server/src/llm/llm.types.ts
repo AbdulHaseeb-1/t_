@@ -18,11 +18,16 @@ export interface ChatRequest {
   cacheKey?: string;
   /** Overrides the tier's configured reasoning effort for this call. */
   reasoningEffort?: string;
+  /** What the call was for; reported per call to clients. */
+  purpose?: CallPurpose;
 }
 
+export type CallPurpose = 'sql' | 'answer' | 'recheck' | 'translate' | 'transcribe' | 'vision' | 'agent';
+
 export interface CallUsage {
-  provider: ProviderName;
+  provider: ProviderName | 'gemini';
   model: string;
+  purpose?: CallPurpose;
   promptTokens: number;
   cachedPromptTokens: number;
   completionTokens: number;
@@ -67,6 +72,16 @@ export class UsageMeter {
       /** False when some call (e.g. transcription) had no known price. */
       costComplete,
       models: [...new Set(this.calls.map((c) => `${c.provider}:${c.model}`))],
+      /** Per-call breakdown, in call order. */
+      calls: this.calls.map((c) => ({
+        purpose: c.purpose ?? 'sql',
+        model: `${c.provider}:${c.model}`,
+        promptTokens: c.promptTokens,
+        cachedPromptTokens: c.cachedPromptTokens,
+        completionTokens: c.completionTokens,
+        latencyMs: c.latencyMs,
+        ...(c.costUsd !== undefined ? { costUsd: c.costUsd } : {}),
+      })),
     };
   }
 }

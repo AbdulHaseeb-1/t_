@@ -6,10 +6,14 @@ import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
 import { Header } from '../components/Header';
 import { MessageRow } from '../components/MessageRow';
+import { ReportChips } from '../components/ReportParts';
 import { RouteMark } from '../components/RouteMark';
+import { useOpenReport } from '../components/useOpenReport';
 import { scriptStyle, useI18n } from '../i18n';
-import type { Message } from '../state/chat-reducer';
+import { UsageSheet } from '../components/Details';
+import { type Message, usageTotals } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
+import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
 import { fonts, type, usePalette } from '../theme';
 
@@ -25,15 +29,27 @@ export default function ChatScreen() {
   const actions = useChatActions();
   const chat = useActiveChat();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const openUsage = useCallback(() => setUsageOpen(true), []);
   const list = useRef<FlatList<Message>>(null);
   const { server, ready } = useSettings();
   const needsServer = ready && !server.baseUrl;
+  const { templates, unread } = useReports();
+  const { openReport, sheet } = useOpenReport();
+  const go = useCallback((path: '/reports' | '/schedules' | '/inbox') => {
+    setDrawerOpen(false);
+    router.push(path);
+  }, []);
+  const openReports = useCallback(() => go('/reports'), [go]);
+  const openSchedules = useCallback(() => go('/schedules'), [go]);
+  const openInbox = useCallback(() => go('/inbox'), [go]);
 
   const messages = chat?.messages ?? EMPTY;
   // Inverted list: newest at the bottom, keyboard-friendly, no scroll-to-end bookkeeping.
   const data = useMemo(() => [...messages].reverse(), [messages]);
   const busy = useMemo(() => messages.some((m) => m.role === 'assistant' && m.status === 'pending'), [messages]);
   const chats = useMemo(() => state.order.map((id) => state.chats[id]), [state.order, state.chats]);
+  const totals = useMemo(() => usageTotals(chat), [chat]);
 
   const send = useCallback(
     (out: Outgoing) => {
@@ -63,7 +79,16 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Header title={chat ? chat.title || t.voiceMessage : t.appNewChat} onMenu={openDrawer} onNewChat={newChat} canStartNew={!!chat} />
+        <Header
+          title={chat ? chat.title || t.voiceMessage : t.appNewChat}
+          onMenu={openDrawer}
+          onNewChat={newChat}
+          canStartNew={!!chat}
+          tokens={totals.tokens}
+          onUsage={openUsage}
+          unread={unread}
+          onInbox={openInbox}
+        />
         <View style={styles.fill}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
@@ -75,7 +100,7 @@ export default function ChatScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t.setupAction}
-                    onPress={openSettings}
+                    onPress={() => router.push('/settings/server')}
                     style={({ pressed }) => [styles.setup, { backgroundColor: p.primary }, pressed && styles.pressed]}
                   >
                     <Text style={[scriptStyle(t.setupAction, type.label), { color: p.onPrimary }]}>{t.setupAction}</Text>
@@ -85,6 +110,7 @@ export default function ChatScreen() {
                 <>
                   <Text style={[scriptStyle(t.greeting, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.greeting}</Text>
                   <Text style={[scriptStyle(t.greetingHint, type.meta), { color: p.muted, textAlign: 'center' }]}>{t.greetingHint}</Text>
+                  <ReportChips templates={templates} onPick={openReport} onAll={openReports} />
                 </>
               )}
             </View>
@@ -111,6 +137,7 @@ export default function ChatScreen() {
           <Composer busy={busy} onSend={send} onStop={actions.stop} />
         </View>
       </KeyboardAvoidingView>
+      {usageOpen && <UsageSheet totals={totals} visible={usageOpen} onClose={() => setUsageOpen(false)} />}
       <Drawer
         open={drawerOpen}
         chats={chats}
@@ -120,7 +147,12 @@ export default function ChatScreen() {
         onNewChat={newChat}
         onDelete={actions.remove}
         onSettings={openSettings}
+        onReports={openReports}
+        onSchedules={openSchedules}
+        onInbox={openInbox}
+        unread={unread}
       />
+      {sheet}
     </SafeAreaView>
   );
 }

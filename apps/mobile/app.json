@@ -81,7 +81,14 @@
           }
         }
       ],
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      "expo-background-task",
+      [
+        "expo-notifications",
+        {
+          "color": "#C96442"
+        }
+      ]
     ],
     "scheme": "askdata"
   }

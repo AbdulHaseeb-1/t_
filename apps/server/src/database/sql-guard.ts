@@ -70,7 +70,10 @@ const DUCKDB_FORBIDDEN_RE = new RegExp(
 const DUCKDB_FUNCTION_RE =
   /\b(read_\w+|\w+_scan|glob|getenv|query|query_table|sniff_csv|parquet_\w+|duckdb_\w+|pragma_\w+|current_setting|which_secret|load_\w+|write_\w+)\s*\(/i;
 /** DuckDB treats a string in FROM/JOIN as a file to scan: FROM 'data.csv'. */
-const DUCKDB_FILE_SCAN_RE = /\b(FROM|JOIN|,)\s*'s'/i;
+// A string literal used as a table ('data.csv'): after FROM/JOIN, or as a comma-joined
+// item of the FROM list. Literals in expressions (IN lists, COALESCE(x, 'n/a')) are fine.
+const DUCKDB_FILE_SCAN_RE =
+  /\b(?:FROM|JOIN)\s*'s'|\bFROM\s+(?:(?!\b(?:WHERE|GROUP|ORDER|HAVING|QUALIFY|WINDOW|LIMIT|SELECT|ON|USING)\b)[^();])*?,\s*'s'/i;
 
 /** Replaces literals/identifiers with placeholders and drops comments. */
 export function stripTsql(sql: string, dialect: SqlDialect = 'tsql'): string {
