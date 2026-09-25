@@ -3,6 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAware } from '../../components/KeyboardAware';
 import { Chip, ParamFields } from '../../components/ReportParts';
 import { PageHeader, Section } from '../../components/SettingsUI';
 import { row, scriptStyle, useI18n } from '../../i18n';
@@ -185,178 +186,180 @@ export default function ScheduleEditor() {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <PageHeader
-          title={editing ? t.editSchedule : t.newSchedule}
-          onBack={leave}
-          back
-          action={
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t.save}
-              disabled={!canSave || busy}
-              onPress={save}
-              style={({ pressed }) => [styles.save, { backgroundColor: p.primary, opacity: !canSave || busy ? 0.4 : pressed ? 0.85 : 1 }]}
-            >
-              <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
-            </Pressable>
-          }
-        />
+      <KeyboardAware>
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <PageHeader
+            title={editing ? t.editSchedule : t.newSchedule}
+            onBack={leave}
+            back
+            action={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t.save}
+                disabled={!canSave || busy}
+                onPress={save}
+                style={({ pressed }) => [styles.save, { backgroundColor: p.primary, opacity: !canSave || busy ? 0.4 : pressed ? 0.85 : 1 }]}
+              >
+                <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
+              </Pressable>
+            }
+          />
 
-        {message && (
-          <Text style={[scriptStyle(message.text, type.meta), styles.message, { color: message.kind === 'error' ? p.danger : p.text, backgroundColor: message.kind === 'error' ? p.dangerSoft : p.sunken }]}>
-            {message.text}
-          </Text>
-        )}
+          {message && (
+            <Text style={[scriptStyle(message.text, type.meta), styles.message, { color: message.kind === 'error' ? p.danger : p.text, backgroundColor: message.kind === 'error' ? p.dangerSoft : p.sunken }]}>
+              {message.text}
+            </Text>
+          )}
 
-        <Section title={t.scheduleName}>
-          <TextInput value={shownName} onChangeText={setName} accessibilityLabel={t.scheduleName} placeholder={t.scheduleName} placeholderTextColor={p.muted} style={[text(shownName, styles.input)]} />
-        </Section>
+          <Section title={t.scheduleName}>
+            <TextInput value={shownName} onChangeText={setName} accessibilityLabel={t.scheduleName} placeholder={t.scheduleName} placeholderTextColor={p.muted} style={[text(shownName, styles.input)]} />
+          </Section>
 
-        <Section title={t.whatToRun}>
-          <View style={styles.inner}>
-            <View style={[row(rtl), styles.wrap]}>
-              <Chip label={t.reports} icon="grid" selected={mode === 'report'} onPress={() => setMode('report')} />
-              <Chip label={t.orQuestion} icon="message-square" selected={mode === 'question'} onPress={() => setMode('question')} />
+          <Section title={t.whatToRun}>
+            <View style={styles.inner}>
+              <View style={[row(rtl), styles.wrap]}>
+                <Chip label={t.reports} icon="grid" selected={mode === 'report'} onPress={() => setMode('report')} />
+                <Chip label={t.orQuestion} icon="message-square" selected={mode === 'question'} onPress={() => setMode('question')} />
+              </View>
+              {mode === 'report' ? (
+                <>
+                  <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.pickReport}>
+                    {sortedTemplates.map((r) => (
+                      <Chip key={r.id} label={templateTitle(r, lang)} selected={r.id === templateId} onPress={() => pick(r.id)} testID={`pick-${r.id}`} />
+                    ))}
+                  </View>
+                  {template && <ParamFields key={template.id} report={template} values={values} onChange={setValues} today={today} />}
+                </>
+              ) : (
+                <TextInput
+                  value={question}
+                  onChangeText={setQuestion}
+                  multiline
+                  accessibilityLabel={t.orQuestion}
+                  placeholder={t.placeholder}
+                  placeholderTextColor={p.muted}
+                  style={[text(question, [styles.input, styles.multiline, { backgroundColor: p.sunken }])]}
+                />
+              )}
             </View>
-            {mode === 'report' ? (
-              <>
-                <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.pickReport}>
-                  {sortedTemplates.map((r) => (
-                    <Chip key={r.id} label={templateTitle(r, lang)} selected={r.id === templateId} onPress={() => pick(r.id)} testID={`pick-${r.id}`} />
+          </Section>
+
+          <Section title={t.when}>
+            <View style={styles.inner}>
+              <View style={[row(rtl), styles.wrap]}>
+                {(['daily', 'weekly', 'monthly'] as Kind[]).map((k) => (
+                  <Chip key={k} label={t[k]} selected={kind === k} onPress={() => setKind(k)} />
+                ))}
+              </View>
+              {kind === 'weekly' && (
+                <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.onDays}>
+                  {t.weekdaysShort.map((d, i) => (
+                    <Chip key={d} label={d} selected={weekdays.includes(i)} onPress={() => setWeekdays(weekdays.includes(i) ? weekdays.filter((x) => x !== i) : [...weekdays, i].sort())} />
                   ))}
                 </View>
-                {template && <ParamFields key={template.id} report={template} values={values} onChange={setValues} today={today} />}
-              </>
-            ) : (
-              <TextInput
-                value={question}
-                onChangeText={setQuestion}
-                multiline
-                accessibilityLabel={t.orQuestion}
-                placeholder={t.placeholder}
-                placeholderTextColor={p.muted}
-                style={[text(question, [styles.input, styles.multiline, { backgroundColor: p.sunken }])]}
-              />
-            )}
-          </View>
-        </Section>
-
-        <Section title={t.when}>
-          <View style={styles.inner}>
-            <View style={[row(rtl), styles.wrap]}>
-              {(['daily', 'weekly', 'monthly'] as Kind[]).map((k) => (
-                <Chip key={k} label={t[k]} selected={kind === k} onPress={() => setKind(k)} />
-              ))}
-            </View>
-            {kind === 'weekly' && (
-              <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.onDays}>
-                {t.weekdaysShort.map((d, i) => (
-                  <Chip key={d} label={d} selected={weekdays.includes(i)} onPress={() => setWeekdays(weekdays.includes(i) ? weekdays.filter((x) => x !== i) : [...weekdays, i].sort())} />
+              )}
+              {kind === 'monthly' && (
+                <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.dayOfMonth}>
+                  {MONTH_DAYS.map((d) => (
+                    <Chip key={String(d)} label={d === 'last' ? t.lastDay : String(d)} selected={monthDay === d} onPress={() => setMonthDay(d)} />
+                  ))}
+                </View>
+              )}
+              <Text style={[scriptStyle(t.atTime, type.meta), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{t.atTime}</Text>
+              <View style={[row(rtl), styles.wrap]}>
+                {TIMES.map((x) => (
+                  <Chip
+                    key={x}
+                    label={x}
+                    selected={time === x && !customTime}
+                    onPress={() => {
+                      setCustomTime(false);
+                      setTime(x);
+                    }}
+                  />
                 ))}
+                <Chip label={t.customTime} icon="edit-2" selected={customTime || !TIMES.includes(time)} onPress={() => setCustomTime(true)} />
               </View>
-            )}
-            {kind === 'monthly' && (
-              <View style={[row(rtl), styles.wrap]} accessibilityLabel={t.dayOfMonth}>
-                {MONTH_DAYS.map((d) => (
-                  <Chip key={String(d)} label={d === 'last' ? t.lastDay : String(d)} selected={monthDay === d} onPress={() => setMonthDay(d)} />
-                ))}
-              </View>
-            )}
-            <Text style={[scriptStyle(t.atTime, type.meta), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{t.atTime}</Text>
-            <View style={[row(rtl), styles.wrap]}>
-              {TIMES.map((x) => (
-                <Chip
-                  key={x}
-                  label={x}
-                  selected={time === x && !customTime}
-                  onPress={() => {
-                    setCustomTime(false);
-                    setTime(x);
-                  }}
+              {(customTime || !TIMES.includes(time)) && (
+                <TextInput
+                  value={time}
+                  onChangeText={setTime}
+                  autoFocus={customTime}
+                  accessibilityLabel={t.atTime}
+                  placeholder="HH:MM"
+                  placeholderTextColor={p.muted}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                  style={[type.body, styles.time, { color: p.text, backgroundColor: timeOk ? p.sunken : p.dangerSoft }]}
                 />
-              ))}
-              <Chip label={t.customTime} icon="edit-2" selected={customTime || !TIMES.includes(time)} onPress={() => setCustomTime(true)} />
+              )}
             </View>
-            {(customTime || !TIMES.includes(time)) && (
+          </Section>
+
+          <Section title={t.deliverTo} footer={whatsappReady ? t.whatsappHint : t.whatsappOff}>
+            <View style={[styles.switchRow, row(rtl)]}>
+              <Feather name="smartphone" size={16} color={p.text} />
+              <Text style={[text(t.deliverApp), styles.flex]}>{t.deliverApp}</Text>
+              <Switch value={app} onValueChange={setApp} accessibilityLabel={t.deliverApp} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
+            </View>
+            <View style={[styles.inner, { borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border }]}>
+              <View style={[row(rtl), styles.labelRow]}>
+                <Feather name="message-circle" size={16} color={whatsappReady ? p.text : p.faint} />
+                <Text style={[scriptStyle(t.deliverWhatsApp, type.body), { color: whatsappReady ? p.text : p.faint }]}>{t.deliverWhatsApp}</Text>
+              </View>
               <TextInput
-                value={time}
-                onChangeText={setTime}
-                autoFocus={customTime}
-                accessibilityLabel={t.atTime}
-                placeholder="HH:MM"
+                value={phones}
+                onChangeText={setPhones}
+                editable={whatsappReady}
+                multiline
+                keyboardType="phone-pad"
+                accessibilityLabel={t.deliverWhatsApp}
+                placeholder="923001234567"
                 placeholderTextColor={p.muted}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                style={[type.body, styles.time, { color: p.text, backgroundColor: timeOk ? p.sunken : p.dangerSoft }]}
+                style={[type.body, styles.input, styles.multiline, { color: p.text, backgroundColor: numbersOk ? p.sunken : p.dangerSoft, fontVariant: ['tabular-nums'] }]}
               />
-            )}
-          </View>
-        </Section>
-
-        <Section title={t.deliverTo} footer={whatsappReady ? t.whatsappHint : t.whatsappOff}>
-          <View style={[styles.switchRow, row(rtl)]}>
-            <Feather name="smartphone" size={16} color={p.text} />
-            <Text style={[text(t.deliverApp), styles.flex]}>{t.deliverApp}</Text>
-            <Switch value={app} onValueChange={setApp} accessibilityLabel={t.deliverApp} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
-          </View>
-          <View style={[styles.inner, { borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border }]}>
-            <View style={[row(rtl), styles.labelRow]}>
-              <Feather name="message-circle" size={16} color={whatsappReady ? p.text : p.faint} />
-              <Text style={[scriptStyle(t.deliverWhatsApp, type.body), { color: whatsappReady ? p.text : p.faint }]}>{t.deliverWhatsApp}</Text>
             </View>
-            <TextInput
-              value={phones}
-              onChangeText={setPhones}
-              editable={whatsappReady}
-              multiline
-              keyboardType="phone-pad"
-              accessibilityLabel={t.deliverWhatsApp}
-              placeholder="923001234567"
-              placeholderTextColor={p.muted}
-              style={[type.body, styles.input, styles.multiline, { color: p.text, backgroundColor: numbersOk ? p.sunken : p.dangerSoft, fontVariant: ['tabular-nums'] }]}
-            />
-          </View>
-        </Section>
+          </Section>
 
-        <Section footer={t.onlyIfRowsHint}>
-          <View style={[styles.switchRow, row(rtl)]}>
-            <Text style={[text(t.onlyIfRows), styles.flex]}>{t.onlyIfRows}</Text>
-            <Switch value={rowsOnly} onValueChange={setOnlyIfRows} accessibilityLabel={t.onlyIfRows} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
-          </View>
-          <View style={[styles.switchRow, row(rtl), { borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border }]}>
-            <Text style={[text(t.enabled), styles.flex]}>{t.enabled}</Text>
-            <Switch value={enabled} onValueChange={setEnabled} accessibilityLabel={t.enabled} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
-          </View>
-        </Section>
+          <Section footer={t.onlyIfRowsHint}>
+            <View style={[styles.switchRow, row(rtl)]}>
+              <Text style={[text(t.onlyIfRows), styles.flex]}>{t.onlyIfRows}</Text>
+              <Switch value={rowsOnly} onValueChange={setOnlyIfRows} accessibilityLabel={t.onlyIfRows} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
+            </View>
+            <View style={[styles.switchRow, row(rtl), { borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border }]}>
+              <Text style={[text(t.enabled), styles.flex]}>{t.enabled}</Text>
+              <Switch value={enabled} onValueChange={setEnabled} accessibilityLabel={t.enabled} trackColor={{ true: p.accent, false: p.border }} thumbColor={p.surface} {...({ activeThumbColor: p.surface } as object)} />
+            </View>
+          </Section>
 
-        <Section title={t.replyIn}>
-          <View style={[row(rtl), styles.wrap, styles.inner]}>
-            {(
-              [
-                ['ur', 'اردو'],
-                ['en', 'English'],
-                ['ur-Latn', t.romanUrdu],
-              ] as const
-            ).map(([v, label]) => (
-              <Chip key={v} label={label} selected={language === v} onPress={() => setLanguage(v)} />
-            ))}
-          </View>
-        </Section>
+          <Section title={t.replyIn}>
+            <View style={[row(rtl), styles.wrap, styles.inner]}>
+              {(
+                [
+                  ['ur', 'اردو'],
+                  ['en', 'English'],
+                  ['ur-Latn', t.romanUrdu],
+                ] as const
+              ).map(([v, label]) => (
+                <Chip key={v} label={label} selected={language === v} onPress={() => setLanguage(v)} />
+              ))}
+            </View>
+          </Section>
 
-        {editing && (
-          <View style={[row(rtl), styles.bottom]}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t.runNow} disabled={busy} onPress={runNow} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}>
-              {busy ? <ActivityIndicator color={p.muted} /> : <Feather name="play" size={16} color={p.text} />}
-              <Text style={[scriptStyle(t.runNow, type.label), { color: p.text }]}>{t.runNow}</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={t.deleteSchedule} onPress={remove} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.dangerSoft }]}>
-              <Feather name="trash-2" size={16} color={p.danger} />
-              <Text style={[scriptStyle(t.deleteSchedule, type.label), { color: p.danger }]}>{t.deleteSchedule}</Text>
-            </Pressable>
-          </View>
-        )}
-      </ScrollView>
+          {editing && (
+            <View style={[row(rtl), styles.bottom]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t.runNow} disabled={busy} onPress={runNow} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}>
+                {busy ? <ActivityIndicator color={p.muted} /> : <Feather name="play" size={16} color={p.text} />}
+                <Text style={[scriptStyle(t.runNow, type.label), { color: p.text }]}>{t.runNow}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t.deleteSchedule} onPress={remove} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.dangerSoft }]}>
+                <Feather name="trash-2" size={16} color={p.danger} />
+                <Text style={[scriptStyle(t.deleteSchedule, type.label), { color: p.danger }]}>{t.deleteSchedule}</Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAware>
     </SafeAreaView>
   );
 }

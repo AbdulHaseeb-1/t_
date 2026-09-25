@@ -21,18 +21,10 @@ interface Props {
   unread?: number;
 }
 
-function relativeDay(ts: number, t: ReturnType<typeof useI18n>['t'], lang: string): string {
-  const days = Math.floor((Date.now() - ts) / 86_400_000);
-  if (days <= 0) return t.today;
-  if (days === 1) return t.yesterday;
-  if (days < 7) return t.daysAgo(days);
-  return new Date(ts).toLocaleDateString(lang === 'ur' ? 'ur-PK' : undefined, { month: 'short', day: 'numeric' });
-}
-
 /** Conversation list: slides over the chat, dismissed by the scrim or a selection. */
 export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onSelect, onNewChat, onDelete, onSettings, onReports, onSchedules, onInbox, unread = 0 }: Props) {
   const p = usePalette();
-  const { t, rtl, lang } = useI18n();
+  const { t, rtl } = useI18n();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(320, width * 0.84);
@@ -164,7 +156,6 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
                 <Text style={[scriptStyle(c.title || t.voiceMessage, type.body), { color: p.text }]} numberOfLines={1}>
                   {c.title || t.voiceMessage}
                 </Text>
-                <Text style={[scriptStyle(t.today, type.caption), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{relativeDay(c.updatedAt, t, lang)}</Text>
               </Pressable>
             ),
           )}
@@ -194,7 +185,7 @@ const styles = StyleSheet.create({
   row: { alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10 },
   section: { paddingHorizontal: 12, paddingTop: 16, paddingBottom: 6 },
   list: { flex: 1 },
-  chat: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, gap: 1 },
+  chat: { paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10 },
   empty: { paddingHorizontal: 12, paddingVertical: 8 },
   count: { minWidth: 20, paddingHorizontal: 6, borderRadius: 10, overflow: 'hidden', textAlign: 'center' },
 });

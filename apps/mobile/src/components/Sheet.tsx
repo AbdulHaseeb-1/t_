@@ -5,6 +5,7 @@ import { row, scriptStyle, useI18n } from '../i18n';
 import { card, type, usePalette } from '../theme';
 import { OnCard } from './surface';
 import { IconButton } from './IconButton';
+import { KeyboardAware } from './KeyboardAware';
 
 /** Bottom sheet: dimmed backdrop, rounded top, title bar with close. */
 export function Sheet({ visible, title, onClose, children, testID }: { visible: boolean; title: string; onClose: () => void; children: ReactNode; testID?: string }) {
@@ -13,7 +14,7 @@ export function Sheet({ visible, title, onClose, children, testID }: { visible: 
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.fill}>
+      <KeyboardAware style={styles.fill}>
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel={t.cancel} />
         <View style={[styles.sheet, { backgroundColor: p.bg, paddingBottom: insets.bottom + 12 }]} testID={testID} accessibilityViewIsModal>
           <View style={[styles.grabber, { backgroundColor: p.border }]} />
@@ -25,7 +26,7 @@ export function Sheet({ visible, title, onClose, children, testID }: { visible: 
           </View>
           <ScrollView contentContainerStyle={styles.body}>{children}</ScrollView>
         </View>
-      </View>
+      </KeyboardAware>
     </Modal>
   );
 }

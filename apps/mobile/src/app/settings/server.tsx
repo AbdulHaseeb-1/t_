@@ -2,6 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAware } from '../../components/KeyboardAware';
 import { PageHeader, Section } from '../../components/SettingsUI';
 import { row, scriptStyle, useI18n } from '../../i18n';
 import { checkConnection, normalizeBaseUrl, type ServerConfig } from '../../lib/api';
@@ -54,72 +55,74 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <PageHeader
-          title={t.server}
-          onBack={leave}
-          back
-          action={
-            <Pressable accessibilityRole="button" accessibilityLabel="Save settings" onPress={done} hitSlop={8} style={[styles.save, { backgroundColor: p.primary }]}>
-              <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
-            </Pressable>
-          }
-        />
-
-        <Section title={t.serverAddress} footer={t.serverHint}>
-          <TextInput
-            value={url}
-            onChangeText={setUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            placeholder="http://192.168.1.20:3000"
-            autoFocus={!initial.baseUrl}
-            placeholderTextColor={p.muted}
-            accessibilityLabel="Server address"
-            style={input}
+      <KeyboardAware>
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <PageHeader
+            title={t.server}
+            onBack={leave}
+            back
+            action={
+              <Pressable accessibilityRole="button" accessibilityLabel="Save settings" onPress={done} hitSlop={8} style={[styles.save, { backgroundColor: p.primary }]}>
+                <Text style={[scriptStyle(t.save, { ...type.label, ...weight.semibold }, 'bold'), { color: p.onPrimary }]}>{t.save}</Text>
+              </Pressable>
+            }
           />
-        </Section>
 
-        <Section title={t.apiKey} footer={t.keychain}>
-          <TextInput
-            value={key}
-            onChangeText={setKey}
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-            placeholder={t.optional}
-            placeholderTextColor={p.muted}
-            accessibilityLabel="API key"
-            style={input}
-          />
-        </Section>
+          <Section title={t.serverAddress} footer={t.serverHint}>
+            <TextInput
+              value={url}
+              onChangeText={setUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="http://192.168.1.20:3000"
+              autoFocus={!initial.baseUrl}
+              placeholderTextColor={p.muted}
+              accessibilityLabel="Server address"
+              style={input}
+            />
+          </Section>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Test connection"
-          onPress={test}
-          disabled={check.state === 'checking'}
-          style={({ pressed }) => [styles.test, row(rtl), card(p), pressed && { backgroundColor: p.sunken }]}
-        >
-          {check.state === 'checking' ? (
-            <ActivityIndicator color={p.muted} />
-          ) : (
-            <>
-              <Feather name="activity" size={16} color={p.text} />
-              <Text style={[scriptStyle(t.testConnection, type.label), { color: p.text }]}>{t.testConnection}</Text>
-            </>
+          <Section title={t.apiKey} footer={t.keychain}>
+            <TextInput
+              value={key}
+              onChangeText={setKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              placeholder={t.optional}
+              placeholderTextColor={p.muted}
+              accessibilityLabel="API key"
+              style={input}
+            />
+          </Section>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Test connection"
+            onPress={test}
+            disabled={check.state === 'checking'}
+            style={({ pressed }) => [styles.test, row(rtl), card(p), pressed && { backgroundColor: p.sunken }]}
+          >
+            {check.state === 'checking' ? (
+              <ActivityIndicator color={p.muted} />
+            ) : (
+              <>
+                <Feather name="activity" size={16} color={p.text} />
+                <Text style={[scriptStyle(t.testConnection, type.label), { color: p.text }]}>{t.testConnection}</Text>
+              </>
+            )}
+          </Pressable>
+          {'message' in check && (
+            <View style={[styles.status, row(rtl)]}>
+              <Feather name={statusIcon} size={16} color={statusColor} />
+              <Text style={[scriptStyle(check.message, type.meta), styles.flex, { color: check.state === 'fail' ? p.danger : p.text }]} accessibilityLiveRegion="polite">
+                {check.message}
+              </Text>
+            </View>
           )}
-        </Pressable>
-        {'message' in check && (
-          <View style={[styles.status, row(rtl)]}>
-            <Feather name={statusIcon} size={16} color={statusColor} />
-            <Text style={[scriptStyle(check.message, type.meta), styles.flex, { color: check.state === 'fail' ? p.danger : p.text }]} accessibilityLiveRegion="polite">
-              {check.message}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAware>
     </SafeAreaView>
   );
 }

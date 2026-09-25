@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, type ListRenderItem, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
@@ -12,6 +12,7 @@ import { RouteMark } from '../components/RouteMark';
 import { useOpenReport } from '../components/useOpenReport';
 import { scriptStyle, useI18n } from '../i18n';
 import { UsageSheet } from '../components/Details';
+import { KeyboardAware } from '../components/KeyboardAware';
 import { type Message, usageTotals } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
 import { useReports } from '../state/reports';
@@ -82,7 +83,7 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAware>
         <View style={styles.headerFrame}>
           <Header
             title={chat ? chat.title || t.voiceMessage : t.appNewChat}
@@ -145,7 +146,7 @@ export default function ChatScreen() {
             <Composer key={starter?.id ?? 0} busy={busy} initialText={starter?.text} onSend={send} onStop={actions.stop} />
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAware>
       {usageOpen && <UsageSheet totals={totals} visible={usageOpen} onClose={() => setUsageOpen(false)} />}
       <Drawer
         open={drawerOpen}
