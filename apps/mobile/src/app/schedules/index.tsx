@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PressableCard } from '../../components/PressableCard';
 import { PageHeader } from '../../components/SettingsUI';
 import { row, scriptStyle, useI18n } from '../../i18n';
 import { listSchedules, type Schedule, saveSchedule } from '../../lib/api';
@@ -74,12 +75,12 @@ export default function SchedulesScreen() {
           <Text style={[scriptStyle(t.noSchedules, type.body), styles.pad, { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{t.noSchedules}</Text>
         )}
         {schedules?.map((s) => (
-          <Pressable
+          <PressableCard
             key={s.id}
             accessibilityRole="button"
             accessibilityLabel={`${s.name}, ${describeFrequency(s.frequency, t, lang)}`}
             onPress={() => router.push({ pathname: '/schedules/edit', params: { id: s.id } })}
-            style={({ pressed }) => [styles.card, { backgroundColor: p.surface, borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+            style={styles.card}
           >
             <View style={[row(rtl), styles.cardTop]}>
               <View style={styles.flex}>
@@ -101,7 +102,7 @@ export default function SchedulesScreen() {
                 {s.lastStatus === 'failed' && s.lastError ? ` — ${s.lastError}` : ''}
               </Text>
             )}
-          </Pressable>
+          </PressableCard>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -111,10 +112,10 @@ export default function SchedulesScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1, gap: 2 },
-  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 12, gap: 10 },
+  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 14, gap: 12 },
   add: { alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 34, borderRadius: 17, marginHorizontal: 4 },
   pad: { padding: 16 },
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 8 },
+  card: { borderRadius: 20, padding: 16, gap: 8 },
   cardTop: { alignItems: 'center', gap: 12 },
   meta: { alignItems: 'center', gap: 8 },
 });

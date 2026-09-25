@@ -2,7 +2,8 @@ import { type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { type, usePalette } from '../theme';
+import { card, type, usePalette } from '../theme';
+import { OnCard } from './surface';
 import { IconButton } from './IconButton';
 
 /** Bottom sheet: dimmed backdrop, rounded top, title bar with close. */
@@ -35,7 +36,11 @@ export function Group({ title, children, footer }: { title?: string; children: R
   return (
     <View style={styles.group}>
       {!!title && <Text style={[scriptStyle(title, type.meta), styles.groupTitle, { color: p.muted }]}>{title}</Text>}
-      <View style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>{children}</View>
+      <View style={[styles.shell, card(p)]}>
+        <View style={styles.card}>
+          <OnCard.Provider value>{children}</OnCard.Provider>
+        </View>
+      </View>
       {!!footer && <Text style={[scriptStyle(footer, type.meta), styles.footer, { color: p.faint }]}>{footer}</Text>}
     </View>
   );
@@ -65,7 +70,8 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 16, paddingBottom: 12, gap: 18 },
   group: { gap: 6 },
   groupTitle: { paddingHorizontal: 4 },
-  card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  shell: { borderRadius: 16 },
+  card: { borderRadius: 16, overflow: 'hidden' },
   footer: { paddingHorizontal: 4 },
   stat: { alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, gap: 12 },
   statLabel: { flex: 1 },

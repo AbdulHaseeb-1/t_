@@ -8,7 +8,7 @@ import { checkConnection, normalizeBaseUrl, type ServerConfig } from '../../lib/
 import { describeError } from '../../lib/errors';
 import { leave } from '../../lib/nav';
 import { useSettings } from '../../state/settings';
-import { fonts, type, useChartPalette, usePalette } from '../../theme';
+import { card, fonts, type, useChartPalette, usePalette } from '../../theme';
 
 type Check = { state: 'idle' } | { state: 'checking' } | { state: 'ok' | 'warn' | 'fail'; message: string };
 
@@ -100,7 +100,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
           accessibilityLabel="Test connection"
           onPress={test}
           disabled={check.state === 'checking'}
-          style={({ pressed }) => [styles.test, row(rtl), { borderColor: p.border, backgroundColor: p.surface }, pressed && { backgroundColor: p.sunken }]}
+          style={({ pressed }) => [styles.test, row(rtl), card(p), pressed && { backgroundColor: p.sunken }]}
         >
           {check.state === 'checking' ? (
             <ActivityIndicator color={p.muted} />
@@ -130,6 +130,6 @@ const styles = StyleSheet.create({
   body: { paddingBottom: 32, gap: 22, maxWidth: 640, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
   input: { paddingHorizontal: 14, paddingVertical: 13, outlineStyle: 'none' } as never,
   save: { paddingHorizontal: 16, height: 34, borderRadius: 17, justifyContent: 'center', marginHorizontal: 4 },
-  test: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, height: 48, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  test: { borderRadius: 16, height: 48, alignItems: 'center', justifyContent: 'center', gap: 8 },
   status: { alignItems: 'flex-start', gap: 8, paddingHorizontal: 4 },
 });

@@ -4,13 +4,15 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { row, scriptStyle, useI18n } from '../i18n';
 import type { ParamValues, ReportTemplate, TemplateParam } from '../lib/api';
 import { CATEGORY_ICON, datePresets, defaultParams, paramLabel, resolveDate, templateDescription, templateTitle, validDate } from '../lib/reports';
-import { fonts, type, usePalette } from '../theme';
+import { card, fonts, type, usePalette } from '../theme';
+import { useControlSurface } from './surface';
 import { Sheet } from './Sheet';
 
 type Icon = React.ComponentProps<typeof Feather>['name'];
 
 export function Chip({ label, selected, onPress, icon, testID }: { label: string; selected?: boolean; onPress: () => void; icon?: Icon; testID?: string }) {
   const p = usePalette();
+  const surface = useControlSurface(p);
   const { rtl } = useI18n();
   return (
     <Pressable
@@ -22,7 +24,7 @@ export function Chip({ label, selected, onPress, icon, testID }: { label: string
       style={({ pressed }) => [
         styles.chip,
         row(rtl),
-        { borderColor: selected ? p.text : p.border, backgroundColor: selected ? p.text : p.surface },
+        selected ? { backgroundColor: p.text } : surface,
         pressed && { opacity: 0.8 },
       ]}
     >
@@ -56,6 +58,7 @@ export function ParamFields({ report, values, onChange, today }: { report: Repor
 
 function ParamField({ param, value, onChange, today }: { param: TemplateParam; value: string | number; onChange: (v: string | number) => void; today?: string }) {
   const p = usePalette();
+  const surface = useControlSurface(p);
   const { t, lang, rtl } = useI18n();
   const label = paramLabel(param, lang);
   const [text, setText] = useState(param.type === 'date' && validDate(String(value)) ? String(value) : '');
@@ -66,7 +69,7 @@ function ParamField({ param, value, onChange, today }: { param: TemplateParam; v
       <View style={styles.field}>
         <Text style={[scriptStyle(label, type.label), { color: p.text, textAlign: rtl ? 'right' : 'left' }]}>{label}</Text>
         <View style={[row(rtl), styles.stepper]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${label} −`} onPress={() => onChange(clamp(n - 1))} style={[styles.step, { borderColor: p.border }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${label} −`} onPress={() => onChange(clamp(n - 1))} style={[styles.step, surface]}>
             <Feather name="minus" size={16} color={p.text} />
           </Pressable>
           <TextInput
@@ -77,9 +80,9 @@ function ParamField({ param, value, onChange, today }: { param: TemplateParam; v
             }}
             keyboardType="number-pad"
             accessibilityLabel={label}
-            style={[type.body, styles.numInput, { color: p.text, borderColor: p.border }]}
+            style={[type.body, styles.numInput, { color: p.text, backgroundColor: p.sunken }]}
           />
-          <Pressable accessibilityRole="button" accessibilityLabel={`${label} +`} onPress={() => onChange(clamp(n + 1))} style={[styles.step, { borderColor: p.border }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${label} +`} onPress={() => onChange(clamp(n + 1))} style={[styles.step, surface]}>
             <Feather name="plus" size={16} color={p.text} />
           </Pressable>
         </View>
@@ -118,7 +121,7 @@ function ParamField({ param, value, onChange, today }: { param: TemplateParam; v
         autoCapitalize="none"
         autoCorrect={false}
         accessibilityLabel={`${label}: ${t.customDate}`}
-        style={[type.body, styles.dateInput, { color: p.text, borderColor: text && !validDate(text) ? p.danger : p.border }]}
+        style={[type.body, styles.dateInput, { color: p.text, backgroundColor: text && !validDate(text) ? p.dangerSoft : p.sunken }]}
       />
     </View>
   );
@@ -162,7 +165,7 @@ export function ReportSheet({
             accessibilityRole="button"
             accessibilityLabel={t.scheduleIt}
             onPress={() => onSchedule(values)}
-            style={({ pressed }) => [styles.secondary, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+            style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}
           >
             <Feather name="clock" size={16} color={p.text} />
             <Text style={[scriptStyle(t.scheduleIt, type.label), { color: p.text }]}>{t.scheduleIt}</Text>
@@ -191,19 +194,19 @@ export function ReportChips({ templates, onPick, onAll }: { templates: ReportTem
 }
 
 const styles = StyleSheet.create({
-  chip: { alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 12, height: 32, maxWidth: 240 },
+  chip: { alignItems: 'center', gap: 6, borderRadius: 16, paddingHorizontal: 12, height: 32, maxWidth: 240 },
   chips: { gap: 8, paddingVertical: 2 },
   fields: { gap: 18 },
   field: { gap: 8 },
   labelRow: { justifyContent: 'space-between', alignItems: 'baseline' },
   stepper: { alignItems: 'center', gap: 8 },
-  step: { width: 40, height: 40, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
-  numInput: { minWidth: 72, height: 40, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, textAlign: 'center', paddingHorizontal: 8 },
-  dateInput: { height: 40, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, fontVariant: ['tabular-nums'] },
+  step: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  numInput: { minWidth: 72, height: 40, borderRadius: 12, textAlign: 'center', paddingHorizontal: 8 },
+  dateInput: { height: 40, borderRadius: 12, paddingHorizontal: 12, fontVariant: ['tabular-nums'] },
   sheetBody: { gap: 18, paddingBottom: 8 },
   buttons: { gap: 10 },
   primary: { flex: 1, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  secondary: { height: 46, borderRadius: 23, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
+  secondary: { height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
   quick: { marginTop: 18, flexWrap: 'wrap', justifyContent: 'center', gap: 8, maxWidth: 520 },
 });
 
@@ -233,7 +236,7 @@ export function SaveReportSheet({ question, onClose, onSave }: { question: strin
           onChangeText={setTitle}
           autoFocus
           accessibilityLabel={t.reportName}
-          style={[scriptStyle(title, type.body), styles.dateInput, { color: p.text, borderColor: p.border, textAlign: rtl ? 'right' : 'left' }]}
+          style={[scriptStyle(title, type.body), styles.dateInput, { color: p.text, backgroundColor: p.sunken, textAlign: rtl ? 'right' : 'left' }]}
         />
         {!!error && <Text style={[scriptStyle(error, type.meta), { color: p.danger }]}>{error}</Text>}
         <Pressable

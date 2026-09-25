@@ -5,7 +5,7 @@ import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-
 import { scriptStyle, useI18n } from '../i18n';
 import { compactNumber, type Growth, humanize, lineDomain, niceMax, percent, type VizSpec } from '../lib/chart';
 import { formatCell } from '../lib/format';
-import { fonts, type, type ChartPalette, useChartPalette, usePalette } from '../theme';
+import { card, fonts, type, type ChartPalette, useChartPalette, usePalette } from '../theme';
 
 /**
  * Charts follow one spec (see lib/chart.ts for the form choice):
@@ -106,7 +106,7 @@ function Kpis({ items }: { items: { label: string; value: number }[] }) {
   return (
     <View style={styles.kpis} testID="chart-kpis">
       {items.map((k) => (
-        <View key={k.label} style={[styles.kpi, { borderColor: p.border, backgroundColor: p.surface }]} accessible accessibilityLabel={`${humanize(k.label)}: ${formatCell(k.value)}`}>
+        <View key={k.label} style={[styles.kpi, card(p)]} accessible accessibilityLabel={`${humanize(k.label)}: ${formatCell(k.value)}`}>
           <Text style={[type.meta, { color: p.muted }]} numberOfLines={1}>
             {humanize(k.label)}
           </Text>
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  kpi: { flexGrow: 1, flexBasis: '45%', borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   kpiValue: { fontFamily: fonts.sansSemibold, fontSize: 22, lineHeight: 28 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   donutLegend: { flex: 1, minWidth: 140, gap: 6 },

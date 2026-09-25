@@ -15,7 +15,7 @@ import { isUrduText, row, scriptStyle, useI18n } from '../i18n';
 import { type PickedImage, pickImage } from '../lib/media';
 import { useVoice } from '../lib/useVoice';
 import type { Outgoing } from '../state/chats';
-import { fonts, type, usePalette } from '../theme';
+import { card, fonts, type, usePalette } from '../theme';
 import { IconButton } from './IconButton';
 import { PulseDot, Waveform } from './Waveform';
 
@@ -122,7 +122,7 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
   );
 
   return (
-    <View style={[styles.box, { backgroundColor: p.surface, borderColor: p.border }]}>
+    <View style={[styles.box, card(p)]}>
       {image && (
         <View style={[row(rtl), styles.attachRow]}>
           <View>
@@ -185,11 +185,11 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
 
       {menu && (
         <View style={[row(rtl), styles.menu]}>
-          <Pressable accessibilityRole="button" accessibilityLabel={t.choosePhoto} onPress={() => attach('library')} style={[styles.chip, { borderColor: p.border }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t.choosePhoto} onPress={() => attach('library')} style={[styles.chip, { backgroundColor: p.sunken }]}>
             <Feather name="image" size={15} color={p.text} />
             <Text style={[scriptStyle(t.choosePhoto, type.meta), { color: p.text, fontFamily: rtl ? fonts.urdu : fonts.sansMedium }]}>{t.choosePhoto}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={t.takePhoto} onPress={() => attach('camera')} style={[styles.chip, { borderColor: p.border }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t.takePhoto} onPress={() => attach('camera')} style={[styles.chip, { backgroundColor: p.sunken }]}>
             <Feather name="camera" size={15} color={p.text} />
             <Text style={[scriptStyle(t.takePhoto, type.meta), { color: p.text, fontFamily: rtl ? fonts.urdu : fonts.sansMedium }]}>{t.takePhoto}</Text>
           </Pressable>
@@ -218,17 +218,11 @@ export const Composer = memo(function Composer({ busy, onSend, onStop }: Props) 
 
 const styles = StyleSheet.create({
   box: {
-    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 24,
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 6,
     gap: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
   input: { paddingTop: 0, paddingBottom: 0, paddingHorizontal: 4, outlineStyle: 'none' } as never,
   attachRow: { paddingHorizontal: 4, paddingTop: 2 },
@@ -237,7 +231,7 @@ const styles = StyleSheet.create({
   recRow: { alignItems: 'center', gap: 10, paddingHorizontal: 4, minHeight: 30 },
   clock: { fontVariant: ['tabular-nums'], minWidth: 40 },
   menu: { gap: 8, paddingHorizontal: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
   bar: { alignItems: 'center' },
   spacer: { flex: 1 },
   round: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

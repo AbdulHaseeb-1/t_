@@ -13,7 +13,7 @@ import { ensureNotificationPermission } from '../../lib/notifications';
 import { defaultParams, templateTitle } from '../../lib/reports';
 import { useReports } from '../../state/reports';
 import { useSettings } from '../../state/settings';
-import { fonts, type, usePalette } from '../../theme';
+import { card, fonts, type, usePalette } from '../../theme';
 
 type Kind = 'daily' | 'weekly' | 'monthly';
 const TIMES = ['08:00', '09:00', '13:00', '18:00', '21:00'];
@@ -236,7 +236,7 @@ export default function ScheduleEditor() {
                 accessibilityLabel={t.orQuestion}
                 placeholder={t.placeholder}
                 placeholderTextColor={p.faint}
-                style={[text(question, [styles.input, styles.multiline, { borderColor: p.border }])]}
+                style={[text(question, [styles.input, styles.multiline, { backgroundColor: p.sunken }])]}
               />
             )}
           </View>
@@ -288,7 +288,7 @@ export default function ScheduleEditor() {
                 placeholderTextColor={p.faint}
                 keyboardType="numbers-and-punctuation"
                 maxLength={5}
-                style={[type.body, styles.time, { color: p.text, borderColor: timeOk ? p.border : p.danger }]}
+                style={[type.body, styles.time, { color: p.text, backgroundColor: timeOk ? p.sunken : p.dangerSoft }]}
               />
             )}
           </View>
@@ -314,7 +314,7 @@ export default function ScheduleEditor() {
               accessibilityLabel={t.deliverWhatsApp}
               placeholder="923001234567"
               placeholderTextColor={p.faint}
-              style={[type.body, styles.input, styles.multiline, { color: p.text, borderColor: numbersOk ? p.border : p.danger, fontVariant: ['tabular-nums'] }]}
+              style={[type.body, styles.input, styles.multiline, { color: p.text, backgroundColor: numbersOk ? p.sunken : p.dangerSoft, fontVariant: ['tabular-nums'] }]}
             />
           </View>
         </Section>
@@ -346,11 +346,11 @@ export default function ScheduleEditor() {
 
         {editing && (
           <View style={[row(rtl), styles.bottom]}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t.runNow} disabled={busy} onPress={runNow} style={({ pressed }) => [styles.secondary, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.runNow} disabled={busy} onPress={runNow} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}>
               {busy ? <ActivityIndicator color={p.muted} /> : <Feather name="play" size={16} color={p.text} />}
               <Text style={[scriptStyle(t.runNow, type.label), { color: p.text }]}>{t.runNow}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={t.deleteSchedule} onPress={remove} style={({ pressed }) => [styles.secondary, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.dangerSoft }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t.deleteSchedule} onPress={remove} style={({ pressed }) => [styles.secondary, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.dangerSoft }]}>
               <Feather name="trash-2" size={16} color={p.danger} />
               <Text style={[scriptStyle(t.deleteSchedule, type.label), { color: p.danger }]}>{t.deleteSchedule}</Text>
             </Pressable>
@@ -368,12 +368,12 @@ const styles = StyleSheet.create({
   save: { paddingHorizontal: 16, height: 34, borderRadius: 17, justifyContent: 'center', marginHorizontal: 4 },
   message: { borderRadius: 12, padding: 12, marginHorizontal: 4 },
   input: { paddingHorizontal: 14, paddingVertical: 12, outlineStyle: 'none' } as never,
-  multiline: { minHeight: 76, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, textAlignVertical: 'top' },
+  multiline: { minHeight: 76, borderRadius: 12, textAlignVertical: 'top' },
   inner: { padding: 14, gap: 12 },
   wrap: { flexWrap: 'wrap', gap: 8 },
-  time: { width: 76, height: 32, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  time: { width: 76, height: 32, borderRadius: 16, textAlign: 'center', fontVariant: ['tabular-nums'] },
   switchRow: { alignItems: 'center', gap: 12, paddingHorizontal: 14, minHeight: 52 },
   labelRow: { alignItems: 'center', gap: 12 },
   bottom: { gap: 10, flexWrap: 'wrap', paddingHorizontal: 4 },
-  secondary: { height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
+  secondary: { height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 18 },
 });

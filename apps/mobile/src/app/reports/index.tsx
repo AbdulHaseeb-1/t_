@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PressableCard } from '../../components/PressableCard';
 import { PageHeader } from '../../components/SettingsUI';
 import { useOpenReport } from '../../components/useOpenReport';
 import { row, scriptStyle, useI18n } from '../../i18n';
@@ -105,14 +106,14 @@ function ReportCard({ r, onPress, onLongPress }: { r: ReportTemplate; onPress: (
   const title = templateTitle(r, lang);
   const description = templateDescription(r, lang);
   return (
-    <Pressable
+    <PressableCard
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={description}
       onPress={onPress}
       onLongPress={onLongPress}
       testID={`report-${r.id}`}
-      style={({ pressed }) => [styles.card, { backgroundColor: p.surface, borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+      style={styles.card}
     >
       <View style={[row(rtl), styles.cardTop]}>
         <View style={[styles.icon, { backgroundColor: r.alert ? p.dangerSoft : p.sunken }]}>
@@ -128,7 +129,7 @@ function ReportCard({ r, onPress, onLongPress }: { r: ReportTemplate; onPress: (
           {description}
         </Text>
       )}
-    </Pressable>
+    </PressableCard>
   );
 }
 
@@ -144,9 +145,9 @@ const styles = StyleSheet.create({
   pad: { padding: 16 },
   group: { gap: 8, marginTop: 14 },
   groupTitle: { paddingHorizontal: 8 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 4, paddingBottom: 4 },
   // Two per row on phones and tablets alike; a lone last card keeps its width.
-  card: { flexGrow: 1, flexBasis: '45%', maxWidth: '49%', minHeight: 116, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 14, gap: 8 },
+  card: { flexGrow: 1, flexBasis: '45%', maxWidth: '49%', minHeight: 116, borderRadius: 20, padding: 14, gap: 8 },
   cardTop: { justifyContent: 'space-between', alignItems: 'center' },
-  icon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

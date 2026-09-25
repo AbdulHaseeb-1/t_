@@ -11,7 +11,7 @@ import { saveTemplate } from '../lib/api';
 import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
 import { useChatActions } from '../state/chats';
-import { type, usePalette } from '../theme';
+import { card, type, usePalette } from '../theme';
 import { Chart } from './Chart';
 import { DataPanel } from './DataPanel';
 import { AnswerDetailsSheet } from './Details';
@@ -99,7 +99,7 @@ function Assistant({ m }: { m: AssistantMessage }) {
               accessibilityRole="button"
               accessibilityLabel={t.openSettings}
               onPress={() => router.push('/settings/server')}
-              style={({ pressed }) => [styles.fix, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+              style={({ pressed }) => [styles.fix, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}
             >
               <Feather name="settings" size={14} color={p.text} />
               <Text style={[scriptStyle(t.openSettings, type.meta), { color: p.text }]}>{t.openSettings}</Text>
@@ -189,5 +189,5 @@ const styles = StyleSheet.create({
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   actions: { marginHorizontal: -10, marginTop: -6, alignItems: 'center', gap: 4 },
   meta: { alignItems: 'center', gap: 5, paddingHorizontal: 8, flexShrink: 1 },
-  fix: { alignItems: 'center', gap: 6, borderWidth: StyleSheet.hairlineWidth, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  fix: { alignItems: 'center', gap: 6, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
 });

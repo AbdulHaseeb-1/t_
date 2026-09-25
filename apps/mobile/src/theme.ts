@@ -21,6 +21,10 @@ const light = {
   danger: '#B3261E',
   dangerSoft: '#F9E3E1',
   scrim: 'rgba(20, 19, 17, 0.32)',
+  /** Cards float on a soft, warm two-layer shadow instead of a border. */
+  shadow: '0px 1px 2px rgba(60, 50, 30, 0.05), 0px 4px 16px rgba(60, 50, 30, 0.07)',
+  /** Small controls (chips): a lighter lift. */
+  shadowSm: '0px 1px 2px rgba(60, 50, 30, 0.06), 0px 2px 8px rgba(60, 50, 30, 0.05)',
 };
 
 const dark: typeof light = {
@@ -39,6 +43,9 @@ const dark: typeof light = {
   danger: '#F2B8B5',
   dangerSoft: '#3B2322',
   scrim: 'rgba(0, 0, 0, 0.5)',
+  // Dark surfaces are lighter than the page, so a deeper shadow only adds depth.
+  shadow: '0px 1px 2px rgba(0, 0, 0, 0.22), 0px 6px 18px rgba(0, 0, 0, 0.20)',
+  shadowSm: '0px 1px 2px rgba(0, 0, 0, 0.20), 0px 2px 8px rgba(0, 0, 0, 0.16)',
 };
 
 export type Palette = typeof light;
@@ -92,6 +99,11 @@ export const type = {
 } as const;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
+
+/** A borderless, softly shadowed card: continuous (squircle) corners on iOS. */
+export function card(p: Palette, size: 'md' | 'sm' = 'md') {
+  return { backgroundColor: p.surface, boxShadow: size === 'sm' ? p.shadowSm : p.shadow, borderCurve: 'continuous' as const };
+}
 
 export function usePalette(): Palette {
   return useColorScheme() === 'dark' ? dark : light;

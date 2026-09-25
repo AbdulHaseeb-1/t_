@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PressableCard } from '../../components/PressableCard';
 import { PageHeader } from '../../components/SettingsUI';
 import { row, scriptStyle, useI18n } from '../../i18n';
 import { type InboxEntry, listInbox, markInboxRead } from '../../lib/api';
@@ -57,12 +58,12 @@ export default function InboxScreen() {
         {reports?.map((r) => {
           const line = r.status === 'failed' ? `${t.reportFailed}: ${r.error ?? ''}` : (r.summary ?? t.rowsCount(r.rows)).replace(/\*\*/g, '');
           return (
-            <Pressable
+            <PressableCard
               key={r.id}
               accessibilityRole="button"
               accessibilityLabel={`${r.read ? '' : '• '}${r.title}, ${formatWhen(r.createdAt, lang)}`}
               onPress={() => router.push(`/inbox/${r.id}`)}
-              style={({ pressed }) => [styles.item, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+              style={[styles.item, row(rtl)]}
             >
               <View style={[styles.dot, { backgroundColor: r.read ? 'transparent' : p.accent }]} />
               <View style={[styles.icon, { backgroundColor: r.status === 'failed' ? p.dangerSoft : p.sunken }]}>
@@ -79,7 +80,7 @@ export default function InboxScreen() {
                   {line}
                 </Text>
               </View>
-            </Pressable>
+            </PressableCard>
           );
         })}
       </ScrollView>
@@ -90,10 +91,10 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   flex: { flex: 1, gap: 2 },
-  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 12 },
+  body: { paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center', paddingHorizontal: 14, gap: 10 },
   action: { paddingHorizontal: 10, height: 34, justifyContent: 'center' },
   pad: { padding: 16 },
-  item: { alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  item: { alignItems: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 18 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   icon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   titleRow: { alignItems: 'baseline', gap: 8 },

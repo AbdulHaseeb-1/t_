@@ -35,7 +35,7 @@ export const Header = memo(function Header({ title, onMenu, onNewChat, canStartN
           accessibilityLabel={t.usageButton(tok)}
           onPress={onUsage}
           hitSlop={6}
-          style={({ pressed }) => [styles.pill, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}
+          style={({ pressed }) => [styles.pill, row(rtl), { backgroundColor: p.sunken }, pressed && { opacity: 0.7 }]}
           testID="usage-pill"
         >
           <Feather name="zap" size={12} color={p.muted} />
@@ -58,7 +58,7 @@ export const Header = memo(function Header({ title, onMenu, onNewChat, canStartN
 const styles = StyleSheet.create({
   bar: { alignItems: 'center', paddingHorizontal: 8, height: 56, gap: 4 },
   title: { flex: 1, textAlign: 'center' },
-  pill: { alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 8, height: 26 },
+  pill: { alignItems: 'center', gap: 4, borderRadius: 12, paddingHorizontal: 8, height: 26 },
   pillText: { fontVariant: ['tabular-nums'] },
   badge: { position: 'absolute', top: 6, right: 4, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },

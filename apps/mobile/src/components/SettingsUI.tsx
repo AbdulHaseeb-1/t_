@@ -2,7 +2,8 @@ import Feather from '@expo/vector-icons/Feather';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { fonts, type, usePalette } from '../theme';
+import { card, fonts, type, usePalette } from '../theme';
+import { OnCard } from './surface';
 import { IconButton } from './IconButton';
 
 type Icon = ComponentProps<typeof Feather>['name'];
@@ -39,7 +40,11 @@ export function Section({ title, children, footer }: { title?: string; children:
   return (
     <View style={styles.section}>
       {!!title && <Text style={[scriptStyle(title, { ...type.meta, fontFamily: fonts.sansMedium }), styles.sectionTitle, { color: p.muted }]}>{title}</Text>}
-      <View style={[styles.card, { backgroundColor: p.surface, borderColor: p.border }]}>{children}</View>
+      <View style={[styles.shell, card(p)]}>
+        <View style={styles.card}>
+          <OnCard.Provider value>{children}</OnCard.Provider>
+        </View>
+      </View>
       {!!footer && <Text style={[scriptStyle(footer, type.meta), styles.footer, { color: p.faint }]}>{footer}</Text>}
     </View>
   );
@@ -117,7 +122,8 @@ const styles = StyleSheet.create({
   bigTitle: { fontFamily: fonts.serif, fontSize: 30, lineHeight: 38, paddingHorizontal: 20, paddingBottom: 8 },
   section: { gap: 6 },
   sectionTitle: { paddingHorizontal: 16, textTransform: 'none' },
-  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  shell: { borderRadius: 18 },
+  card: { borderRadius: 18, overflow: 'hidden' },
   footer: { paddingHorizontal: 16 },
   row: { alignItems: 'center', gap: 12, paddingHorizontal: 14, minHeight: 50, paddingVertical: 8 },
   iconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

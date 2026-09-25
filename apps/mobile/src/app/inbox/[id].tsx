@@ -16,7 +16,7 @@ import { leave } from '../../lib/nav';
 import { useChatActions } from '../../state/chats';
 import { useReports } from '../../state/reports';
 import { useSettings } from '../../state/settings';
-import { type, usePalette } from '../../theme';
+import { card, type, usePalette } from '../../theme';
 
 /** One delivered report: summary, chart, data, where it was sent. Opening it marks it read. */
 export default function InboxReportScreen() {
@@ -87,7 +87,7 @@ export default function InboxReportScreen() {
               </View>
             )}
             {res?.template && (
-              <Pressable accessibilityRole="button" accessibilityLabel={t.runReport} onPress={again} style={({ pressed }) => [styles.again, row(rtl), { borderColor: p.border }, pressed && { backgroundColor: p.sunken }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t.runReport} onPress={again} style={({ pressed }) => [styles.again, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}>
                 <Feather name="refresh-cw" size={15} color={p.text} />
                 <Text style={[scriptStyle(t.runReport, type.label), { color: p.text }]}>{t.runReport}</Text>
               </Pressable>
@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
   failed: { borderRadius: 12, padding: 12 },
   deliveries: { gap: 4 },
   delivery: { alignItems: 'center', gap: 6 },
-  again: { alignSelf: 'flex-start', alignItems: 'center', gap: 8, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, paddingHorizontal: 14, height: 36 },
+  again: { alignSelf: 'flex-start', alignItems: 'center', gap: 8, borderRadius: 18, paddingHorizontal: 14, height: 36 },
 });
