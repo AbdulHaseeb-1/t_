@@ -28,3 +28,7 @@ infra/mssql/data/*
 # Playwright output
 test-results/
 playwright-report/
+
+# This is a pnpm workspace: pnpm-lock.yaml is the only lockfile.
+package-lock.json
+yarn.lock
