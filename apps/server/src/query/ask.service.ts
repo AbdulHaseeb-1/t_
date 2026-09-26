@@ -347,7 +347,7 @@ export class AskService {
   ): Promise<{ answer: string; usage: UsageSummary; llmMs: number }> {
     const meter = new UsageMeter();
     const timings: Timings = { llmMs: 0, dbMs: 0 };
-    const answer = await this.phrase(question, sql, result, meter, timings, lang, guidance);
+    const answer = await this.phrase(question, sql, result, meter, timings, lang, guidance, true);
     return { answer, usage: meter.summary(), llmMs: Math.round(timings.llmMs) };
   }
 
@@ -359,6 +359,7 @@ export class AskService {
     timings: Timings,
     lang: Lang,
     guidance?: string,
+    report = false,
   ): Promise<string> {
     if (result.rowCount === 0) return PHRASES[lang].noRows;
     // A single value needs no language model (English only: Urdu needs a natural label).
@@ -370,7 +371,7 @@ export class AskService {
       this.llm.chat(
         {
           tier: 'fast',
-          messages: answerMessages(question, sql, table, lang, guidance),
+          messages: answerMessages(question, sql, table, lang, guidance, report),
           temperature: 0.2,
           maxTokens: 900,
           purpose: 'answer',
