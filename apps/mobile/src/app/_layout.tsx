@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatProvider, useChatState } from '../state/chats';
 import { ReportsProvider } from '../state/reports';
@@ -24,16 +25,18 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SettingsProvider>
-        <I18nProvider>
-          <ChatProvider>
-            <ReportsProvider>
-              <StartupSplashGate />
-              <Screens />
-            </ReportsProvider>
-          </ChatProvider>
-        </I18nProvider>
-      </SettingsProvider>
+      <KeyboardProvider>
+        <SettingsProvider>
+          <I18nProvider>
+            <ChatProvider>
+              <ReportsProvider>
+                <StartupSplashGate />
+                <Screens />
+              </ReportsProvider>
+            </ChatProvider>
+          </I18nProvider>
+        </SettingsProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

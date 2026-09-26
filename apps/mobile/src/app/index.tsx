@@ -5,7 +5,6 @@ import {
   Animated,
   Easing,
   FlatList,
-  KeyboardAvoidingView,
   type ListRenderItem,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -17,6 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
@@ -138,7 +138,8 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom', 'left', 'right']}>
-      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Android draws edge to edge, so the window no longer resizes for the keyboard: the composer is lifted here, frame by frame with the keyboard, on both platforms. */}
+      <KeyboardAvoidingView style={styles.fill} behavior="padding" automaticOffset>
         <View style={styles.headerFrame}>
           <Header
             title={chat ? chat.title || t.voiceMessage : t.appNewChat}

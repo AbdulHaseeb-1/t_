@@ -1,21 +1,24 @@
 import { type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { card, type, usePalette } from '../theme';
 import { OnCard } from './surface';
 import { IconButton } from './IconButton';
 
-/** Bottom sheet: dimmed backdrop, rounded top, title bar with close. */
+/** Bottom sheet: dimmed backdrop, rounded top, title bar with close. Rides up with the keyboard so its inputs stay visible. */
 export function Sheet({ visible, title, onClose, children, testID }: { visible: boolean; title: string; onClose: () => void; children: ReactNode; testID?: string }) {
   const p = usePalette();
   const { t, rtl } = useI18n();
   const insets = useSafeAreaInsets();
+  // The keyboard covers the navigation bar, so its inset would only leave a gap above the keys.
+  const keyboardUp = useKeyboardState((state) => state.isVisible);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.fill}>
+      <KeyboardAvoidingView style={styles.fill} behavior="padding" automaticOffset>
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: p.scrim }]} onPress={onClose} accessibilityLabel={t.cancel} />
-        <View style={[styles.sheet, { backgroundColor: p.bg, paddingBottom: insets.bottom + 12 }]} testID={testID} accessibilityViewIsModal>
+        <View style={[styles.sheet, { backgroundColor: p.bg, paddingBottom: (keyboardUp ? 0 : insets.bottom) + 12 }]} testID={testID} accessibilityViewIsModal>
           <View style={[styles.grabber, { backgroundColor: p.border }]} />
           <View style={[styles.bar, row(rtl)]}>
             <Text style={[scriptStyle(title, type.title), styles.title, { color: p.text }]} accessibilityRole="header">
@@ -23,9 +26,11 @@ export function Sheet({ visible, title, onClose, children, testID }: { visible: 
             </Text>
             <IconButton name="x" label={t.cancel} size={20} onPress={onClose} />
           </View>
-          <ScrollView contentContainerStyle={styles.body}>{children}</ScrollView>
+          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

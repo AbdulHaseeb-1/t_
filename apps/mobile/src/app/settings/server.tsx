@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PageHeader, Section } from '../../components/SettingsUI';
 import { row, scriptStyle, useI18n } from '../../i18n';
@@ -54,7 +55,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bottomOffset={24}>
         <PageHeader
           title={t.server}
           onBack={leave}
@@ -119,7 +120,7 @@ function ServerForm({ initial, save }: { initial: ServerConfig; save: (next: Ser
             </Text>
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
