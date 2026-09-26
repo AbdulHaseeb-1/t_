@@ -737,9 +737,9 @@ describe('reports', () => {
     // The message and the new chat's title.
     expect(await screen.findAllByText("📊 Today's orders")).toHaveLength(2);
     expect(await screen.findByLabelText('Orders: 54', {}, { timeout: 3000 })).toBeTruthy(); // KPI tiles
-    // A report answer offers Schedule, not "Save as report" (it already is one).
+    // A template answer offers Schedule, not "Save as template" (it already is one).
     expect(screen.getByLabelText('Schedule')).toBeTruthy();
-    expect(screen.queryByLabelText('Save as report')).toBeNull();
+    expect(screen.queryByLabelText('Save as template')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Ask again'));
     await waitFor(() => expect(requests).toHaveLength(2));
@@ -750,7 +750,7 @@ describe('reports', () => {
     renderRouter(routes, { initialUrl: '/reports' });
     expect(await screen.findByTestId('report-top-customers')).toBeTruthy(); // templates loaded
     expect(screen.getAllByText('Customers')).toHaveLength(2); // filter chip and category heading
-    fireEvent.changeText(screen.getByLabelText('Search reports'), 'top');
+    fireEvent.changeText(screen.getByLabelText('Search templates'), 'top');
     expect(screen.queryByTestId('report-stock-shortage')).toBeNull();
     fireEvent.press(screen.getByTestId('report-top-customers'));
 
@@ -770,15 +770,15 @@ describe('reports', () => {
     await screen.findByText('What would you like to know?');
     await ask('How many orders are there?');
     await act(async () => requests[0].resolve(200, answer('SELECT COUNT(*) AS Orders FROM sales.Orders', 'There are **500** orders.')));
-    fireEvent.press(await screen.findByLabelText('Save as report'));
-    expect(screen.getByLabelText('Report name').props.value).toBe('How many orders are there?');
-    fireEvent.changeText(screen.getByLabelText('Report name'), 'Order count');
+    fireEvent.press(await screen.findByLabelText('Save as template'));
+    expect(screen.getByLabelText('Template name').props.value).toBe('How many orders are there?');
+    fireEvent.changeText(screen.getByLabelText('Template name'), 'Order count');
     fireEvent.press(screen.getByLabelText('Save'));
     await waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1].url).toMatch(/\/templates$/);
     expect(requests[1].body).toEqual({ title: 'Order count', question: 'How many orders are there?', sql: 'SELECT COUNT(*) AS Orders FROM sales.Orders' });
     await act(async () => requests[1].resolve(201, { ...TEMPLATES[0], id: 'order-count-x1', title: 'Order count', builtIn: false }));
-    expect(await screen.findByLabelText('Saved to Reports')).toBeTruthy();
+    expect(await screen.findByLabelText('Saved to Templates')).toBeTruthy();
   });
 
   it('schedules a report weekly to the app and WhatsApp', async () => {
