@@ -2,17 +2,23 @@ import type { ChartKind, QueryResult } from './api';
 
 /**
  * Chooses how a result is shown. The data's job picks the form:
+ *   one row: a value + its previous period  -> stat tile with the change
  *   one row of 2-4 numbers        -> KPI tiles (a single number stays in the prose)
  *   <= 12 periods, one measure    -> growth columns: latest period highlighted + change vs previous
  *   longer / multi-measure time   -> trend line (area for a single series)
  *   categories, "share of" intent -> donut (<= 6 positive parts)
  *   categories                    -> ranked bars (grouped when 2-3 measures)
+ *   long rows (x, a second dimension, one measure) -> one series per value of the second
+ *     dimension, top 5 + "Other": stacked columns over periods, stacked bars across
+ *     categories, lines to compare trends, grouped bars for 2-3 series
  * Anything that would mislead (ids, ambiguous labels, too many points) stays a table.
- * The assistant's preferred form (line, column, bar, donut) wins whenever the data fits it.
+ * The assistant's preferred form (line, column, bar, donut, stacked) wins whenever the data fits it.
  */
 export interface Series {
   name: string;
   values: number[];
+  /** Display name when the series is a data value ("North"), not a column name to humanize. */
+  label?: string;
 }
 
 export interface Growth {
@@ -23,11 +29,25 @@ export interface Growth {
   peakIndex: number;
 }
 
+/** `other`: the last series is the folded tail ("Other"), drawn in the context gray. `title` names a pivoted chart. */
 export type VizSpec =
   | { kind: 'kpis'; items: { label: string; value: number }[] }
+  | {
+      kind: 'stat';
+      label: string;
+      value: number;
+      previous: number;
+      /** The comparison period in words: "last month", "previous". */
+      previousLabel: string;
+      /** (value - previous) / |previous|; undefined when previous is 0. */
+      change?: number;
+      /** Whether a rise is good news (false for returns, costs, overdue amounts). */
+      upIsGood: boolean;
+    }
   | { kind: 'columns'; labels: string[]; series: Series; growth: Growth }
-  | { kind: 'trend'; labels: string[]; series: Series[]; growth?: Growth }
-  | { kind: 'bars'; labels: string[]; series: Series[]; total?: number }
+  | { kind: 'trend'; labels: string[]; series: Series[]; growth?: Growth; other?: boolean; title?: string }
+  | { kind: 'bars'; labels: string[]; series: Series[]; total?: number; other?: boolean; title?: string }
+  | { kind: 'stacked'; orientation: 'columns' | 'bars'; labels: string[]; series: Series[]; other?: boolean; title: string }
   | { kind: 'donut'; labels: string[]; series: Series; total: number; other?: boolean };
 
 /** @deprecated kept for older call sites: same as VizSpec. */
@@ -42,6 +62,15 @@ const SHARE_WORDS =
   /\b(share|shares|distribution|breakdown|proportion|percentage|percent|split|mix|composition|hissa|tanasub|fisad)\b|حصہ|تناسب|فیصد|تقسیم/i;
 const SHARE_COLUMN = /pct|percent|share|ratio|portion/i;
 
+/** A comparison column: previous_net_sales, last_month, ly_sales, pichla_mahina. */
+const PREVIOUS = /(^|_|\b)(prev|previous|prior|last|ly|pichl[aey]|guzishta|sabiq)(_|\b|$)|پچھل|گزشتہ|سابق/i;
+/** Measures where a rise is bad news. */
+const UP_IS_BAD = /return|refund|cancel|cost|expense|overdue|outstanding|receivable|debt|loss|discount|shortage|complaint|churn|late|expir/i;
+const PERIOD_WORD = /^(day|week|month|quarter|year|mahina|saal)s?$/i;
+/** Named series in a two-way breakdown before the rest is folded into "Other" (6 validated colors in all). */
+const MAX_SERIES = 5;
+/** Grouped bars stay readable with up to three bars per category. */
+const MAX_GROUPED = 3;
 const MAX_POINTS = 40;
 const MAX_BARS = 15;
 const MAX_DONUT = 6;
@@ -132,11 +161,17 @@ export function inferChart(r: QueryResult | null | undefined, question = '', lan
   // One row of several numbers: headline figures, not a chart.
   if (r.rows.length === 1) {
     const nums = cols.filter((c) => c.numeric && !c.id && !c.time);
+    // In one row, "this_month" and "last_month" are values, not a time axis.
+    const pair = cols.filter((c) => c.numeric && !c.id);
+    const stat = pair.length === 2 && pair.length === cols.length ? statOf(pair[0].name, pair[1].name, r.rows[0][pair[0].i] as number, r.rows[0][pair[1].i] as number) : null;
+    if (stat) return stat;
     if (nums.length >= 2 && nums.length <= 4 && nums.length === cols.length) {
       return { kind: 'kpis', items: nums.map((c) => ({ label: c.name, value: r.rows[0][c.i] as number })) };
     }
     return null;
   }
+  const pivot = pivotLong(r, cols, lang, prefer);
+  if (pivot !== undefined) return pivot;
   if (r.rows.length > MAX_POINTS || r.columns.length < 2) return null;
 
   // The x axis: the finest time column (year + month -> month), a name before its
@@ -195,6 +230,114 @@ export function inferChart(r: QueryResult | null | undefined, question = '', lan
   return { kind: 'bars', labels, series, total };
 }
 
+function words(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_]+/)
+    .map((w) => w.toLowerCase())
+    .filter(Boolean);
+}
+
+/** The comparison period in words: previous_net_sales vs net_sales -> "previous"; last_month vs this_month -> "last month". */
+export function comparisonLabel(previous: string, current: string): string {
+  const cur = new Set(words(current));
+  const kept = words(previous).filter((w) => !cur.has(w) || PERIOD_WORD.test(w));
+  const text = (kept.length ? kept : words(previous)).join(' ').replace(/\bly\b/, 'last year').replace(/\bprev\b/, 'previous');
+  return text;
+}
+
+/** One row holding a value and the same measure for a comparison period: a stat tile with the change. */
+function statOf(nameA: string, nameB: string, a: number, b: number): VizSpec | null {
+  const bPrev = PREVIOUS.test(nameB);
+  const aPrev = PREVIOUS.test(nameA);
+  if (bPrev === aPrev) return null;
+  const [curName, prevName, value, previous] = bPrev ? [nameA, nameB, a, b] : [nameB, nameA, b, a];
+  return {
+    kind: 'stat',
+    label: humanize(curName),
+    value,
+    previous,
+    previousLabel: comparisonLabel(prevName, curName),
+    change: previous !== 0 ? (value - previous) / Math.abs(previous) : undefined,
+    upIsGood: !UP_IS_BAD.test(curName),
+  };
+}
+
+type Col = { name: string; i: number; numeric: boolean; time: boolean; id: boolean };
+
+/**
+ * Long rows (x, a second dimension, one measure) turned into one series per
+ * value of the second dimension. The largest values keep their own series and
+ * color; the rest are summed into "Other". Returns undefined when the result is
+ * not in that shape, null when it is but is too large to draw (a table then).
+ */
+function pivotLong(r: QueryResult, cols: Col[], lang: 'en' | 'ur', prefer?: ChartKind): VizSpec | null | undefined {
+  const measures = cols.filter((c) => c.numeric && !c.id && !c.time);
+  if (measures.length !== 1) return undefined;
+  const measure = measures[0];
+  const times = cols.filter((c) => c.time).map((c) => ({ c, g: grainOf(c.name, isDateLike(r.rows, c.i)) }));
+  const finest = times.length ? Math.max(...times.map((t) => t.g)) : 0;
+  const time = times.filter((t) => t.g === finest).sort((a, b) => Number(a.c.numeric) - Number(b.c.numeric))[0]?.c;
+  const text = cols.filter((c) => !c.numeric && !c.time && !c.id);
+  let x: Col | undefined;
+  let dim: Col | undefined;
+  if (time && text.length === 1) [x, dim] = [time, text[0]];
+  else if (!time && text.length === 2) [x, dim] = [text[0], text[1]];
+  if (!x || !dim) return undefined;
+
+  // Periods in time order; categories in the order the query returned them (its ranking).
+  const xKeys: unknown[] = [];
+  const seen = new Set<string>();
+  for (const row of r.rows) {
+    const k = String(row[x.i]);
+    if (!seen.has(k)) {
+      seen.add(k);
+      xKeys.push(row[x.i]);
+    }
+  }
+  if (x === time) xKeys.sort((a, b) => (typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))));
+  const xIndex = new Map(xKeys.map((k, i) => [String(k), i]));
+  if (xKeys.length < 2 || xKeys.length > (x === time ? MAX_POINTS : MAX_BARS)) return null;
+
+  // One second-dimension value per x (customer + their city) is an attribute, not a breakdown: a table.
+  const perX = new Map<string, Set<string>>();
+  for (const row of r.rows) perX.set(String(row[x.i]), (perX.get(String(row[x.i])) ?? new Set()).add(plainLabel(row[dim.i])));
+  if ([...perX.values()].every((d) => d.size === 1)) return undefined;
+
+  const byDim = new Map<string, number[]>();
+  for (const row of r.rows) {
+    const d = plainLabel(row[dim.i]);
+    const values = byDim.get(d) ?? new Array<number>(xKeys.length).fill(0);
+    values[xIndex.get(String(row[x.i]))!] += (row[measure.i] as number | null) ?? 0;
+    byDim.set(d, values);
+  }
+  const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
+  const ranked = [...byDim.entries()].sort((a, b) => sum(b[1]) - sum(a[1]));
+  if (ranked.length < 2) return undefined;
+
+  const labels = x === time ? timeLabels(xKeys, x.name, lang) : xKeys.map(plainLabel);
+  const positive = ranked.every(([, v]) => v.every((n) => n >= 0));
+  const grouped = x !== time && prefer !== 'stacked' && ranked.length <= MAX_GROUPED;
+  const keep = grouped ? MAX_GROUPED : MAX_SERIES;
+  const head = ranked.length > keep + 1 ? ranked.slice(0, keep) : ranked;
+  const tail = ranked.slice(head.length);
+  const series: Series[] = head.map(([name, values]) => ({ name, label: name, values }));
+  if (tail.length) {
+    const other = new Array<number>(xKeys.length).fill(0);
+    for (const [, v] of tail) v.forEach((n, i) => (other[i] += n));
+    series.push({ name: 'other', label: lang === 'ur' ? 'دیگر' : 'Other', values: other });
+  }
+  const other = tail.length > 0;
+  const title = `${humanize(measure.name)} · ${humanize(dim.name).toLowerCase()}`;
+
+  if (x === time) {
+    const stack = positive && prefer !== 'line' && (prefer === 'stacked' || xKeys.length <= COLUMNS_MAX) && xKeys.length <= COLUMNS_PREFERRED_MAX;
+    return stack ? { kind: 'stacked', orientation: 'columns', labels, series, other, title } : { kind: 'trend', labels, series, other, title };
+  }
+  if (grouped) return { kind: 'bars', labels, series, other, title };
+  return positive ? { kind: 'stacked', orientation: 'bars', labels, series, other, title } : null;
+}
+
 /**
  * Measures that can share one axis. A percentage column next to the amount it
  * was derived from is redundant (the chart computes shares itself), and a
@@ -218,6 +361,31 @@ export function wholeFromShares(amounts: number[], shares: number[]): number | u
   if (sum / scale > 1.01) return undefined; // not shares of one whole
   const est = amounts.map((a, i) => (shares[i] > 0 ? (a * scale) / shares[i] : NaN)).filter(Number.isFinite).sort((a, b) => a - b);
   return est.length ? est[Math.floor(est.length / 2)] : undefined;
+}
+
+/**
+ * The column a table can draw in-cell bars for: the first non-negative measure
+ * (not an id, not a time), in a table of at least three rows. null when none.
+ */
+export function magnitudeColumn(r: QueryResult): number | null {
+  if (r.rows.length < 3) return null;
+  const c = r.columns.findIndex(
+    (col, i) =>
+      numericColumn(r.rows, i) &&
+      !ID_NAME.test(col.name) &&
+      !TIME_NAME.test(col.name) &&
+      !TIME_NAME_UR.test(col.name) &&
+      r.rows.every((row) => row[i] === null || (row[i] as number) >= 0),
+  );
+  if (c < 0) return null;
+  return Math.max(...r.rows.map((row) => (row[c] as number | null) ?? 0)) > 0 ? c : null;
+}
+
+/** Rows ranked by that measure, highest first, with a label to rank: worth rank numbers. */
+export function isRanking(r: QueryResult, c: number): boolean {
+  const hasLabel = r.columns.some((_, i) => !numericColumn(r.rows, i));
+  const v = r.rows.map((row) => (row[c] as number | null) ?? 0);
+  return hasLabel && v.every((x, i) => i === 0 || x <= v[i - 1]) && v[0] > v[v.length - 1];
 }
 
 /** Round axis maximum: 1, 2, 2.5 or 5 x 10^n, so gridlines land on readable values. */

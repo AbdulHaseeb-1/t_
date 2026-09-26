@@ -44,7 +44,7 @@ export interface AskResponse {
 
 /** How the assistant wants a result shown, from what was asked ("as a table", "trend"...). */
 export type ResultView = 'number' | 'table' | 'chart';
-export type ChartKind = 'line' | 'column' | 'bar' | 'donut';
+export type ChartKind = 'line' | 'column' | 'bar' | 'donut' | 'stacked';
 
 export interface Display {
   view: ResultView;

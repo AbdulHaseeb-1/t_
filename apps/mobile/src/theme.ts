@@ -79,6 +79,9 @@ const chartLight = {
   grid: '#EDEDED',
   good: '#006300',
   bad: '#D03B3B',
+  /** Washes behind a delta (the text on them stays in the ink color). */
+  goodSoft: '#E6F4E8',
+  badSoft: '#FBEAEA',
 };
 const chartDark: typeof chartLight = {
   series: ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181', '#008300'],
@@ -86,6 +89,8 @@ const chartDark: typeof chartLight = {
   grid: '#333333',
   good: '#0CA30C',
   bad: '#E66767',
+  goodSoft: '#1B3320',
+  badSoft: '#3D2426',
 };
 export type ChartPalette = typeof chartLight;
 

@@ -478,6 +478,68 @@ it('opens all requested list rows from the analyst result widget', async () => {
   expect(screen.queryByTestId('chart-bars')).toBeNull();
 });
 
+it('ranks list rows and draws a bar behind the main measure', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('List the top products');
+  const rows = [['Panadol', 900, 12], ['Brufen', 600, 8], ['Risek', 300, 3]];
+  const columns = ['product_name', 'net_sales', 'units_sold'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'Panadol leads.',
+    result,
+    results: [{ id: 'r1', title: 'Top products', sql: 'SELECT ...', result, display: { view: 'table' } }],
+  }, columns, rows)));
+  await screen.findByText('Panadol leads.');
+  expect(screen.getByText('#')).toBeTruthy();
+  const bars = screen.getAllByTestId('data-bar');
+  expect(bars).toHaveLength(3);
+  const widths = bars.map((b) => Object.assign({}, ...[b.props.style].flat(Infinity).filter(Boolean)).width as number);
+  expect(widths[0]).toBeGreaterThan(widths[1]);
+  expect(widths[1]).toBeGreaterThan(widths[2]);
+});
+
+it('shows a figure with its change against the previous period', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Sales this month');
+  const rows = [[24_800_000, 26_300_000]];
+  const columns = ['net_sales', 'previous_net_sales'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: 1, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'Net sales are **24.8M**, down 5.7%.',
+    result,
+    results: [{ id: 'r1', title: 'Net sales this month', sql: 'SELECT ...', result, display: { view: 'number' } }],
+  }, columns, rows)));
+  expect(await screen.findByTestId('chart-stat')).toBeTruthy();
+  expect(screen.getAllByText('24.8M')).toHaveLength(2); // the prose and the tile
+  expect(screen.getByText('−5.7%')).toBeTruthy();
+  expect(screen.getByText('vs 26.3M previous')).toBeTruthy();
+});
+
+it('stacks a two-way breakdown and reads out each part for a tapped period', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Monthly sales by region');
+  const rows = [
+    ['2026-07-01', 'North', 300], ['2026-07-01', 'South', 100],
+    ['2026-08-01', 'North', 400], ['2026-08-01', 'South', 200],
+  ];
+  const columns = ['month', 'region', 'net_sales'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'North leads every month.',
+    result,
+    results: [{ id: 'r1', title: 'Net sales by region', sql: 'SELECT ...', result, display: { view: 'chart', chart: 'stacked' } }],
+  }, columns, rows)));
+  expect(await screen.findByTestId('chart-stacked')).toBeTruthy();
+  // The latest month first: its total, its change, and each region's part.
+  expect(screen.getByText('600')).toBeTruthy();
+  expect(screen.getByText('North')).toBeTruthy();
+  expect(screen.getByText('400  67%')).toBeTruthy();
+  expect(screen.getByText('200  33%')).toBeTruthy();
+});
+
 it('pages through every returned table row beyond the first 50', async () => {
   renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What would you like to know?');
