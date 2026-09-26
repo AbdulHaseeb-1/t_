@@ -96,7 +96,7 @@ export const DataPanel = memo(function DataPanel({ sql, result, title: heading, 
                     ))}
                   </View>
                   {rows.map((r, i) => (
-                    <View key={i} style={[styles.row, { borderColor: p.border, backgroundColor: i % 2 ? p.sunken : p.surface }]}>
+                    <View key={i} style={[styles.row, { borderColor: p.border, backgroundColor: p.surface }, i === rows.length - 1 && styles.lastRow]}>
                       {result.columns.map((_, j) => (
                         <Text key={j} style={[styles.cell, columnWidth(j), type.meta, { color: p.text, textAlign: numeric[j] ? 'right' : 'left', fontVariant: ['tabular-nums'] }]} numberOfLines={2} selectable>
                           {formatCell(r[j])}
@@ -125,13 +125,14 @@ export const DataPanel = memo(function DataPanel({ sql, result, title: heading, 
 });
 
 const styles = StyleSheet.create({
-  shell: { borderRadius: 14 },
-  box: { borderRadius: 14, overflow: 'hidden' },
-  head: { alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  shell: { borderRadius: 16, borderCurve: 'continuous' },
+  box: { borderRadius: 16, overflow: 'hidden' },
+  head: { alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
   body: { borderTopWidth: StyleSheet.hairlineWidth, padding: 8, gap: 12 },
   sql: { borderRadius: 8, padding: 10 },
   row: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
-  headerRow: { minHeight: 38 },
+  headerRow: { minHeight: 38, borderRadius: 8 },
+  lastRow: { borderBottomWidth: 0 },
   cell: { paddingHorizontal: 10, paddingVertical: 9 },
   scrollHint: { alignItems: 'center', gap: 5, paddingHorizontal: 6 },
   pager: { alignItems: 'center', justifyContent: 'space-between', gap: 6 },

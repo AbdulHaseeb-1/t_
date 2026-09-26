@@ -26,6 +26,7 @@ jest.mock('../src/lib/useVoice', () => {
 });
 jest.mock('../src/lib/feedback', () => ({
   cue: jest.fn(),
+  tap: jest.fn(),
   preloadFeedback: jest.fn(),
   setFeedbackEnabled: jest.fn(),
   START_CUE_MS: 0,
@@ -207,7 +208,7 @@ it('shows what each answer cost and where the time went', async () => {
   await ask('How many orders are there?');
   await act(async () => requests[0].resolve(200, answer('SELECT 1', 'There are **500** orders.')));
   // Per-answer line: time, tokens; tap for the breakdown.
-  fireEvent.press(await screen.findByLabelText('Details: 1.4 s · 1.9K Tokens'));
+  fireEvent.press(await screen.findByLabelText('Details: 1.4 s · 1.9K tokens'));
   expect(await screen.findByText('Answer details')).toBeTruthy();
   expect(screen.getByText('Write query')).toBeTruthy();
   expect(screen.getByText('Write answer')).toBeTruthy();
@@ -525,6 +526,24 @@ it('shows one row of several figures as KPI tiles', async () => {
   expect(screen.getByLabelText('Total revenue: 2,500,000')).toBeTruthy();
   expect(screen.getByText('2.5M')).toBeTruthy();
   expect(screen.getByLabelText('Orders: 812')).toBeTruthy();
+});
+
+it('is white by default and switches to the dark theme from Settings', async () => {
+  const flat = (el: { props: { style?: unknown } }) => Object.assign({}, ...[el.props.style].flat(Infinity).filter(Boolean)) as Record<string, unknown>;
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  expect(flat(screen.getByTestId('header')).backgroundColor).toBe('#FFFFFF');
+  screen.unmount();
+
+  renderRouter(routes, { initialUrl: '/settings' });
+  fireEvent.press(await screen.findByLabelText('Theme, Light'));
+  fireEvent.press(await screen.findByLabelText('Dark'));
+  await waitFor(async () => expect(await AsyncStorage.getItem('settings.appearance')).toBe(JSON.stringify('dark')));
+  screen.unmount();
+
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await waitFor(() => expect(flat(screen.getByTestId('header')).backgroundColor).toBe('#212121'));
 });
 
 it('starts in English until a display language is chosen', async () => {

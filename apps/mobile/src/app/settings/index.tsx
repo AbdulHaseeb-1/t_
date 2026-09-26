@@ -11,11 +11,12 @@ import { layout, usePalette } from '../../theme';
 export default function SettingsScreen() {
   const p = usePalette();
   const { t } = useI18n();
-  const { server, language, replyLanguage, sounds, setSounds, showSql, setShowSql, ready } = useSettings();
+  const { server, language, replyLanguage, sounds, setSounds, showSql, setShowSql, appearance, ready } = useSettings();
   if (!ready) return <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} />;
 
   const host = server.baseUrl ? server.baseUrl.replace(/^https?:\/\//, '') : t.notConnected;
   const reply = { auto: t.replyAuto, ur: 'اردو', 'ur-Latn': t.romanUrdu, en: 'English' }[replyLanguage];
+  const theme = { light: t.themeLight, dark: t.themeDark, system: t.themeSystem }[appearance];
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
@@ -32,6 +33,15 @@ export default function SettingsScreen() {
             onPress={() => router.push({ pathname: '/settings/choose', params: { kind: 'ui' } })}
           />
           <SettingsRow icon="message-circle" label={t.replyLanguage} value={reply} onPress={() => router.push({ pathname: '/settings/choose', params: { kind: 'reply' } })} last />
+        </Section>
+        <Section title={t.sectionAppearance}>
+          <SettingsRow
+            icon={appearance === 'dark' ? 'moon' : 'sun'}
+            label={t.theme}
+            value={theme}
+            onPress={() => router.push({ pathname: '/settings/choose', params: { kind: 'appearance' } })}
+            last
+          />
         </Section>
         <Section title={t.sectionChat} footer={t.showSqlHint}>
           <SettingsRow icon="code" label={t.showSql} toggle={{ value: showSql, onChange: setShowSql }} />

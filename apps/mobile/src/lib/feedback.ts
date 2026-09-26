@@ -68,3 +68,9 @@ export function cue(name: Cue): void {
     // Sound is decoration; never let it break the flow.
   }
 }
+
+/** A light tick for sending a typed message: haptic only, no sound. */
+export function tap(): void {
+  if (!enabled || Platform.OS === 'web') return;
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+}

@@ -9,6 +9,7 @@ import { closeOpenSpans } from '../lib/markdown';
 import { useSmoothText } from '../lib/useSmoothText';
 import type { AnswerDetails, AssistantMessage, Message, UserMessage } from '../state/chat-reducer';
 import { formatDuration, formatTokens } from '../lib/format';
+import { isFresh, shown } from '../lib/fresh';
 import { cue } from '../lib/feedback';
 import { saveTemplate } from '../lib/api';
 import { useReports } from '../state/reports';
@@ -18,6 +19,7 @@ import { card, type, usePalette } from '../theme';
 import { Chart } from './Chart';
 import { DataPanel } from './DataPanel';
 import { AnswerDetailsSheet } from './Details';
+import { FadeIn } from './FadeIn';
 import { IconButton } from './IconButton';
 import { Markdown } from './Markdown';
 import { SaveReportSheet } from './ReportParts';
@@ -74,6 +76,9 @@ function Assistant({ m }: { m: AssistantMessage }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const wasPending = useRef(m.status === 'pending');
+  /** Answered while on screen (not loaded from history): its results fade in once. */
+  const [answeredLive, setAnsweredLive] = useState(m.status === 'pending');
+  if (m.status === 'pending' && !answeredLive) setAnsweredLive(true);
   const { text: visibleText, done: revealDone } = useSmoothText(m.text ?? '', m.status === 'pending', m.status === 'done');
   useEffect(() => {
     if (m.status === 'pending') {
@@ -141,8 +146,14 @@ function Assistant({ m }: { m: AssistantMessage }) {
     if (!visibleText) return <Thinking label={m.progress?.label?.trim() || stageLabel} />;
     return (
       <View style={styles.assistant}>
-        <Markdown text={closeOpenSpans(visibleText)} />
-        <Text style={[type.prose, styles.cursor, { color: p.accent }]} accessibilityLabel="Response in progress">▍</Text>
+        <Markdown
+          text={closeOpenSpans(visibleText)}
+          trailing={
+            <Text style={[styles.liveDot, { color: p.text }]} accessibilityLabel="Response in progress">
+              {' ●'}
+            </Text>
+          }
+        />
       </View>
     );
   }
@@ -151,8 +162,16 @@ function Assistant({ m }: { m: AssistantMessage }) {
     <View style={styles.assistant}>
       {!!visibleText && <Markdown text={visibleText} />}
       {hasShownResults
-        ? m.results!.map((item) => <ResultWidget key={item.id} item={item} question={m.question} showSql={showSql} />)
-        : chart && <Chart spec={chart} />}
+        ? m.results!.map((item, i) => (
+            <FadeIn key={item.id} enabled={answeredLive} delay={i * 90}>
+              <ResultWidget item={item} question={m.question} showSql={showSql} />
+            </FadeIn>
+          ))
+        : chart && (
+            <FadeIn enabled={answeredLive}>
+              <Chart spec={chart} />
+            </FadeIn>
+          )}
       {!!m.imageNote && (
         <Text style={[scriptStyle(m.imageNote, type.meta), { color: p.muted }]}>
           {`${t.readFromImage}: ${m.imageNote}`}
@@ -192,7 +211,7 @@ function MetaLine({ details, onPress }: { details: AnswerDetails; onPress: () =>
   const tokens = details.tokens.prompt + details.tokens.completion;
   const parts = [
     formatDuration(details.timings.totalMs, lang),
-    tokens ? `${formatTokens(tokens)} ${t.tokens}` : null,
+    tokens ? `${formatTokens(tokens)} ${t.tokens.toLowerCase()}` : null,
     details.cache ? t.cache : null,
   ].filter(Boolean);
   const text = parts.join(' · ');
@@ -214,18 +233,25 @@ function MetaLine({ details, onPress }: { details: AnswerDetails; onPress: () =>
 
 /** Memoized on the message object: the reducer only replaces messages that changed. */
 export const MessageRow = memo(function MessageRow({ message }: { message: Message }) {
-  return message.role === 'user' ? <UserBubble m={message} /> : <Assistant m={message} />;
+  // New messages ease in once; history and rows remounted by scrolling appear as they are.
+  const [animate] = useState(() => isFresh(message.id));
+  useEffect(() => shown(message.id), [message.id]);
+  return (
+    <FadeIn enabled={animate} distance={message.role === 'user' ? 12 : 6} duration={message.role === 'user' ? 240 : 300}>
+      {message.role === 'user' ? <UserBubble m={message} /> : <Assistant m={message} />}
+    </FadeIn>
+  );
 });
 
 const styles = StyleSheet.create({
   userRow: { alignItems: 'flex-end', paddingLeft: 32, gap: 6 },
   userRowRtl: { alignItems: 'flex-start', paddingLeft: 0, paddingRight: 32 },
-  bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '92%', gap: 4 },
+  bubble: { borderRadius: 22, borderCurve: 'continuous', paddingHorizontal: 16, paddingVertical: 10, maxWidth: '85%', gap: 4 },
   voice: { alignItems: 'center', gap: 6 },
   photo: { width: 120, height: 120, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   photoImg: { width: '100%', height: '100%' },
   assistant: { gap: 12 },
-  cursor: { marginTop: -8 },
+  liveDot: { fontSize: 13 },
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   actions: { marginHorizontal: -10, marginTop: -6, alignItems: 'center', gap: 4 },
   meta: { alignItems: 'center', gap: 5, paddingHorizontal: 8, flexShrink: 1 },

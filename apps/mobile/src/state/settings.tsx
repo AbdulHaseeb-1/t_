@@ -3,6 +3,7 @@ import { I18nContext, STRINGS, type UiLanguage } from '../i18n';
 import type { ReplyLanguage, ServerConfig } from '../lib/api';
 import { preloadFeedback, setFeedbackEnabled } from '../lib/feedback';
 import { secrets, storage } from '../lib/storage';
+import { type Appearance, SchemeContext } from '../theme';
 
 const URL_KEY = 'settings.apiUrl';
 const API_KEY = 'settings.apiKey';
@@ -10,6 +11,7 @@ const LANG_KEY = 'settings.language';
 const REPLY_KEY = 'settings.replyLanguage';
 const SOUNDS_KEY = 'settings.sounds';
 const SHOW_SQL_KEY = 'settings.showSql';
+const APPEARANCE_KEY = 'settings.appearance';
 
 /**
  * Release builds ship with no server: the address is set in the app on first run.
@@ -19,6 +21,9 @@ export const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__ ? 'ht
 const REPLY_LANGUAGES: ReplyLanguage[] = ['auto', 'ur', 'ur-Latn', 'en'];
 /** English is the default until the user chooses a display language. */
 export const DEFAULT_LANGUAGE: UiLanguage = 'en';
+/** A clean white app unless the person picks dark (or following the phone) in Settings. */
+export const DEFAULT_APPEARANCE: Appearance = 'light';
+const APPEARANCES: Appearance[] = ['light', 'dark', 'system'];
 
 interface SettingsValue {
   ready: boolean;
@@ -29,11 +34,13 @@ interface SettingsValue {
   sounds: boolean;
   /** Show the SQL behind answers (off: answers show text, chart and data only). */
   showSql: boolean;
+  appearance: Appearance;
   save(next: ServerConfig): Promise<void>;
   setLanguage(lang: UiLanguage): void;
   setReplyLanguage(lang: ReplyLanguage): void;
   setSounds(on: boolean): void;
   setShowSql(on: boolean): void;
+  setAppearance(a: Appearance): void;
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null);
@@ -44,6 +51,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [replyLanguage, setReply] = useState<ReplyLanguage>('auto');
   const [sounds, setSoundsState] = useState(true);
   const [showSql, setShowSqlState] = useState(false);
+  const [appearance, setAppearanceState] = useState<Appearance>(DEFAULT_APPEARANCE);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -55,13 +63,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       storage.get<ReplyLanguage>(REPLY_KEY),
       storage.get<boolean>(SOUNDS_KEY),
       storage.get<boolean>(SHOW_SQL_KEY),
-    ]).then(([url, key, lang, reply, snd, sql]) => {
+      storage.get<Appearance>(APPEARANCE_KEY),
+    ]).then(([url, key, lang, reply, snd, sql, look]) => {
       if (!alive) return;
       setServer({ baseUrl: url || DEFAULT_API_URL, apiKey: key || undefined });
       if (lang === 'ur' || lang === 'en') setLang(lang);
       if (reply && REPLY_LANGUAGES.includes(reply)) setReply(reply);
       if (snd === false) setSoundsState(false);
       if (sql === true) setShowSqlState(true);
+      if (look && APPEARANCES.includes(look)) setAppearanceState(look);
       setFeedbackEnabled(snd !== false);
       if (snd !== false) preloadFeedback();
       setReady(true);
@@ -97,11 +107,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     void storage.set(SHOW_SQL_KEY, on);
   }, []);
 
+  const setAppearance = useCallback((a: Appearance) => {
+    setAppearanceState(a);
+    void storage.set(APPEARANCE_KEY, a);
+  }, []);
+
   const value = useMemo(
-    () => ({ ready, server, language, replyLanguage, sounds, showSql, save, setLanguage, setReplyLanguage, setSounds, setShowSql }),
-    [ready, server, language, replyLanguage, sounds, showSql, save, setLanguage, setReplyLanguage, setSounds, setShowSql],
+    () => ({ ready, server, language, replyLanguage, sounds, showSql, appearance, save, setLanguage, setReplyLanguage, setSounds, setShowSql, setAppearance }),
+    [ready, server, language, replyLanguage, sounds, showSql, appearance, save, setLanguage, setReplyLanguage, setSounds, setShowSql, setAppearance],
   );
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return (
+    <SettingsContext.Provider value={value}>
+      <SchemeContext.Provider value={appearance}>{children}</SchemeContext.Provider>
+    </SettingsContext.Provider>
+  );
 }
 
 /** The saved server outside React (background tasks run without the provider). */

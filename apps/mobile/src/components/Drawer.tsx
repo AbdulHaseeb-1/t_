@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Chat } from '../state/chat-reducer';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { type, usePalette, weight } from '../theme';
+import { RouteMark } from './RouteMark';
 
 interface Props {
   open: boolean;
@@ -77,26 +78,24 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
             width: panelWidth,
             // Slides in from the reading start: left in English, right in Urdu.
             ...(rtl ? { right: 0 } : { left: 0 }),
-            backgroundColor: p.bg,
+            backgroundColor: p.sidebar,
             paddingTop: insets.top + 8,
             paddingBottom: insets.bottom + 8,
             transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [rtl ? panelWidth : -panelWidth, 0] }) }],
           },
         ]}
       >
-        <View style={[styles.drawerHeader, row(rtl), { borderBottomColor: p.border }]}>
+        <View style={[styles.drawerHeader, row(rtl)]}>
           <View style={[styles.brand, row(rtl)]}>
-            <View style={[styles.brandMark, { backgroundColor: p.sunken }]}>
-              <Feather name="database" size={16} color={p.accent} />
-            </View>
-            <Text style={[styles.brandName, { color: p.text }]}>DATALINK</Text>
+            <RouteMark size={28} />
+            <Text style={[styles.brandName, { color: p.text }]}>Datalink</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t.closeConversations}
             onPress={onClose}
             hitSlop={6}
-            style={({ pressed }) => [styles.closeButton, pressed && { backgroundColor: p.sunken }]}
+            style={({ pressed }) => [styles.closeButton, pressed && { backgroundColor: p.selected }]}
           >
             <Feather name="x" size={18} color={p.muted} />
           </Pressable>
@@ -106,10 +105,10 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
           accessibilityRole="button"
           accessibilityLabel={t.startNewChat}
           onPress={onNewChat}
-          style={({ pressed }) => [styles.row, row(rtl), pressed && { backgroundColor: p.sunken }]}
+          style={({ pressed }) => [styles.row, styles.newChat, row(rtl), { backgroundColor: pressed ? p.selected : p.bg, borderColor: p.border }]}
         >
-          <Feather name="edit" size={18} color={p.text} />
-          <Text style={[scriptStyle(t.appNewChat, type.label), { color: p.text }]}>{t.appNewChat}</Text>
+          <Feather name="edit" size={17} color={p.text} />
+          <Text style={[scriptStyle(t.appNewChat, { ...type.label, ...weight.semibold }), { color: p.text }]}>{t.appNewChat}</Text>
         </Pressable>
 
         {(
@@ -125,9 +124,9 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
               accessibilityRole="button"
               accessibilityLabel={count ? t.inboxButton(count) : label}
               onPress={onPress}
-              style={({ pressed }) => [styles.row, row(rtl), pressed && { backgroundColor: p.sunken }]}
+              style={({ pressed }) => [styles.row, row(rtl), pressed && { backgroundColor: p.selected }]}
             >
-              <Feather name={icon} size={18} color={p.text} />
+              <Feather name={icon} size={18} color={p.muted} />
               <Text style={[scriptStyle(label, type.label), { color: p.text, flex: 1 }]}>{label}</Text>
               {count > 0 && <Text style={[type.meta, styles.count, { color: '#fff', backgroundColor: p.accent }]}>{count > 99 ? '99+' : count}</Text>}
             </Pressable>
@@ -159,24 +158,25 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
                 accessibilityState={{ selected: c.id === activeId }}
                 onPress={() => onSelect(c.id)}
                 onLongPress={() => setConfirming(c.id)}
-                style={({ pressed }) => [styles.chat, (pressed || c.id === activeId) && { backgroundColor: p.sunken }]}
+                style={({ pressed }) => [styles.chat, (pressed || c.id === activeId) && { backgroundColor: p.selected }]}
               >
                 <Text style={[scriptStyle(c.title || t.voiceMessage, type.body), { color: p.text }]} numberOfLines={1}>
                   {c.title || t.voiceMessage}
                 </Text>
-                <Text style={[scriptStyle(t.today, type.caption), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{relativeDay(c.updatedAt, t, lang)}</Text>
+                <Text style={[scriptStyle(t.today, type.caption), { color: p.faint, textAlign: rtl ? 'right' : 'left' }]}>{relativeDay(c.updatedAt, t, lang)}</Text>
               </Pressable>
             ),
           )}
         </ScrollView>
 
+        <View style={[styles.divider, { backgroundColor: p.border }]} />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t.settings}
           onPress={onSettings}
-          style={({ pressed }) => [styles.row, row(rtl), { borderTopColor: p.border, borderTopWidth: StyleSheet.hairlineWidth }, pressed && { backgroundColor: p.sunken }]}
+          style={({ pressed }) => [styles.row, row(rtl), pressed && { backgroundColor: p.selected }]}
         >
-          <Feather name="settings" size={18} color={p.text} />
+          <Feather name="settings" size={18} color={p.muted} />
           <Text style={[scriptStyle(t.settings, type.label), { color: p.text }]}>{t.settings}</Text>
         </Pressable>
       </Animated.View>
@@ -186,13 +186,14 @@ export const Drawer = memo(function Drawer({ open, chats, activeId, onClose, onS
 
 const styles = StyleSheet.create({
   panel: { position: 'absolute', top: 0, bottom: 0, paddingHorizontal: 8 },
-  drawerHeader: { minHeight: 52, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 6, borderBottomWidth: StyleSheet.hairlineWidth },
+  drawerHeader: { minHeight: 52, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, marginBottom: 8 },
   brand: { alignItems: 'center', gap: 10 },
-  brandMark: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  brandName: { fontSize: 13, lineHeight: 18, fontWeight: '700', letterSpacing: 1.1 },
+  brandName: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
+  newChat: { borderWidth: 1, marginBottom: 6 },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: 12, marginVertical: 4 },
   closeButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   row: { alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10 },
-  section: { paddingHorizontal: 12, paddingTop: 16, paddingBottom: 6 },
+  section: { paddingHorizontal: 12, paddingTop: 18, paddingBottom: 6, fontSize: 13 },
   list: { flex: 1 },
   chat: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, gap: 1 },
   empty: { paddingHorizontal: 12, paddingVertical: 8 },

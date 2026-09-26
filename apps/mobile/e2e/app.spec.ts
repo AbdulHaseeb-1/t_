@@ -178,8 +178,13 @@ test('renders tables in dark mode', async ({ browser }) => {
   const ctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('settings.language', JSON.stringify('en')));
+  await page.evaluate(() => {
+    localStorage.setItem('settings.language', JSON.stringify('en'));
+    // The app is white by default; "Match phone" follows the dark system setting.
+    localStorage.setItem('settings.appearance', JSON.stringify('system'));
+  });
   await page.goto('/');
+  await expect.poll(() => page.getByTestId('header').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(33, 33, 33)');
   await ask(page, 'For each sales channel, what percentage of its orders were cancelled (0-100)? Show a table.');
   await lastAnswerDone(page);
   await expect(page.getByText(/Store/).first()).toBeVisible();

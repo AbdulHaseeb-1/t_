@@ -28,7 +28,7 @@ export const PromptStarters = memo(function PromptStarters({ onPick }: { onPick:
   const { lang, rtl } = useI18n();
   return (
     <View style={styles.group}>
-      <Text style={[type.caption, styles.kicker, { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{lang === 'ur' ? 'سوال کے نمونے' : 'START WITH A QUESTION'}</Text>
+      <Text style={[type.caption, styles.kicker, { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{lang === 'ur' ? 'سوال کے نمونے' : 'Try asking'}</Text>
       <View style={styles.list}>
         {starters.map((starter) => {
           const copy = starter[lang];
@@ -38,14 +38,14 @@ export const PromptStarters = memo(function PromptStarters({ onPick }: { onPick:
               accessibilityRole="button"
               accessibilityLabel={`${copy.title}: ${copy.detail}`}
               onPress={() => onPick(copy.prompt)}
-              style={({ pressed }) => [styles.item, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}
+              style={({ pressed }) => [styles.item, row(rtl), card(p, 'sm'), pressed && { backgroundColor: p.sunken, transform: [{ scale: 0.985 }] }]}
             >
-              <View style={[styles.icon, { backgroundColor: p.sunken }]}><Feather name={starter.icon} size={16} color={p.accent} /></View>
+              <View style={styles.icon}><Feather name={starter.icon} size={17} color={p.muted} /></View>
               <View style={[styles.copy, { alignItems: rtl ? 'flex-end' : 'flex-start' }]}>
                 <Text style={[scriptStyle(copy.title, { ...type.label, ...weight.semibold }), { color: p.text }]}>{copy.title}</Text>
                 <Text style={[scriptStyle(copy.detail, type.meta), { color: p.muted }]}>{copy.detail}</Text>
               </View>
-              <Feather name={rtl ? 'arrow-up-left' : 'arrow-up-right'} size={15} color={p.muted} />
+              <Feather name={rtl ? 'arrow-up-left' : 'arrow-up-right'} size={15} color={p.faint} />
             </Pressable>
           );
         })}
@@ -55,10 +55,10 @@ export const PromptStarters = memo(function PromptStarters({ onPick }: { onPick:
 });
 
 const styles = StyleSheet.create({
-  group: { width: '100%', maxWidth: 500, gap: 10, marginTop: 18 },
-  kicker: { ...weight.semibold, letterSpacing: 1.2, paddingHorizontal: 4 },
+  group: { width: '100%', maxWidth: 500, gap: 10, marginTop: 22 },
+  kicker: { ...weight.medium, fontSize: 13, paddingHorizontal: 4 },
   list: { gap: 8 },
-  item: { alignItems: 'center', gap: 12, minHeight: 62, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 9 },
-  icon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  item: { alignItems: 'center', gap: 12, minHeight: 60, borderRadius: 16, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 10 },
+  icon: { width: 24, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 0 },
 });

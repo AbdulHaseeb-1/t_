@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 import { row, scriptStyle, useI18n } from '../i18n';
-import { card, type, usePalette } from '../theme';
+import { type, usePalette } from '../theme';
 
-/** Three softly pulsing dots, with what the assistant is doing; static when the user prefers reduced motion. */
+/** The timer appears only once a wait is long enough to be worth measuring. */
+const SHOW_TIMER_S = 4;
+
+/**
+ * What the assistant is doing before its answer starts: a softly breathing dot
+ * and a shimmering stage label ("Thinking", "Querying: Net sales by month").
+ * Static when the person prefers reduced motion.
+ */
 export function Thinking({ label }: { label?: string }) {
   const p = usePalette();
   const { t: strings, rtl } = useI18n();
-  const [t] = useState(() => new Animated.Value(0));
+  const [pulse] = useState(() => new Animated.Value(0));
   const [reduce, setReduce] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -26,11 +33,22 @@ export function Thinking({ label }: { label?: string }) {
   useEffect(() => {
     if (reduce) return;
     const loop = Animated.loop(
-      Animated.timing(t, { toValue: 1, duration: 1200, easing: Easing.linear, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [reduce, t]);
+  }, [reduce, pulse]);
+
+  const dot = reduce
+    ? { opacity: 0.8 }
+    : {
+        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
+        transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1.08] }) }],
+      };
+  const shimmer = reduce ? { opacity: 0.8 } : { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0.95] }) };
 
   return (
     <View
@@ -39,36 +57,18 @@ export function Thinking({ label }: { label?: string }) {
       accessibilityRole="progressbar"
       accessibilityLiveRegion="polite"
     >
-      <View style={[styles.indicator, card(p, 'sm')]}>
-        <View style={[styles.dots, row(rtl)]}>
-          {[0, 1, 2].map((i) => {
-            const opacity = reduce
-              ? 0.65
-              : t.interpolate({
-                  inputRange: [0, 0.2 + i * 0.2, 0.4 + i * 0.2, 1],
-                  outputRange: [0.25, 1, 0.25, 0.25],
-                  extrapolate: 'clamp',
-                });
-            return <Animated.View key={i} style={[styles.dot, { backgroundColor: p.accent, opacity }]} />;
-          })}
-        </View>
-      </View>
-      <View style={[styles.copy, { alignItems: rtl ? 'flex-end' : 'flex-start' }]}>
-        <Animated.Text style={[scriptStyle(shown, type.label), styles.label, { color: p.text }]} numberOfLines={1}>
-          {shown}
-        </Animated.Text>
-        <Animated.Text style={[type.meta, styles.elapsed, { color: p.faint }]}>{elapsed}</Animated.Text>
-      </View>
+      <Animated.View style={[styles.dot, { backgroundColor: p.text }, dot]} />
+      <Animated.Text style={[scriptStyle(shown, type.body), styles.label, { color: p.text }, shimmer]} numberOfLines={1}>
+        {shown}
+      </Animated.Text>
+      {seconds >= SHOW_TIMER_S && <Animated.Text style={[type.meta, styles.elapsed, { color: p.faint }]}>{elapsed}</Animated.Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { alignItems: 'center', gap: 10, paddingVertical: 4, maxWidth: '100%' },
-  indicator: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  dots: { gap: 3, alignItems: 'center' },
-  dot: { width: 4, height: 4, borderRadius: 2 },
-  copy: { gap: 0, flexShrink: 1 },
+  row: { alignItems: 'center', gap: 10, minHeight: 32, maxWidth: '100%' },
+  dot: { width: 12, height: 12, borderRadius: 6 },
   label: { flexShrink: 1 },
   elapsed: { fontVariant: ['tabular-nums'] },
 });

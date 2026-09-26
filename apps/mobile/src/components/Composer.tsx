@@ -1,6 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
   Image,
   type NativeSyntheticEvent,
   Platform,
@@ -12,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { isUrduText, row, scriptStyle, useI18n } from '../i18n';
+import { tap } from '../lib/feedback';
 import { type PickedImage, pickImage } from '../lib/media';
 import { useVoice } from '../lib/useVoice';
 import type { Outgoing } from '../state/chats';
@@ -27,6 +30,27 @@ interface Props {
 }
 
 const MAX_LINES = 7;
+
+/** The primary button springs in whenever its role changes (mic, send, stop). */
+function Pop({ children }: { children: ReactNode }) {
+  const [v] = useState(() => new Animated.Value(0.6));
+  useEffect(() => {
+    let cancelled = false;
+    let anim: Animated.CompositeAnimation | undefined;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      // The button may have been swapped out (typing, sending) before the check returned.
+      if (cancelled) return;
+      if (reduce) return v.setValue(1);
+      anim = Animated.spring(v, { toValue: 1, speed: 28, bounciness: 7, useNativeDriver: true });
+      anim.start();
+    });
+    return () => {
+      cancelled = true;
+      anim?.stop();
+    };
+  }, [v]);
+  return <Animated.View style={{ opacity: v.interpolate({ inputRange: [0.6, 1], outputRange: [0.3, 1] }), transform: [{ scale: v }] }}>{children}</Animated.View>;
+}
 
 function clock(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -66,6 +90,7 @@ export const Composer = memo(function Composer({ busy, initialText = '', onSend,
 
   const send = useCallback(() => {
     if (!hasContent || busy) return;
+    tap();
     onSend({ text: text.trim(), image: image ?? undefined });
     reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,14 +138,25 @@ export const Composer = memo(function Composer({ busy, initialText = '', onSend,
       <Feather name="arrow-up" size={20} color={p.onPrimary} />
     </Pressable>
   ) : hasContent ? (
-    <Pressable accessibilityRole="button" accessibilityLabel={t.send} onPress={send} style={[styles.round, { backgroundColor: p.primary }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t.send}
+      onPress={send}
+      style={({ pressed }) => [styles.round, { backgroundColor: p.primary }, pressed && styles.pressed]}
+    >
       <Feather name="arrow-up" size={20} color={p.onPrimary} />
     </Pressable>
   ) : (
-    <Pressable accessibilityRole="button" accessibilityLabel={t.record} onPress={voice.start} style={[styles.round, { backgroundColor: p.sunken }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t.record}
+      onPress={voice.start}
+      style={({ pressed }) => [styles.round, { backgroundColor: p.sunken }, pressed && styles.pressed]}
+    >
       <Feather name="mic" size={19} color={p.text} />
     </Pressable>
   );
+  const mode = busy ? 'stop' : recording ? 'recording' : hasContent ? 'send' : 'mic';
 
   return (
     <View style={[styles.box, card(p)]}>
@@ -185,7 +221,7 @@ export const Composer = memo(function Composer({ busy, initialText = '', onSend,
             ]}
           />
         )}
-        {primary}
+        <Pop key={mode}>{primary}</Pop>
       </View>
 
       {photoError && (
@@ -219,13 +255,13 @@ export const Composer = memo(function Composer({ busy, initialText = '', onSend,
 
 const styles = StyleSheet.create({
   box: {
-    borderRadius: 24,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     gap: 8,
   },
   entryRow: { alignItems: 'flex-end', gap: 4 },
-  input: { flex: 1, minWidth: 0, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, marginBottom: 9, outlineStyle: 'none' } as never,
+  input: { flex: 1, minWidth: 0, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, marginBottom: 8, outlineStyle: 'none' } as never,
   attachRow: { paddingHorizontal: 4, paddingTop: 2 },
   thumb: { width: 56, height: 56, borderRadius: 10 },
   remove: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -233,6 +269,7 @@ const styles = StyleSheet.create({
   clock: { fontVariant: ['tabular-nums'], minWidth: 40 },
   menu: { gap: 8, paddingHorizontal: 4 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6 },
-  round: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.94 }] },
   stopGlyph: { width: 11, height: 11, borderRadius: 2 },
 });

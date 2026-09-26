@@ -44,6 +44,7 @@ Release builds ship **without** a server address. On first launch the app shows 
 - **Settings**: grouped cards with a large title, in the style of a native settings screen:
   - **Connection**: the server row opens the address and optional API key (kept in the device keychain), with **Test connection**, which reports reachability, database, model and key status separately.
   - **Language**: *App language* (English, the default, or Urdu) and *Reply language* (Auto, Urdu script, Roman Urdu such as *"Ap k 20 customers hain."*, or English), each on its own picker page.
+  - **Appearance**: *Theme*: Light (the default: a clean white, ChatGPT-style canvas), Dark, or Match phone.
   - **Chat**: *Show SQL queries*, and sounds and vibration.
   - Connection errors offer an **Open settings** shortcut straight to the server page.
 

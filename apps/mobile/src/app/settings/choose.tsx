@@ -6,17 +6,24 @@ import { type UiLanguage, useI18n } from '../../i18n';
 import type { ReplyLanguage } from '../../lib/api';
 import { leave } from '../../lib/nav';
 import { useSettings } from '../../state/settings';
-import { layout, usePalette } from '../../theme';
+import { type Appearance, layout, usePalette } from '../../theme';
 
 /** One choice per page, checkmark on the current one; picking applies instantly. */
 export default function ChooseScreen() {
   const p = usePalette();
   const { t } = useI18n();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
-  const { language, setLanguage, replyLanguage, setReplyLanguage } = useSettings();
+  const { language, setLanguage, replyLanguage, setReplyLanguage, appearance, setAppearance } = useSettings();
 
   const reply = kind === 'reply';
-  const options: { value: string; label: string }[] = reply
+  const look = kind === 'appearance';
+  const options: { value: string; label: string }[] = look
+    ? [
+        { value: 'light', label: t.themeLight },
+        { value: 'dark', label: t.themeDark },
+        { value: 'system', label: t.themeSystem },
+      ]
+    : reply
     ? [
         { value: 'auto', label: t.replyAuto },
         { value: 'ur', label: 'اردو' },
@@ -27,13 +34,15 @@ export default function ChooseScreen() {
         { value: 'ur', label: 'اردو' },
         { value: 'en', label: 'English' },
       ];
-  const current = reply ? replyLanguage : language;
-  const pick = (v: string) => (reply ? setReplyLanguage(v as ReplyLanguage) : setLanguage(v as UiLanguage));
+  const current = look ? appearance : reply ? replyLanguage : language;
+  const pick = (v: string) =>
+    look ? setAppearance(v as Appearance) : reply ? setReplyLanguage(v as ReplyLanguage) : setLanguage(v as UiLanguage);
+  const title = look ? t.theme : reply ? t.replyLanguage : t.interfaceLanguage;
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: p.bg }]} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.body}>
-        <PageHeader title={reply ? t.replyLanguage : t.interfaceLanguage} onBack={leave} back />
+        <PageHeader title={title} onBack={leave} back />
         <Section footer={reply ? t.replyAutoHint : undefined}>
           {options.map((o, i) => (
             <SettingsRow key={o.value} label={o.label} checked={current === o.value} onPress={() => pick(o.value)} last={i === options.length - 1} />

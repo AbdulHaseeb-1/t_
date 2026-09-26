@@ -14,6 +14,7 @@ import {
 import { useI18n } from '../i18n';
 import { ApiError, chat, chatMedia, type ChatHandlers, type MediaFile, type ParamValues, runTemplate } from '../lib/api';
 import { describeError, needsSettings } from '../lib/errors';
+import { markFresh } from '../lib/fresh';
 import { newId } from '../lib/id';
 import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState, type ReportRef } from './chat-reducer';
 import { ChatStore } from './chat-store';
@@ -118,13 +119,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!q && !out.audio && !out.image) return;
         const chatId = stateRef.current.activeId ?? newId();
         const assistantId = newId();
+        const userId = newId();
+        markFresh(userId, assistantId);
         if (out.audio || out.image) media.current.set(assistantId, { audio: out.audio, image: out.image });
         // Follow-up context = turns that already exist, so read it before dispatching.
         run(chatId, assistantId, q, dispatch);
         dispatch({
           type: 'ask',
           chatId,
-          userId: newId(),
+          userId,
           assistantId,
           question: q,
           now: Date.now(),
@@ -137,9 +140,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       runReport(id, params, label) {
         const chatId = stateRef.current.activeId ?? newId();
         const assistantId = newId();
+        const userId = newId();
         const report = { id, params };
+        markFresh(userId, assistantId);
         run(chatId, assistantId, label, dispatch, report);
-        dispatch({ type: 'ask', chatId, userId: newId(), assistantId, question: label, now: Date.now(), report });
+        dispatch({ type: 'ask', chatId, userId, assistantId, question: label, now: Date.now(), report });
       },
       retry(assistantId) {
         const chatId = stateRef.current.activeId;

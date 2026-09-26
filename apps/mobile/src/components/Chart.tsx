@@ -1,6 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import { memo, useMemo, useState } from 'react';
-import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { scriptStyle, useI18n } from '../i18n';
 import { compactNumber, type Growth, humanize, lineDomain, niceMax, percent, type VizSpec } from '../lib/chart';
@@ -13,7 +13,14 @@ import { card, type ChartPalette, type, useChartPalette, usePalette, weight } fr
  * validated series colors in fixed order, selective labels, and a readout line
  * above the plot that doubles as the tap tooltip (nothing floats over marks).
  */
-const AXIS = { fontSize: 12 };
+/** SVG text gets no font from the page on the web (it falls back to a serif): name the system sans. */
+const SVG_FONT = Platform.OS === 'web' ? { fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' } : {};
+const AXIS = { fontSize: 12, ...SVG_FONT };
+
+/** Rough rendered width of a compact value label ("26.3M") at the axis font size. */
+function valueWidth(v: number): number {
+  return compactNumber(v).length * 7.2;
+}
 
 function useWidth() {
   const [width, setWidth] = useState(0);
@@ -143,6 +150,8 @@ function Columns({ spec }: { spec: Extract<VizSpec, { kind: 'columns' }> }) {
   const y = (v: number) => pad.top + plotH - (v / max) * plotH;
   const base = pad.top + plotH;
   const everyLabel = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 44))));
+  // The peak gets its own value label only when it cannot collide with the highlighted one.
+  const labelRoom = (a: number, b: number) => Math.abs(a - b) * band >= (valueWidth(series.values[a]) + valueWidth(series.values[b])) / 2 + 6;
 
   return (
     <View style={styles.box} testID="chart-columns">
@@ -171,7 +180,7 @@ function Columns({ spec }: { spec: Extract<VizSpec, { kind: 'columns' }> }) {
               return (
                 <G key={k}>
                   <Path d={vBar(x, base, barW, h)} fill={on ? c.series[0] : c.context} />
-                  {(k === i || (k === growth.peakIndex && k !== i && sel === null)) && (
+                  {(k === i || (k === growth.peakIndex && k !== i && sel === null && labelRoom(k, i))) && (
                     <SvgText x={x + barW / 2} y={base - h - 5} textAnchor="middle" fill={on ? p.text : p.muted} {...AXIS}>
                       {compactNumber(v)}
                     </SvgText>
@@ -408,7 +417,7 @@ function Donut({ spec }: { spec: Extract<VizSpec, { kind: 'donut' }> }) {
               onPress={() => setSel(a.i === sel ? null : a.i)}
             />
           ))}
-          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontWeight="600" fontSize={17}>
+          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontWeight="600" fontSize={17} {...SVG_FONT}>
             {shown === null ? compactNumber(total) : `${Math.round((series.values[shown] / total) * 100)}%`}
           </SvgText>
           <SvgText x={size / 2} y={size / 2 + 18} textAnchor="middle" fill={p.muted} {...AXIS}>
@@ -459,7 +468,7 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   kpiValue: { ...weight.semibold, fontSize: 24, lineHeight: 31 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   donutLegend: { flex: 1, minWidth: 140, gap: 6 },
