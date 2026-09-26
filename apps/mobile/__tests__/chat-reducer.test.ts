@@ -47,6 +47,24 @@ describe('chatReducer', () => {
     expect(m.role === 'assistant' && m.result?.rowCount).toBe(1500);
   });
 
+  it('stores the rows of a chat answer once, under its results', () => {
+    const r = response('SELECT 1', 3);
+    const withResults: AskResponse = { ...r, results: [{ id: 'r1', title: 'N', sql: 'SELECT 1', result: r.result!, display: { view: 'table' } }] };
+    const s = chatReducer(askOnce(hydrated, 'c1', 1), { type: 'answer', chatId: 'c1', assistantId: 'a1', response: withResults });
+    const m = s.chats.c1.messages[1] as Extract<Chat['messages'][number], { role: 'assistant' }>;
+    expect(m.result).toBeNull();
+    expect(m.sql).toBe('SELECT 1');
+    expect(m.results![0].result.rows).toHaveLength(3);
+  });
+
+  it('keeps chats without an interrupted request identical on load (so they are not rewritten)', () => {
+    let s = askOnce(hydrated, 'c1', 1);
+    s = chatReducer(s, { type: 'answer', chatId: 'c1', assistantId: 'a1', response: response('SELECT 1') });
+    const saved = s.chats.c1;
+    const loaded = chatReducer(initialState, { type: 'hydrate', chats: [saved] });
+    expect(loaded.chats.c1).toBe(saved);
+  });
+
   it('handles failure, stop and retry', () => {
     let s = askOnce(hydrated, 'c1', 1);
     s = chatReducer(s, { type: 'fail', chatId: 'c1', assistantId: 'a1', error: 'boom' });

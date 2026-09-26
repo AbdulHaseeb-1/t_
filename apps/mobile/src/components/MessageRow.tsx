@@ -74,7 +74,7 @@ function Assistant({ m }: { m: AssistantMessage }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const wasPending = useRef(m.status === 'pending');
-  const { text: visibleText, done: revealDone } = useSmoothText(m.text ?? '', m.status === 'pending');
+  const { text: visibleText, done: revealDone } = useSmoothText(m.text ?? '', m.status === 'pending', m.status === 'done');
   useEffect(() => {
     if (m.status === 'pending') {
       wasPending.current = true;

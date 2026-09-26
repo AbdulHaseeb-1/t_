@@ -111,11 +111,6 @@ export interface Usage {
 /** Answer language: auto follows the question; ur-Latn is Roman Urdu. */
 export type ReplyLanguage = 'auto' | 'ur' | 'ur-Latn' | 'en';
 
-export interface Turn {
-  question: string;
-  sql: string;
-}
-
 export interface ServerConfig {
   baseUrl: string;
   apiKey?: string;
@@ -134,7 +129,7 @@ export class ApiError extends Error {
   }
 }
 
-const ASK_TIMEOUT_MS = 90_000;
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export function normalizeBaseUrl(url: string): string {
   const trimmed = url.trim().replace(/\/+$/, '');
@@ -173,7 +168,7 @@ async function request<T>(
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, init.timeoutMs ?? ASK_TIMEOUT_MS);
+  }, init.timeoutMs ?? REQUEST_TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort);
 
@@ -204,39 +199,10 @@ async function request<T>(
   return body as T;
 }
 
-export function ask(
-  cfg: ServerConfig,
-  question: string,
-  context: Turn[],
-  signal?: AbortSignal,
-  language: ReplyLanguage = 'auto',
-): Promise<AskResponse> {
-  return request<AskResponse>(
-    cfg,
-    '/query/ask',
-    { method: 'POST', body: JSON.stringify({ question, context: context.slice(-4), answer: true, language }) },
-    signal,
-  );
-}
-
 export interface MediaFile {
   uri: string;
   name: string;
   type: string;
-}
-
-/**
- * Voice and/or image question. Native platforms stream the file from its URI;
- * the web build reads it into a Blob first.
- */
-export async function askMedia(
-  cfg: ServerConfig,
-  input: { question: string; context: Turn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage },
-  signal?: AbortSignal,
-): Promise<AskResponse> {
-  const form = await mediaForm({ ...input, context: input.context.slice(-4) });
-  form.append('answer', 'true');
-  return request<AskResponse>(cfg, '/query/ask/media', { method: 'POST', body: form, timeoutMs: 120_000 }, signal);
 }
 
 // ── Chat: the assistant, streamed as Server-Sent Events ─────────────────────
@@ -394,7 +360,10 @@ async function streamChat(
   }
 }
 
-/** The assistant: talks, queries when needed, and streams its answer. */
+/**
+ * The assistant: talks, queries when needed, and streams its answer. `fresh`
+ * skips the server's short answer cache (asking again should really ask again).
+ */
 export function chat(
   cfg: ServerConfig,
   question: string,
@@ -402,14 +371,15 @@ export function chat(
   on: ChatHandlers,
   signal?: AbortSignal,
   language: ReplyLanguage = 'auto',
+  fresh = false,
 ): Promise<AskResponse> {
-  return streamChat(cfg, '/query/chat', JSON.stringify({ question, context, language }), on, signal);
+  return streamChat(cfg, '/query/chat', JSON.stringify({ question, context, language, ...(fresh && { noCache: true }) }), on, signal);
 }
 
 /** `chat` for voice and/or photo messages. */
 export async function chatMedia(
   cfg: ServerConfig,
-  input: { question: string; context: ChatTurn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage },
+  input: { question: string; context: ChatTurn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage; fresh?: boolean },
   on: ChatHandlers,
   signal?: AbortSignal,
 ): Promise<AskResponse> {
@@ -432,11 +402,12 @@ function nativeFilePart(file: MediaFile): Blob {
   return { name: file.name, type: file.type, bytes: () => source.bytes() } as unknown as Blob;
 }
 
-async function mediaForm(input: { question: string; context: (Turn | ChatTurn)[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage }) {
+async function mediaForm(input: { question: string; context: ChatTurn[]; audio?: MediaFile; image?: MediaFile; language?: ReplyLanguage; fresh?: boolean }) {
   const form = new FormData();
   form.append('question', input.question);
   form.append('context', JSON.stringify(input.context));
   form.append('language', input.language ?? 'auto');
+  if (input.fresh) form.append('noCache', 'true');
   for (const [field, file] of [['audio', input.audio], ['image', input.image]] as const) {
     if (!file) continue;
     if (Platform.OS === 'web') {

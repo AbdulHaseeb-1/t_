@@ -43,7 +43,7 @@ Release builds ship **without** a server address. On first launch the app shows 
 - **Notifications**: the app checks the inbox on open, every minute while in use, and about every 15 minutes in the background (`expo-background-task`). New reports show as local notifications. Tapping one opens the report. The first check after install does not replay old reports. Remote push through Expo is used instead when the build has an EAS project ID and FCM credentials.
 - **Settings**: grouped cards with a large title, in the style of a native settings screen:
   - **Connection**: the server row opens the address and optional API key (kept in the device keychain), with **Test connection**, which reports reachability, database, model and key status separately.
-  - **Language**: *App language* (Urdu, the default, or English) and *Reply language* (Auto, Urdu script, Roman Urdu such as *"Ap k 20 customers hain."*, or English), each on its own picker page.
+  - **Language**: *App language* (English, the default, or Urdu) and *Reply language* (Auto, Urdu script, Roman Urdu such as *"Ap k 20 customers hain."*, or English), each on its own picker page.
   - **Chat**: *Show SQL queries*, and sounds and vibration.
   - Connection errors offer an **Open settings** shortcut straight to the server page.
 
@@ -71,7 +71,7 @@ Light and dark themes follow the system setting.
 - The message list is virtualized and inverted. Rows are memoized on message identity, and the reducer only replaces messages that changed.
 - The composer owns its text state, so typing never re-renders the conversation (enforced by a test).
 - Markdown parsing is memoized per message. The parser is a small purpose-built module (400-row table < 50 ms).
-- Chats persist with a debounced write, and stored results keep up to 1,000 rows per result (the server's default row cap).
+- Chats persist with a debounced write, one stored value per conversation, and only changed conversations are rewritten. A value that cannot be read is left untouched, never saved over. Stored results keep up to 250 rows each (fewer if a conversation would exceed Android's ~2 MB read window); the table says when a full result must be asked again. Histories saved by older versions move to the new format on first launch.
 - Fonts are imported per weight. The package roots would ship every weight: 6.8 MB instead of 2.5 MB on the web.
 
 Measured in the web build (Chromium, 390×844): cold start to interactive **~100 ms**, opening a 240-message chat **~420 ms** with 5 rows mounted, **0** long tasks while typing.
@@ -103,7 +103,7 @@ python3 -m http.server 8090 --directory dist    # or any static server
 pnpm test:e2e                                   # PW_CHROMIUM=/path/to/chromium if needed
 ```
 
-14 Playwright scenarios run at phone size. They check answers against ground-truth values in the `Eval_Retail` fixture. They cover follow-ups, reload persistence, stop and retry, recovery from a wrong server address, Roman Urdu replies, hidden-by-default SQL, the usage and answer-details sheets, dark mode, the Urdu default, real voice and photo questions, charts, and performance budgets.
+14 Playwright scenarios run at phone size. They check answers against ground-truth values in the `Eval_Retail` fixture. They cover follow-ups, reload persistence, stop and retry, recovery from a wrong server address, Roman Urdu replies, hidden-by-default SQL, the usage and answer-details sheets, dark mode, the Urdu interface, real voice and photo questions, charts, and performance budgets.
 
 ## Android release APK
 

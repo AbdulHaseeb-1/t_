@@ -253,6 +253,38 @@ it('stops an in-flight request and can retry it', async () => {
   expect(await screen.findByText('Recovered.')).toBeTruthy();
 });
 
+it('asks again for a fresh answer, not the one the server just cached', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('How many orders?');
+  expect(requests[0].body).not.toHaveProperty('noCache');
+  await act(async () => requests[0].resolve(200, answer('SELECT 1', 'First.')));
+  await screen.findByText('First.');
+  fireEvent.press(screen.getByLabelText('Ask again'));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].body).toMatchObject({ question: 'How many orders?', noCache: true });
+});
+
+it('explains that a voice message interrupted by a restart must be sent again', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  fireEvent.press(screen.getByLabelText('Record voice message'));
+  await screen.findByLabelText('Recording');
+  fireEvent.press(screen.getByLabelText('Send voice message'));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await waitFor(async () => expect((await AsyncStorage.getAllKeys()).some((k) => k.startsWith('chat.v2:'))).toBe(true));
+
+  // The app restarts: the recording itself was only in memory.
+  screen.unmount();
+  renderRouter(routes, { initialUrl: '/' });
+  fireEvent.press(await screen.findByLabelText('Open conversations'));
+  fireEvent.press(await screen.findByLabelText('Open Voice message'));
+  expect(await screen.findByText('Interrupted.')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Retry'));
+  expect(await screen.findByText('The voice message or photo is no longer on this phone. Send it again.')).toBeTruthy();
+  expect(requests).toHaveLength(1); // nothing empty was sent
+});
+
 it('explains server errors in plain language', async () => {
   renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What would you like to know?');
@@ -280,7 +312,11 @@ it('keeps conversations in the drawer, switches and deletes them, and persists',
   expect(await screen.findByText('One.')).toBeTruthy();
 
   // Survives an app restart (after the debounced save lands).
-  await waitFor(async () => expect(await AsyncStorage.getItem('chats.v1')).toContain('Second conversation'));
+  const stored = async () => {
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith('chat.v2:'));
+    return (await AsyncStorage.multiGet(keys)).map(([, v]) => v).join('\n');
+  };
+  await waitFor(async () => expect(await stored()).toContain('Second conversation'));
   screen.unmount();
   renderRouter(routes, { initialUrl: '/' });
   fireEvent.press(await screen.findByLabelText('Open conversations'));
@@ -491,12 +527,18 @@ it('shows one row of several figures as KPI tiles', async () => {
   expect(screen.getByLabelText('Orders: 812')).toBeTruthy();
 });
 
-describe('in Urdu (the default)', () => {
+it('starts in English until a display language is chosen', async () => {
+  await AsyncStorage.removeItem('settings.language');
+  renderRouter(routes, { initialUrl: '/' });
+  expect(await screen.findByText('What would you like to know?')).toBeTruthy();
+});
+
+describe('in Urdu', () => {
   beforeEach(async () => {
-    await AsyncStorage.removeItem('settings.language');
+    await AsyncStorage.setItem('settings.language', JSON.stringify('ur'));
   });
 
-  it('shows an Urdu, right-to-left interface out of the box', async () => {
+  it('shows an Urdu, right-to-left interface', async () => {
     renderRouter(routes, { initialUrl: '/' });
     const greeting = await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
     expect(Object.assign({}, ...[greeting.props.style].flat(Infinity).filter(Boolean))).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular' });
@@ -625,7 +667,8 @@ describe('reports', () => {
 
   it('asks for parameters with presets before running, from the gallery', async () => {
     renderRouter(routes, { initialUrl: '/reports' });
-    expect(await screen.findByText('Customers')).toBeTruthy(); // category heading
+    expect(await screen.findByTestId('report-top-customers')).toBeTruthy(); // templates loaded
+    expect(screen.getAllByText('Customers')).toHaveLength(2); // filter chip and category heading
     fireEvent.changeText(screen.getByLabelText('Search reports'), 'top');
     expect(screen.queryByTestId('report-stock-shortage')).toBeNull();
     fireEvent.press(screen.getByTestId('report-top-customers'));

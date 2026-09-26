@@ -9,16 +9,16 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from 'react';
 import { useI18n } from '../i18n';
 import { ApiError, chat, chatMedia, type ChatHandlers, type MediaFile, type ParamValues, runTemplate } from '../lib/api';
 import { describeError, needsSettings } from '../lib/errors';
 import { newId } from '../lib/id';
-import { storage } from '../lib/storage';
 import { type Chat, type ChatAction, chatReducer, type ChatState, contextFor, initialState, type ReportRef } from './chat-reducer';
+import { ChatStore } from './chat-store';
 import { useSettings } from './settings';
 
-const STORAGE_KEY = 'chats.v1';
 const SAVE_DEBOUNCE_MS = 400;
 
 export interface Outgoing {
@@ -63,18 +63,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     langRef.current = lang;
   }, [state, server, replyLanguage, t, lang]);
 
+  const [store] = useState(() => new ChatStore());
   useEffect(() => {
-    void storage.get<Chat[]>(STORAGE_KEY).then((chats) => dispatch({ type: 'hydrate', chats: chats ?? [] }));
-  }, []);
+    void store.load().then((chats) => dispatch({ type: 'hydrate', chats }));
+  }, [store]);
 
-  // Debounced persistence: typing and streaming state changes never block on storage.
+  // Debounced persistence: typing and streaming never block on storage, and only changed chats are written.
   useEffect(() => {
     if (!state.hydrated) return;
-    const t = setTimeout(() => void storage.set(STORAGE_KEY, state.order.map((id) => state.chats[id])), SAVE_DEBOUNCE_MS);
+    const t = setTimeout(() => void store.save(state.chats), SAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [state.chats, state.order, state.hydrated]);
+  }, [store, state.chats, state.hydrated]);
 
-  const run = useCallback((chatId: string, assistantId: string, question: string, dispatchFn: Dispatch<ChatAction>, report?: ReportRef) => {
+  const run = useCallback((chatId: string, assistantId: string, question: string, dispatchFn: Dispatch<ChatAction>, report?: ReportRef, fresh = false) => {
     const controller = new AbortController();
     inflight.current.set(assistantId, { chatId, controller });
     const context = contextFor(stateRef.current.chats[chatId], assistantId);
@@ -92,11 +93,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       : files?.audio || files?.image
         ? chatMedia(
             serverRef.current,
-            { question, context, audio: files.audio, image: files.image, language: replyRef.current },
+            { question, context, audio: files.audio, image: files.image, language: replyRef.current, fresh },
             on,
             controller.signal,
           )
-        : chat(serverRef.current, question, context, on, controller.signal, replyRef.current);
+        : chat(serverRef.current, question, context, on, controller.signal, replyRef.current, fresh);
     request
       .then((response) => {
         dispatchFn({ type: 'answer', chatId, assistantId, response });
@@ -144,11 +145,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const chatId = stateRef.current.activeId;
         const msg = chatId ? stateRef.current.chats[chatId]?.messages.find((m) => m.id === assistantId) : undefined;
         if (!chatId || !msg || msg.role !== 'assistant' || inflight.current.has(assistantId)) return;
+        // A voice or photo question lives only in memory until the server says what was asked.
+        if (!msg.report && !msg.question.trim() && !media.current.has(assistantId)) {
+          dispatch({ type: 'fail', chatId, assistantId, error: tRef.current.errMediaGone });
+          return;
+        }
         dispatch({ type: 'retry', chatId, assistantId });
-        run(chatId, assistantId, msg.question, dispatch, msg.report);
+        // Asking again means a new answer, not the one the server just cached.
+        run(chatId, assistantId, msg.question, dispatch, msg.report, true);
       },
       stop() {
-        for (const { controller } of inflight.current.values()) controller.abort();
+        const active = stateRef.current.activeId;
+        for (const { chatId, controller } of inflight.current.values()) if (chatId === active) controller.abort();
       },
       newChat: () => dispatch({ type: 'new' }),
       select: (id) => dispatch({ type: 'select', id }),

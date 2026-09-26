@@ -26,13 +26,18 @@ test.use({
 
 async function fresh(page: Page) {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('settings.language', JSON.stringify('ur'));
+  });
   await page.goto('/');
   await expect(page.getByText('آپ کیا جاننا چاہتے ہیں؟')).toBeVisible();
 }
 
+/** The progress row (stage + timer) and the streaming cursor are both gone. */
 async function done(page: Page) {
-  await expect(page.getByLabel('جواب تیار ہو رہا ہے')).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByLabel('Response in progress')).toHaveCount(0);
 }
 
 /** Computed style of the element holding the given text (the paragraph, not a span). */
@@ -44,9 +49,9 @@ async function textStyle(page: Page, text: RegExp) {
   });
 }
 
-test('Urdu is the default: Urdu question, Urdu answer in Nastaliq', async ({ page }) => {
+test('In Urdu: Urdu question, Urdu answer in Nastaliq', async ({ page }) => {
   await fresh(page);
-  await expect(page.getByPlaceholder('اپنے ڈیٹا کے بارے میں پوچھیں')).toBeVisible();
+  await expect(page.getByPlaceholder('سوال پوچھیں')).toBeVisible();
   await page.getByRole('textbox', { name: 'Message' }).fill('پاکستان میں ہمارے کتنے گاہک ہیں؟');
   await page.getByRole('button', { name: 'بھیجیں' }).click();
   await done(page);

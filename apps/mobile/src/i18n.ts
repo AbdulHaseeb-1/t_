@@ -155,6 +155,7 @@ const en = {
   errAuth: 'The server rejected the API key. Check it in Settings.',
   errRate: 'Too many requests right now. Wait a moment and try again.',
   errServer: 'The server returned an error.',
+  errMediaGone: 'The voice message or photo is no longer on this phone. Send it again.',
   // Reports, schedules, inbox
   reports: 'Reports',
   reportsHint: 'Choose a report to run it. Browse by category or search by name.',
@@ -389,6 +390,7 @@ const ur: Strings = {
   errAuth: 'سرور نے API کلید قبول نہیں کی۔ سیٹنگز میں چیک کریں۔',
   errRate: 'اس وقت بہت زیادہ درخواستیں ہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',
   errServer: 'سرور میں خرابی پیش آئی۔',
+  errMediaGone: 'یہ آواز کا پیغام یا تصویر اب فون پر موجود نہیں۔ براہِ کرم دوبارہ بھیجیں۔',
   // Reports, schedules, inbox
   reports: 'رپورٹس',
   reportsHint: 'رپورٹ چلانے کے لیے اسے منتخب کریں۔ زمرے کے لحاظ سے دیکھیں یا نام سے تلاش کریں۔',
