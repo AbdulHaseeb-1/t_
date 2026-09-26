@@ -10,6 +10,8 @@ export function toWhatsApp(markdown: string): string {
     .filter((l) => !/^\s*\|.*\|\s*$/.test(l)) // markdown tables: the data block replaces them
     .map((l) =>
       l
+        // Markdown *italic* first: WhatsApp reads single asterisks as bold, and the rules below produce them.
+        .replace(/(?<![*\w])\*(?![\s*])([^*\n]*?[^\s*])\*(?![*\w])/g, '_$1_')
         .replace(/^\s{0,3}#{1,6}\s+(.*)$/, '*$1*')
         .replace(/^\s*[-*]\s+/, '• ')
         .replace(/\*\*(.+?)\*\*/g, '*$1*')

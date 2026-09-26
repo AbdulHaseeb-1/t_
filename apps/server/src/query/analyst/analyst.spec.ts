@@ -78,8 +78,9 @@ describe('chat agent', () => {
     expect(res.answer).toContain('orders by shop');
     expect(res).toMatchObject({ results: [], steps: [], sql: null, result: null, display: null, attempts: 1, language: 'en' });
     const body = llm.requests[before] as Body;
-    // Instructions carry the schema; the question carries today's date and the reply language.
+    // Instructions carry the schema and the answer-writing rules; the question carries today's date and the reply language.
     expect(String(body.messages[0].content)).toContain('sales.Orders');
+    expect(String(body.messages[0].content)).toMatch(/never mention SQL, queries, tools, result ids/);
     expect(JSON.stringify(body.messages.at(-1))).toMatch(/Today is \w+day, \d{4}-\d{2}-\d{2} \(Asia\/Karachi\)[\s\S]*Reply in English/);
     expect((body.tools as { function: { name: string } }[]).map((t) => t.function.name)).toEqual([
       'run_sql',

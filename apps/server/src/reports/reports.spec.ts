@@ -408,6 +408,10 @@ describe('WhatsApp bot', () => {
 describe('WhatsApp formatting', () => {
   it('converts markdown and renders results as an aligned monospace table', () => {
     expect(toWhatsApp('## Top\n**Total**: 5\n- a\n| x | y |\n|---|---|')).toBe('*Top*\n*Total*: 5\n• a');
+    // Markdown italics would read as bold on WhatsApp; arithmetic and list markers stay as they are.
+    expect(toWhatsApp('**Sales** rose *12%*.\n* item\n2 * 3 * 4\n*Want this by salesman?*')).toBe(
+      '*Sales* rose _12%_.\n• item\n2 * 3 * 4\n_Want this by salesman?_',
+    );
     const r = { columns: [{ name: 'customer', type: 'text' }, { name: 'net_sales', type: 'decimal' }], rows: [['ALI', 1234.5], ['BILAL TRADERS', 99]], rowCount: 12, truncated: false, elapsedMs: 1 };
     expect(tableBlock(r, 2)).toBe('```\ncustomer       net sales\nALI              1,234.5\nBILAL TRADERS         99\n… 10 more rows\n```');
     const msg = answerMessage({ title: 'T', answer: 'x'.repeat(5000), result: r });
