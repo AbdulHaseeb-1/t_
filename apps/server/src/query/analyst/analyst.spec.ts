@@ -81,6 +81,9 @@ describe('chat agent', () => {
     // Instructions carry the schema and the answer-writing rules; the question carries today's date and the reply language.
     expect(String(body.messages[0].content)).toContain('sales.Orders');
     expect(String(body.messages[0].content)).toMatch(/never mention SQL, queries, tools, result ids/);
+    // Visual-first: comparison cards and two-way breakdowns are part of the contract with the app.
+    expect(String(body.messages[0].content)).toMatch(/previous_<name>/);
+    expect(JSON.stringify(body.tools)).toContain('"stacked"');
     expect(JSON.stringify(body.messages.at(-1))).toMatch(/Today is \w+day, \d{4}-\d{2}-\d{2} \(Asia\/Karachi\)[\s\S]*Reply in English/);
     expect((body.tools as { function: { name: string } }[]).map((t) => t.function.name)).toEqual([
       'run_sql',
@@ -110,6 +113,16 @@ describe('chat agent', () => {
     expect(res.steps).toMatchObject([{ tool: 'run_sql', label: 'Units by shop', ok: true, rowCount: 2, resultId: 'r1' }]);
     expect(res.attempts).toBe(2);
     expect(res.timings.dbMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('passes a stacked two-way breakdown through to the app', async () => {
+    script = (b) =>
+      toolMessages(b).length === 0
+        ? { toolCalls: [sql('Units by shop and order', 'SELECT shop, order_no, SUM(qty) AS units FROM sales.Orders GROUP BY shop, order_no ORDER BY shop', 'chart', 'stacked')] }
+        : { content: 'Shop **2** sold the most.' };
+    const res = await chat('units by shop split by order');
+    expect(res.results[0]).toMatchObject({ display: { view: 'chart', chart: 'stacked' } });
+    expect(res.results[0].result.columns.map((c) => c.name)).toEqual(['shop', 'order_no', 'units']);
   });
 
   it('recovers from a failed query using the hint it gets back', async () => {

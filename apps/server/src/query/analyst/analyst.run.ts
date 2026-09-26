@@ -2,7 +2,7 @@ import type { QueryResult } from '../../database/database.types.js';
 
 /** How the app should present a result; chosen by the model from what the person asked. */
 export type View = 'number' | 'table' | 'chart';
-export type ChartKind = 'line' | 'column' | 'bar' | 'donut';
+export type ChartKind = 'line' | 'column' | 'bar' | 'donut' | 'stacked';
 
 export interface Display {
   view: View;

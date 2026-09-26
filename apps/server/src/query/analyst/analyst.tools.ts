@@ -107,17 +107,23 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
     name: 'run_sql',
     description:
       'Run one read-only SELECT (or WITH ... SELECT) and get the result back as a TSV sample with column statistics. ' +
-      'Independent queries can be called in parallel. The display setting selects a visible app widget: number card, expanded table, or chart. Use table for requested lists, including top-N product lists.',
+      'Independent queries can be called in parallel. The display setting selects a visible app widget: number card, chart, or expanded table. ' +
+      'Prefer a chart for numbers over time or across categories; use table for requested lists and detail.',
     parameters: z.object({
       title: z.string().describe('Short heading for this result in the person\'s language, e.g. "Net sales by month, 2026".'),
       sql: z.string().describe('A single read-only SELECT or WITH ... SELECT statement.'),
       display: z
         .enum(['number', 'table', 'chart', 'none'])
-        .describe('number: one-row figures; table: visible rows for lists, records, or detail; chart: trend or single-measure comparison; none: checks and intermediate steps.'),
+        .describe(
+          'number: one-row figures (add previous_<name> for a comparison period); chart: trends, rankings, shares and two-way breakdowns; table: requested lists, records and detail; none: checks and intermediate steps.',
+        ),
       chart: z
-        .enum(['line', 'column', 'bar', 'donut'])
+        .enum(['line', 'column', 'bar', 'donut', 'stacked'])
         .nullable()
-        .describe('Only with display "chart": line = time series with many points, column = a few periods, bar = ranked categories, donut = shares of one whole (at most 6 parts). Otherwise null.'),
+        .describe(
+          'Only with display "chart": line = time series with many points or several trends compared, column = up to 12 periods, bar = ranked categories, ' +
+            'donut = shares of one whole (at most 6 parts), stacked = how a total splits across a second dimension (long rows: period or category, the second dimension, one measure). Otherwise null.',
+        ),
       replaces: z
         .string()
         .nullable()
