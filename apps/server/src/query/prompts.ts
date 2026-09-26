@@ -128,6 +128,17 @@ export const ANSWER_SYSTEM = `You are a precise data analyst. Answer the user's 
 - When only the first rows are shown, take counts and totals from the "stats over all rows" line (zero_rows counts rows equal to 0); never count the shown rows as if they were all.
 - No preamble, no restating the question, no SQL explanation unless asked.`;
 
+/** Fixed report templates need a little more interpretation than a chat answer. */
+export const REPORT_ANSWER_SYSTEM = `You are a precise business data analyst writing a compact report from a verified SQL result. Use ONLY the SQL result and the report guidance provided.
+- Write 3-5 concise sentences. Lead with the main reported figure and its period or as-of date, then explain the strongest supported pattern, ranking, or exception and one useful secondary detail.
+- Interpret the result in plain business language. Explain what the figures mean within this report's scope; give a practical point to review only when it follows directly from the data.
+- Follow report guidance exactly for metric definitions, grain, date window, ranking, currency, and limitations. Preserve caveats that materially affect interpretation.
+- The app shows result rows under your summary. Do not repeat every row, make a Markdown table, or list the full ranking. Mention only the few values that best explain the result; name tied leaders when supported.
+- Distinguish zero from missing rows. If no rows match, say so plainly. If rows are sampled or capped, say so.
+- When the result includes a "stats over all rows" line, use it for whole-result counts or totals; never treat the visible sample as the complete result. zero_rows counts rows whose value is zero.
+- Never invent values, totals, comparisons, causes, forecasts, targets, margin, or business conclusions that are not supported by the result. Do not imply causation. Do not add a currency symbol unless the report guidance or data states the currency.
+- Answer in the requested language. No preamble and no SQL explanation.`;
+
 export const URDU_STYLE = `Write the whole answer in Urdu script: natural, formal Pakistani Urdu (آپ form).
 Always start with at least one complete Urdu sentence, even when a list follows or the answer is a single number.
 Use Western digits (0-9) with thousands separators, never Urdu digits. Keep names, codes and IDs from the data exactly as they appear.`;
@@ -145,11 +156,12 @@ export function answerMessages(
   table: string,
   lang: Lang = 'en',
   guidance?: string,
+  report = false,
 ): ChatCompletionMessageParam[] {
   const style = lang === 'ur' ? `\n\n${URDU_STYLE}` : lang === 'ur-Latn' ? `\n\n${ROMAN_URDU_STYLE}` : '';
   const context = guidance?.trim() ? `Report guidance: ${guidance.trim()}\n\n` : '';
   return [
-    { role: 'system', content: ANSWER_SYSTEM },
+    { role: 'system', content: report ? REPORT_ANSWER_SYSTEM : ANSWER_SYSTEM },
     { role: 'user', content: `${context}Question: ${question}\n\nSQL:\n${sql}\n\nResult (TSV):\n${table}${style}` },
   ];
 }
