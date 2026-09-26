@@ -26,6 +26,7 @@ jest.mock('../src/lib/useVoice', () => {
 });
 jest.mock('../src/lib/feedback', () => ({
   cue: jest.fn(),
+  tap: jest.fn(),
   preloadFeedback: jest.fn(),
   setFeedbackEnabled: jest.fn(),
   START_CUE_MS: 0,
@@ -207,7 +208,7 @@ it('shows what each answer cost and where the time went', async () => {
   await ask('How many orders are there?');
   await act(async () => requests[0].resolve(200, answer('SELECT 1', 'There are **500** orders.')));
   // Per-answer line: time, tokens; tap for the breakdown.
-  fireEvent.press(await screen.findByLabelText('Details: 1.4 s · 1.9K Tokens'));
+  fireEvent.press(await screen.findByLabelText('Details: 1.4 s · 1.9K tokens'));
   expect(await screen.findByText('Answer details')).toBeTruthy();
   expect(screen.getByText('Write query')).toBeTruthy();
   expect(screen.getByText('Write answer')).toBeTruthy();
@@ -253,6 +254,38 @@ it('stops an in-flight request and can retry it', async () => {
   expect(await screen.findByText('Recovered.')).toBeTruthy();
 });
 
+it('asks again for a fresh answer, not the one the server just cached', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('How many orders?');
+  expect(requests[0].body).not.toHaveProperty('noCache');
+  await act(async () => requests[0].resolve(200, answer('SELECT 1', 'First.')));
+  await screen.findByText('First.');
+  fireEvent.press(screen.getByLabelText('Ask again'));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[1].body).toMatchObject({ question: 'How many orders?', noCache: true });
+});
+
+it('explains that a voice message interrupted by a restart must be sent again', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  fireEvent.press(screen.getByLabelText('Record voice message'));
+  await screen.findByLabelText('Recording');
+  fireEvent.press(screen.getByLabelText('Send voice message'));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await waitFor(async () => expect((await AsyncStorage.getAllKeys()).some((k) => k.startsWith('chat.v2:'))).toBe(true));
+
+  // The app restarts: the recording itself was only in memory.
+  screen.unmount();
+  renderRouter(routes, { initialUrl: '/' });
+  fireEvent.press(await screen.findByLabelText('Open conversations'));
+  fireEvent.press(await screen.findByLabelText('Open Voice message'));
+  expect(await screen.findByText('Interrupted.')).toBeTruthy();
+  fireEvent.press(screen.getByLabelText('Retry'));
+  expect(await screen.findByText('The voice message or photo is no longer on this phone. Send it again.')).toBeTruthy();
+  expect(requests).toHaveLength(1); // nothing empty was sent
+});
+
 it('explains server errors in plain language', async () => {
   renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What would you like to know?');
@@ -280,7 +313,11 @@ it('keeps conversations in the drawer, switches and deletes them, and persists',
   expect(await screen.findByText('One.')).toBeTruthy();
 
   // Survives an app restart (after the debounced save lands).
-  await waitFor(async () => expect(await AsyncStorage.getItem('chats.v1')).toContain('Second conversation'));
+  const stored = async () => {
+    const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith('chat.v2:'));
+    return (await AsyncStorage.multiGet(keys)).map(([, v]) => v).join('\n');
+  };
+  await waitFor(async () => expect(await stored()).toContain('Second conversation'));
   screen.unmount();
   renderRouter(routes, { initialUrl: '/' });
   fireEvent.press(await screen.findByLabelText('Open conversations'));
@@ -441,6 +478,68 @@ it('opens all requested list rows from the analyst result widget', async () => {
   expect(screen.queryByTestId('chart-bars')).toBeNull();
 });
 
+it('ranks list rows and draws a bar behind the main measure', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('List the top products');
+  const rows = [['Panadol', 900, 12], ['Brufen', 600, 8], ['Risek', 300, 3]];
+  const columns = ['product_name', 'net_sales', 'units_sold'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'Panadol leads.',
+    result,
+    results: [{ id: 'r1', title: 'Top products', sql: 'SELECT ...', result, display: { view: 'table' } }],
+  }, columns, rows)));
+  await screen.findByText('Panadol leads.');
+  expect(screen.getByText('#')).toBeTruthy();
+  const bars = screen.getAllByTestId('data-bar');
+  expect(bars).toHaveLength(3);
+  const widths = bars.map((b) => Object.assign({}, ...[b.props.style].flat(Infinity).filter(Boolean)).width as number);
+  expect(widths[0]).toBeGreaterThan(widths[1]);
+  expect(widths[1]).toBeGreaterThan(widths[2]);
+});
+
+it('shows a figure with its change against the previous period', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Sales this month');
+  const rows = [[24_800_000, 26_300_000]];
+  const columns = ['net_sales', 'previous_net_sales'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: 1, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'Net sales are **24.8M**, down 5.7%.',
+    result,
+    results: [{ id: 'r1', title: 'Net sales this month', sql: 'SELECT ...', result, display: { view: 'number' } }],
+  }, columns, rows)));
+  expect(await screen.findByTestId('chart-stat')).toBeTruthy();
+  expect(screen.getAllByText('24.8M')).toHaveLength(2); // the prose and the tile
+  expect(screen.getByText('−5.7%')).toBeTruthy();
+  expect(screen.getByText('vs 26.3M previous')).toBeTruthy();
+});
+
+it('stacks a two-way breakdown and reads out each part for a tapped period', async () => {
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await ask('Monthly sales by region');
+  const rows = [
+    ['2026-07-01', 'North', 300], ['2026-07-01', 'South', 100],
+    ['2026-08-01', 'North', 400], ['2026-08-01', 'South', 200],
+  ];
+  const columns = ['month', 'region', 'net_sales'];
+  const result = { columns: columns.map((name) => ({ name, type: 'x' })), rows, rowCount: rows.length, truncated: false, elapsedMs: 3 };
+  await act(async () => requests[0].resolve(200, answerWith({
+    answer: 'North leads every month.',
+    result,
+    results: [{ id: 'r1', title: 'Net sales by region', sql: 'SELECT ...', result, display: { view: 'chart', chart: 'stacked' } }],
+  }, columns, rows)));
+  expect(await screen.findByTestId('chart-stacked')).toBeTruthy();
+  // The latest month first: its total, its change, and each region's part.
+  expect(screen.getByText('600')).toBeTruthy();
+  expect(screen.getByText('North')).toBeTruthy();
+  expect(screen.getByText('400  67%')).toBeTruthy();
+  expect(screen.getByText('200  33%')).toBeTruthy();
+});
+
 it('pages through every returned table row beyond the first 50', async () => {
   renderRouter(routes, { initialUrl: '/' });
   await screen.findByText('What would you like to know?');
@@ -491,12 +590,36 @@ it('shows one row of several figures as KPI tiles', async () => {
   expect(screen.getByLabelText('Orders: 812')).toBeTruthy();
 });
 
-describe('in Urdu (the default)', () => {
+it('is white by default and switches to the dark theme from Settings', async () => {
+  const flat = (el: { props: { style?: unknown } }) => Object.assign({}, ...[el.props.style].flat(Infinity).filter(Boolean)) as Record<string, unknown>;
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  expect(flat(screen.getByTestId('header')).backgroundColor).toBe('#FFFFFF');
+  screen.unmount();
+
+  renderRouter(routes, { initialUrl: '/settings' });
+  fireEvent.press(await screen.findByLabelText('Theme, Light'));
+  fireEvent.press(await screen.findByLabelText('Dark'));
+  await waitFor(async () => expect(await AsyncStorage.getItem('settings.appearance')).toBe(JSON.stringify('dark')));
+  screen.unmount();
+
+  renderRouter(routes, { initialUrl: '/' });
+  await screen.findByText('What would you like to know?');
+  await waitFor(() => expect(flat(screen.getByTestId('header')).backgroundColor).toBe('#212121'));
+});
+
+it('starts in English until a display language is chosen', async () => {
+  await AsyncStorage.removeItem('settings.language');
+  renderRouter(routes, { initialUrl: '/' });
+  expect(await screen.findByText('What would you like to know?')).toBeTruthy();
+});
+
+describe('in Urdu', () => {
   beforeEach(async () => {
-    await AsyncStorage.removeItem('settings.language');
+    await AsyncStorage.setItem('settings.language', JSON.stringify('ur'));
   });
 
-  it('shows an Urdu, right-to-left interface out of the box', async () => {
+  it('shows an Urdu, right-to-left interface', async () => {
     renderRouter(routes, { initialUrl: '/' });
     const greeting = await screen.findByText('آپ کیا جاننا چاہتے ہیں؟');
     expect(Object.assign({}, ...[greeting.props.style].flat(Infinity).filter(Boolean))).toMatchObject({ fontFamily: 'NotoNastaliqUrdu_400Regular' });
@@ -614,9 +737,9 @@ describe('reports', () => {
     // The message and the new chat's title.
     expect(await screen.findAllByText("📊 Today's orders")).toHaveLength(2);
     expect(await screen.findByLabelText('Orders: 54', {}, { timeout: 3000 })).toBeTruthy(); // KPI tiles
-    // A report answer offers Schedule, not "Save as report" (it already is one).
+    // A template answer offers Schedule, not "Save as template" (it already is one).
     expect(screen.getByLabelText('Schedule')).toBeTruthy();
-    expect(screen.queryByLabelText('Save as report')).toBeNull();
+    expect(screen.queryByLabelText('Save as template')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Ask again'));
     await waitFor(() => expect(requests).toHaveLength(2));
@@ -625,8 +748,9 @@ describe('reports', () => {
 
   it('asks for parameters with presets before running, from the gallery', async () => {
     renderRouter(routes, { initialUrl: '/reports' });
-    expect(await screen.findByText('Customers')).toBeTruthy(); // category heading
-    fireEvent.changeText(screen.getByLabelText('Search reports'), 'top');
+    expect(await screen.findByTestId('report-top-customers')).toBeTruthy(); // templates loaded
+    expect(screen.getAllByText('Customers')).toHaveLength(2); // filter chip and category heading
+    fireEvent.changeText(screen.getByLabelText('Search templates'), 'top');
     expect(screen.queryByTestId('report-stock-shortage')).toBeNull();
     fireEvent.press(screen.getByTestId('report-top-customers'));
 
@@ -646,15 +770,15 @@ describe('reports', () => {
     await screen.findByText('What would you like to know?');
     await ask('How many orders are there?');
     await act(async () => requests[0].resolve(200, answer('SELECT COUNT(*) AS Orders FROM sales.Orders', 'There are **500** orders.')));
-    fireEvent.press(await screen.findByLabelText('Save as report'));
-    expect(screen.getByLabelText('Report name').props.value).toBe('How many orders are there?');
-    fireEvent.changeText(screen.getByLabelText('Report name'), 'Order count');
+    fireEvent.press(await screen.findByLabelText('Save as template'));
+    expect(screen.getByLabelText('Template name').props.value).toBe('How many orders are there?');
+    fireEvent.changeText(screen.getByLabelText('Template name'), 'Order count');
     fireEvent.press(screen.getByLabelText('Save'));
     await waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1].url).toMatch(/\/templates$/);
     expect(requests[1].body).toEqual({ title: 'Order count', question: 'How many orders are there?', sql: 'SELECT COUNT(*) AS Orders FROM sales.Orders' });
     await act(async () => requests[1].resolve(201, { ...TEMPLATES[0], id: 'order-count-x1', title: 'Order count', builtIn: false }));
-    expect(await screen.findByLabelText('Saved to Reports')).toBeTruthy();
+    expect(await screen.findByLabelText('Saved to Templates')).toBeTruthy();
   });
 
   it('schedules a report weekly to the app and WhatsApp', async () => {

@@ -4,8 +4,8 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import type { QueryResult } from '../lib/api';
 import { row, scriptStyle, useI18n } from '../i18n';
 import { formatCell } from '../lib/format';
-import { humanize } from '../lib/chart';
-import { card, layout, type, usePalette, weight } from '../theme';
+import { humanize, isRanking, magnitudeColumn } from '../lib/chart';
+import { card, layout, type, useChartPalette, usePalette, weight } from '../theme';
 
 const PAGE_ROWS = 25;
 
@@ -25,6 +25,7 @@ interface Props {
  */
 export const DataPanel = memo(function DataPanel({ sql, result, title: heading, defaultOpen = false }: Props) {
   const p = usePalette();
+  const c = useChartPalette();
   const { t, rtl } = useI18n();
   const { width } = useWindowDimensions();
   const [open, setOpen] = useState(defaultOpen);
@@ -34,8 +35,13 @@ export const DataPanel = memo(function DataPanel({ sql, result, title: heading, 
   const currentPage = Math.min(page, pageCount - 1);
   const start = currentPage * PAGE_ROWS;
   const rows = result.rows.slice(start, start + PAGE_ROWS);
-  const numeric = result.columns.map((_, c) => result.rows.length > 0 && result.rows.every((r) => r[c] === null || typeof r[c] === 'number'));
-  const columnWidth = (i: number) => ({ width: numeric[i] ? 128 : i === 0 ? 200 : 168 });
+  const numeric = result.columns.map((_, col) => result.rows.length > 0 && result.rows.every((r) => r[col] === null || typeof r[col] === 'number'));
+  // Visual cues: a faint bar behind the main measure, and rank numbers for a ranking by it.
+  const barCol = magnitudeColumn(result);
+  const barMax = barCol === null ? 0 : Math.max(...result.rows.map((r) => (r[barCol] as number | null) ?? 0));
+  const ranked = barCol !== null && isRanking(result, barCol);
+  // With rank numbers the label column gives up room, so the ranked measure still fits a phone screen.
+  const columnWidth = (i: number) => ({ width: numeric[i] ? 128 : i === 0 ? (ranked ? 156 : 200) : 168 });
   const needsHorizontalScroll = result.columns.reduce((sum, _, i) => sum + columnWidth(i).width, 0) > Math.min(width, layout.pageWidth) - 64;
   const count = result.rowCount === 1 ? t.row : t.rows(formatCell(result.rowCount));
   const summary = `${count}${result.truncated ? '+' : ''}`;
@@ -89,19 +95,40 @@ export const DataPanel = memo(function DataPanel({ sql, result, title: heading, 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View>
                   <View style={[styles.row, styles.headerRow, { borderColor: p.border, backgroundColor: p.sunken }]}>
-                    {result.columns.map((c, i) => (
+                    {ranked && <Text style={[styles.cell, styles.rank, type.meta, { color: p.muted, ...weight.medium }]}>#</Text>}
+                    {result.columns.map((col, i) => (
                       <Text key={i} style={[styles.cell, columnWidth(i), type.meta, { color: p.text, ...weight.medium, textAlign: numeric[i] ? 'right' : 'left' }]} numberOfLines={2}>
-                        {humanize(c.name)}
+                        {humanize(col.name)}
                       </Text>
                     ))}
                   </View>
                   {rows.map((r, i) => (
-                    <View key={i} style={[styles.row, { borderColor: p.border, backgroundColor: i % 2 ? p.sunken : p.surface }]}>
-                      {result.columns.map((_, j) => (
-                        <Text key={j} style={[styles.cell, columnWidth(j), type.meta, { color: p.text, textAlign: numeric[j] ? 'right' : 'left', fontVariant: ['tabular-nums'] }]} numberOfLines={2} selectable>
-                          {formatCell(r[j])}
+                    <View key={i} style={[styles.row, { borderColor: p.border, backgroundColor: p.surface }, i === rows.length - 1 && styles.lastRow]}>
+                      {ranked && (
+                        <Text style={[styles.cell, styles.rank, type.meta, { color: start + i < 3 ? p.text : p.faint, fontVariant: ['tabular-nums'] }, start + i < 3 && weight.semibold]}>
+                          {start + i + 1}
                         </Text>
-                      ))}
+                      )}
+                      {result.columns.map((_, j) =>
+                        j === barCol ? (
+                          <View key={j} style={[styles.barCell, columnWidth(j)]}>
+                            <View
+                              testID="data-bar"
+                              style={[
+                                styles.dataBar,
+                                { backgroundColor: c.series[0], width: Math.max(2, ((((r[j] as number | null) ?? 0) / barMax) * (columnWidth(j).width - 12))) },
+                              ]}
+                            />
+                            <Text style={[type.meta, { color: p.text, textAlign: 'right', fontVariant: ['tabular-nums'] }]} numberOfLines={2} selectable>
+                              {formatCell(r[j])}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text key={j} style={[styles.cell, columnWidth(j), type.meta, { color: p.text, textAlign: numeric[j] ? 'right' : 'left', fontVariant: ['tabular-nums'] }]} numberOfLines={2} selectable>
+                            {formatCell(r[j])}
+                          </Text>
+                        ),
+                      )}
                     </View>
                   ))}
                 </View>
@@ -125,14 +152,19 @@ export const DataPanel = memo(function DataPanel({ sql, result, title: heading, 
 });
 
 const styles = StyleSheet.create({
-  shell: { borderRadius: 14 },
-  box: { borderRadius: 14, overflow: 'hidden' },
-  head: { alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  shell: { borderRadius: 16, borderCurve: 'continuous' },
+  box: { borderRadius: 16, overflow: 'hidden' },
+  head: { alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12 },
   body: { borderTopWidth: StyleSheet.hairlineWidth, padding: 8, gap: 12 },
   sql: { borderRadius: 8, padding: 10 },
   row: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
-  headerRow: { minHeight: 38 },
+  headerRow: { minHeight: 38, borderRadius: 8 },
+  lastRow: { borderBottomWidth: 0 },
   cell: { paddingHorizontal: 10, paddingVertical: 9 },
+  rank: { width: 40, textAlign: 'center' },
+  barCell: { paddingHorizontal: 10, paddingVertical: 9, justifyContent: 'center' },
+  /** A wash behind the value, growing from the cell's start; the number stays in the ink color on top. */
+  dataBar: { position: 'absolute', left: 6, top: 7, bottom: 7, borderRadius: 4, opacity: 0.16 },
   scrollHint: { alignItems: 'center', gap: 5, paddingHorizontal: 6 },
   pager: { alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   pageButton: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, minHeight: 36, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 2 },

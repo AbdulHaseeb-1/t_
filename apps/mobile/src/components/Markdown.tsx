@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, type ReactNode, useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, type TextStyle, View } from 'react-native';
 import { type Block, parseMarkdown, type Span, spansToText } from '../lib/markdown';
 import { isUrduText, scriptStyle } from '../i18n';
@@ -10,7 +10,7 @@ function Spans({ spans, base, p }: { spans: Span[]; base: TextStyle; p: Palette 
       {spans.map((s, i) => {
         if (s.code) {
           return (
-            <Text key={i} style={[type.code, { color: p.text, backgroundColor: p.sunken }]}>
+            <Text key={i} style={[type.code, styles.inlineCode, { color: p.text, backgroundColor: p.sunken }]}>
               {` ${s.text} `}
             </Text>
           );
@@ -84,8 +84,12 @@ function Table({ block, p }: { block: Extract<Block, { type: 'table' }>; p: Pale
   );
 }
 
-/** Renders the assistant's Markdown in the prose style. Parsing is memoized per text. */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+/**
+ * Renders the assistant's Markdown in the prose style. Parsing is memoized per
+ * text. `trailing` (the live dot while an answer streams) sits inline at the
+ * end of the last paragraph, list item or heading.
+ */
+export const Markdown = memo(function Markdown({ text, trailing }: { text: string; trailing?: ReactNode }) {
   const p = usePalette();
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   const prose: TextStyle = { ...type.prose, color: p.prose };
@@ -95,6 +99,10 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const headingFor = (text: string, level: number): TextStyle =>
     StyleSheet.flatten(scriptStyle(text, { ...(level === 1 ? type.heading : level === 2 ? type.subheading : type.title), color: p.prose }, 'bold'));
 
+  const lastIndex = blocks.length - 1;
+  const inlineEnd = blocks.length > 0 && ['heading', 'paragraph', 'list'].includes(blocks[lastIndex].type);
+  const tail = (i: number) => (trailing && i === lastIndex ? trailing : null);
+
   return (
     <View style={styles.stack}>
       {blocks.map((b, i) => {
@@ -102,8 +110,9 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
           case 'heading': {
             const heading = headingFor(spansToText(b.spans), b.level);
             return (
-              <Text key={i} accessibilityRole="header" style={heading}>
+              <Text key={i} accessibilityRole="header" style={[heading, styles.heading]}>
                 <Spans spans={b.spans} base={heading} p={p} />
+                {tail(i)}
               </Text>
             );
           }
@@ -111,6 +120,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
             return (
               <Text key={i} style={proseFor(spansToText(b.spans))} selectable>
                 <Spans spans={b.spans} base={proseFor(spansToText(b.spans))} p={p} />
+                {tail(i)}
               </Text>
             );
           case 'list': {
@@ -122,6 +132,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
                     <Text style={[prose, styles.marker, { color: p.muted, textAlign: urdu ? 'right' : 'left' }]}>{b.ordered ? `${b.start + j}.` : '•'}</Text>
                     <Text style={[proseFor(spansToText(item)), styles.itemText]} selectable>
                       <Spans spans={item} base={proseFor(spansToText(item))} p={p} />
+                      {j === b.items.length - 1 ? tail(i) : null}
                     </Text>
                   </View>
                 ))}
@@ -142,18 +153,21 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
             return <View key={i} style={[styles.rule, { backgroundColor: p.border }]} />;
         }
       })}
+      {trailing && !inlineEnd && <Text style={prose}>{trailing}</Text>}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  stack: { gap: 12 },
-  list: { gap: 4 },
+  stack: { gap: 14 },
+  heading: { marginTop: 4 },
+  list: { gap: 6 },
   item: { flexDirection: 'row' },
   marker: { width: 22 },
   itemText: { flex: 1 },
-  code: { borderRadius: 8, padding: 12 },
-  tableWrap: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, alignSelf: 'flex-start', maxWidth: '100%' },
+  inlineCode: { borderRadius: 4 },
+  code: { borderRadius: 10, padding: 12 },
+  tableWrap: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, alignSelf: 'flex-start', maxWidth: '100%' },
   row: { flexDirection: 'row' },
   rowRtl: { flexDirection: 'row-reverse' },
   cell: { paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth },

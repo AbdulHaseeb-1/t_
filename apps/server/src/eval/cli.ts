@@ -14,6 +14,8 @@ Usage: pnpm eval [options]
   --dataset <file>       Dataset JSON (default eval/datasets/retail.json)
   --variant <spec>       name:KEY=VAL,KEY=VAL  (repeatable; default: current settings)
   --preset ablation      Baseline plus each accuracy feature, then all combined
+  --preset pipelines     The one-shot ask pipeline against the chat agent
+  --pipeline <name>      ask (one-shot SQL) | chat (the agent the app uses)  [ask]
   --repeat <n>           Run every case n times (stability, pass@k)      [1]
   --concurrency <n>      Cases in flight per variant                    [4]
   --filter <regex>       Only case ids or tags matching the pattern
@@ -47,6 +49,12 @@ const ABLATION: Record<string, Record<string, string>> = {
   },
   default: {},
   'default+few-shot': { ASK_FEWSHOT_K: '3', EVAL_FEWSHOT: 'dataset' },
+};
+
+/** The same model through both production paths: one-shot SQL and the chat agent. */
+const PIPELINES: Record<string, Record<string, string>> = {
+  ask: {},
+  agent: { EVAL_PIPELINE: 'chat' },
 };
 
 function parseVariant(spec: string): Variant {
@@ -103,6 +111,7 @@ async function main(): Promise<void> {
       dataset: { type: 'string', default: 'eval/datasets/retail.json' },
       variant: { type: 'string', multiple: true },
       preset: { type: 'string' },
+      pipeline: { type: 'string', default: 'ask' },
       repeat: { type: 'string', default: '1' },
       concurrency: { type: 'string', default: '4' },
       filter: { type: 'string' },
@@ -129,12 +138,16 @@ async function main(): Promise<void> {
   const repeats = Math.max(1, Number(values.repeat));
   const concurrency = Math.max(1, Number(values.concurrency));
 
-  const variants: Variant[] =
-    values.preset === 'ablation'
-      ? Object.entries(ABLATION)
-      : values.variant?.length
-        ? values.variant.map(parseVariant)
-        : [['default', {}]];
+  if (values.pipeline !== 'ask' && values.pipeline !== 'chat') throw new Error(`--pipeline must be ask or chat, not "${values.pipeline}"`);
+  const presets: Record<string, Record<string, Record<string, string>>> = { ablation: ABLATION, pipelines: PIPELINES };
+  if (values.preset && !presets[values.preset]) throw new Error(`Unknown preset "${values.preset}" (ablation, pipelines)`);
+  const chosen: Variant[] = values.preset
+    ? Object.entries(presets[values.preset])
+    : values.variant?.length
+      ? values.variant.map(parseVariant)
+      : [['default', {}]];
+  // --pipeline applies to every variant that does not pick its own.
+  const variants: Variant[] = chosen.map(([name, o]) => [name, { EVAL_PIPELINE: values.pipeline!, ...o }]);
 
   const baseEnv = evalBaseEnv(dataset);
   const { gold, rows, problems } = await computeGold(cases, baseEnv);

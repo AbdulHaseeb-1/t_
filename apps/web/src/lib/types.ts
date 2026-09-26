@@ -73,6 +73,8 @@ export interface Features {
   emptyRecheck?: boolean;
   candidates?: number;
   fewShot?: boolean;
+  /** The chat agent the app uses, instead of one-shot text-to-SQL. */
+  agent?: boolean;
 }
 
 export interface StartRun {

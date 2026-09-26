@@ -85,6 +85,11 @@ function isSqlFailure(err: unknown): boolean {
   return err instanceof UnsafeSqlError || err instanceof SqlExecutionError;
 }
 
+function budgetSpent(run: AnalystRun): string {
+  run.degraded = true;
+  return `Query budget for this answer is spent (${run.maxQueries} database calls). Do not query again; answer from the results you have and say what is still missing.`;
+}
+
 /**
  * The agent's tools. They never throw at the model: every failure comes back as
  * text that says what went wrong and how to fix it, so it can correct itself.
@@ -102,21 +107,38 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
     name: 'run_sql',
     description:
       'Run one read-only SELECT (or WITH ... SELECT) and get the result back as a TSV sample with column statistics. ' +
-      'Independent queries can be called in parallel. The display setting selects a visible app widget: number card, expanded table, or chart. Use table for requested lists, including top-N product lists.',
+      'Independent queries can be called in parallel. The display setting selects a visible app widget: number card, chart, or expanded table. ' +
+      'Prefer a chart for numbers over time or across categories; use table for requested lists and detail.',
     parameters: z.object({
       title: z.string().describe('Short heading for this result in the person\'s language, e.g. "Net sales by month, 2026".'),
       sql: z.string().describe('A single read-only SELECT or WITH ... SELECT statement.'),
       display: z
         .enum(['number', 'table', 'chart', 'none'])
-        .describe('number: one-row figures; table: visible rows for lists, records, or detail; chart: trend or single-measure comparison; none: checks and intermediate steps.'),
+        .describe(
+          'number: one-row figures (add previous_<name> for a comparison period); chart: trends, rankings, shares and two-way breakdowns; table: requested lists, records and detail; none: checks and intermediate steps.',
+        ),
       chart: z
-        .enum(['line', 'column', 'bar', 'donut'])
+        .enum(['line', 'column', 'bar', 'donut', 'stacked'])
         .nullable()
-        .describe('Only with display "chart": line = time series with many points, column = a few periods, bar = ranked categories, donut = shares of one whole (at most 6 parts). Otherwise null.'),
+        .describe(
+          'Only with display "chart": line = time series with many points or several trends compared, column = up to 12 periods, bar = ranked categories, ' +
+            'donut = shares of one whole (at most 6 parts), stacked = how a total splits across a second dimension (long rows: period or category, the second dimension, one measure). Otherwise null.',
+        ),
+      replaces: z
+        .string()
+        .nullable()
+        .describe('Id of an earlier displayed result this query corrects (e.g. "r1"), which is then hidden from the person. Otherwise null.'),
     }),
-    execute: async ({ title, sql, display, chart }, ctx?: RunContext<AnalystRun>) => {
+    execute: async ({ title, sql, display, chart, replaces }, ctx?: RunContext<AnalystRun>) => {
       const run = runOf(ctx);
-      const q = run.addQuery({ title: title.trim() || 'Query', sql, display: toDisplay(display, chart) });
+      if (!run.takeQuery()) return budgetSpent(run);
+      const corrects = replaces?.trim().toLowerCase();
+      const q = run.addQuery({
+        title: title.trim() || 'Query',
+        sql,
+        display: toDisplay(display, chart),
+        ...(corrects && /^r\d+$/.test(corrects) ? { replaces: corrects } : {}),
+      });
       run.emit({ type: 'status', stage: 'query', label: q.title });
       const started = performance.now();
       try {
@@ -131,7 +153,10 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         const message = (err as Error).message;
         q.error = message;
         run.step({ tool: 'run_sql', label: q.title, ok: false, sql, resultId: q.id, error: message });
-        if (!isSqlFailure(err)) return `${q.id} failed: the database is unavailable (${message}). Do not retry; tell the person.`;
+        if (!isSqlFailure(err)) {
+          run.degraded = true;
+          return `${q.id} failed: the database is unavailable (${message}). Do not retry; tell the person.`;
+        }
         return `${q.id} failed: ${message}\n${sqlHint(message)}`;
       }
     },
@@ -188,6 +213,7 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         run.step({ tool: 'column_values', label, ok: false, error: 'unknown column' });
         return `Unknown column "${column}" in ${t.id}. Its columns: ${t.columns.map((x) => x.name).join(', ')}.`;
       }
+      if (!run.takeQuery()) return budgetSpent(run);
       const started = performance.now();
       try {
         const r = await db.readOnlyQuery(columnValuesSql(t, c, contains?.trim() || null, db.dialect), MAX_VALUES + 1);
@@ -202,6 +228,7 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         run.dbMs += performance.now() - started;
         const message = (err as Error).message;
         run.step({ tool: 'column_values', label, ok: false, error: message });
+        if (!isSqlFailure(err)) run.degraded = true;
         return `Could not read values: ${message}`;
       }
     },

@@ -9,6 +9,9 @@ import type { Pipeline } from './pipeline.js';
 
 export type Verdict = 'correct' | 'wrong' | 'error';
 
+/** `ask`: one-shot text-to-SQL (reports, schedules). `chat`: the agent the app and WhatsApp use. */
+export type EvalPipeline = 'ask' | 'chat';
+
 export type Category =
   | 'correct'
   | 'wrong_rows'
@@ -87,7 +90,30 @@ function errorCategory(err: unknown): { category: Category; detail: string; sql?
   return { category: 'other_error', detail: message };
 }
 
-/** Runs one case through the real ask pipeline and scores it against gold. */
+/** A pipeline's reply in the shape the scorer needs: every result it showed, first = primary. */
+interface Reply {
+  sql: string | null;
+  answer: string | null;
+  attempts: number;
+  trace?: AskResponse['trace'];
+  timings: { totalMs: number; llmMs: number; dbMs: number };
+  usage: UsageSummary;
+  shown: { sql: string; result: QueryResult | null }[];
+}
+
+async function reply(pipeline: Pipeline, kind: EvalPipeline, question: string, withAnswers: boolean): Promise<Reply> {
+  if (kind === 'chat') {
+    const res = await pipeline.analyst.chat({ question, context: [], language: 'auto', tier: 'fast', noCache: true });
+    return { ...res, shown: res.results.map((r) => ({ sql: r.sql, result: r.result })) };
+  }
+  const res = await pipeline.ask.ask({ question, context: [], language: 'auto', answer: withAnswers, tier: 'fast', noCache: true });
+  return { ...res, shown: res.sql === null ? [] : [{ sql: res.sql, result: res.result }] };
+}
+
+/**
+ * Runs one case through a real pipeline and scores it against gold. The agent
+ * may show more than one result; the case is correct when one of them matches.
+ */
 export async function runCase(
   pipeline: Pipeline,
   variant: string,
@@ -95,6 +121,7 @@ export async function runCase(
   c: EvalCase,
   gold: QueryResult | undefined,
   withAnswers: boolean,
+  kind: EvalPipeline = 'ask',
 ): Promise<CaseResult> {
   const base = {
     variant,
@@ -108,16 +135,9 @@ export async function runCase(
     gold: preview(gold),
   };
   const started = performance.now();
-  let res: AskResponse;
+  let res: Reply;
   try {
-    res = await pipeline.ask.ask({
-      question: c.question,
-      context: [],
-      language: 'auto',
-      answer: withAnswers,
-      tier: 'fast',
-      noCache: true,
-    });
+    res = await reply(pipeline, kind, c.question, withAnswers);
   } catch (err) {
     const e = errorCategory(err);
     return {
@@ -144,10 +164,10 @@ export async function runCase(
     llmMs: res.timings.llmMs,
     dbMs: res.timings.dbMs,
     usage: res.usage,
-    predicted: preview(res.result),
+    predicted: preview(res.shown[0]?.result),
   };
-  const refused = res.sql === null;
-  if (withAnswers && c.language && res.answer) {
+  const refused = res.shown.length === 0;
+  if ((withAnswers || kind === 'chat') && c.language && res.answer) {
     // Judge the prose, not table rows (which are mostly data values like names and codes).
     const prose = res.answer
       .split('\n')
@@ -170,10 +190,11 @@ export async function runCase(
   if (refused) {
     return { ...common, verdict: 'wrong', category: 'false_refusal', detail: res.answer ?? undefined };
   }
-  const outcome = compareResults(gold!, res.result, { ordered: c.ordered });
-  return outcome.match
-    ? { ...common, verdict: 'correct', category: 'correct' }
-    : { ...common, verdict: 'wrong', category: MISMATCH[outcome.reason!], detail: outcome.detail };
+  const outcomes = res.shown.map((s) => ({ s, outcome: compareResults(gold!, s.result, { ordered: c.ordered }) }));
+  const hit = outcomes.find((o) => o.outcome.match);
+  if (hit) return { ...common, sql: hit.s.sql, predicted: preview(hit.s.result), verdict: 'correct', category: 'correct' };
+  const { outcome } = outcomes[0];
+  return { ...common, verdict: 'wrong', category: MISMATCH[outcome.reason!], detail: outcome.detail };
 }
 
 /** Bounded-concurrency map that preserves input order. */

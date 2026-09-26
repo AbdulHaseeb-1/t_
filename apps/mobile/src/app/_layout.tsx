@@ -11,14 +11,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ChatProvider, useChatState } from '../state/chats';
 import { ReportsProvider } from '../state/reports';
 import { I18nProvider, SettingsProvider, useSettings } from '../state/settings';
-import { usePalette } from '../theme';
+import { usePalette, useScheme } from '../theme';
 
 // Keep the native splash visible until the first screen can render with local state restored.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 SplashScreen.setOptions({ duration: 240, fade: true });
 
 export default function RootLayout() {
-  const p = usePalette();
   const [loaded, error] = useFonts({ NotoNastaliqUrdu_400Regular, NotoNastaliqUrdu_700Bold });
   // Fonts are bundled; keep the native splash up during the brief load and fall back if needed.
   if (!loaded && !error) return null;
@@ -30,16 +29,27 @@ export default function RootLayout() {
           <ChatProvider>
             <ReportsProvider>
               <StartupSplashGate />
-              <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
-              </Stack>
+              <Screens />
             </ReportsProvider>
           </ChatProvider>
         </I18nProvider>
       </SettingsProvider>
     </SafeAreaProvider>
+  );
+}
+
+/** The navigator, inside the settings provider so it follows the chosen theme. */
+function Screens() {
+  const p = usePalette();
+  const scheme = useScheme();
+  return (
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: p.bg } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+      </Stack>
+    </>
   );
 }
 

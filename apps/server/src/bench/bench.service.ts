@@ -402,14 +402,8 @@ export class BenchService implements OnApplicationShutdown {
         entry.busy++;
         try {
           const pipe = await entry.pipe;
-          const r = await pipe.ask.ask({
-            question: input.question,
-            context: [],
-            language: 'auto',
-            answer: true,
-            tier: 'fast',
-            noCache: true,
-          });
+          const q = { question: input.question, context: [], language: 'auto' as const, tier: 'fast' as const, noCache: true };
+          const r = input.features.agent ? await pipe.analyst.chat(q) : await pipe.ask.ask({ ...q, answer: true });
           full[i] = r.result;
           return {
             ...base,
@@ -418,7 +412,7 @@ export class BenchService implements OnApplicationShutdown {
             result: r.result ? { ...r.result, rows: r.result.rows.slice(0, PLAYGROUND_ROWS) } : null,
             timings: r.timings,
             usage: r.usage,
-            trace: r.trace,
+            trace: 'trace' in r ? r.trace : undefined,
           };
         } catch (err) {
           const body = (err as { getResponse?: () => unknown }).getResponse?.() as { sql?: string } | undefined;
@@ -441,7 +435,7 @@ export class BenchService implements OnApplicationShutdown {
       this.pipelines.set(key, hit);
       return hit;
     }
-    const { EVAL_FEWSHOT: _unused, ...env } = overrides;
+    const { EVAL_FEWSHOT: _fewShot, EVAL_PIPELINE: _pipeline, ...env } = overrides;
     const pipe = (async () => {
       const p = buildPipeline({ ...process.env, CACHE_SQL_TTL_S: '0', CACHE_ANSWER_TTL_S: '0', ...env });
       // Reuse the server's schema cache instead of introspecting again.

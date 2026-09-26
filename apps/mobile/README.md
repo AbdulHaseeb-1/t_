@@ -25,16 +25,18 @@ Release builds ship **without** a server address. On first launch the app shows 
   - **cache**: fresh, SQL cache or answer cache, and how many attempts it took
   - **context**: whole schema or the N retrieved tables (with its token size), earlier turns sent, and the engine (SQL Server or converted `.mdf`)
 - **Charts**: the data's shape picks the form, never a fixed chart type:
+  - one row with a figure and its comparison period (`net_sales`, `previous_net_sales`): a **stat tile** with the signed change, an arrow, and the value it is compared against (a rise in returns or costs reads as bad news)
   - one row of 2-4 numbers: **KPI tiles**
   - ≤ 12 periods: **growth columns**, with the latest period highlighted, change vs the previous one and since the first (month + year columns become `Jan`, `Dec 25`, …)
   - longer or multi-series time: a **trend line** with an area wash, peak marker and crosshair
+  - a breakdown by two things (month × region, salesman × company): one series per value of the second, the five largest plus a gray **Other**. **Stacked columns** over periods, **stacked bars** across categories, lines to compare trends, grouped bars for 2-3 series. Tap a column or bar and the legend reads out each part and its share.
   - "share / distribution" questions with ≤ 6 parts: a **donut**. When the query returns its own percentage column, the rest of the whole becomes an "Other" slice, so the chart matches the answer's percentages.
   - categories: **ranked bars** with each item's share
   - Tapping a mark shows its value. A percentage column is never drawn on the same axis as the amount it came from. Ids, ambiguous labels and too many points stay a table.
-- **Data panel**: all returned rows, 25 per page with Previous and Next controls. The panel explains when the server's `DB_MAX_ROWS` cap was reached. The SQL is **hidden by default**. Turn on *Settings → Show SQL queries* to see the query too.
+- **Data panel**: all returned rows, 25 per page with Previous and Next controls. A faint bar behind the main measure shows magnitude at a glance, and a ranked list gets rank numbers. The panel explains when the server's `DB_MAX_ROWS` cap was reached. The SQL is **hidden by default**. Turn on *Settings → Show SQL queries* to see the query too.
 - **Composer**: text, voice and photo in one box. The primary button is context-aware: **mic** when empty, **send** with content, **stop** while a request is in flight. Recording shows a pulsing dot, a timer and a live waveform from the microphone level, with trash (discard) and send. A subtle haptic marks a completed response. On the web, Enter sends and Shift+Enter adds a line.
 - **Drawer**: new chat, **Reports**, **Schedules**, **Inbox** (with an unread count), recent conversations (long-press to delete), settings. The header bell opens the inbox too.
-- **Reports**: a searchable gallery of one-tap reports grouped by category (sales, stock, customers, finance, team, saved). The server's template file supplies them, with SQL verified in advance, so a report returns the same figures every time and only the short summary uses the model. Reports with a date or number show a sheet with presets first: *Today*, *Yesterday*, *This week*, *This month*, *Last month*, or a custom date. Up to two alert reports (such as stock shortage) and two quick ones also appear as chips on the empty chat screen. Any AI answer with SQL can be kept with **Save as report**. Long-press a saved report to delete it.
+- **Templates**: a searchable gallery of one-tap reports grouped by category (sales, stock, customers, finance, team, saved). The server's template file supplies them, with SQL verified in advance, so a report returns the same figures every time and only the short summary uses the model. Reports with a date or number show a sheet with presets first: *Today*, *Yesterday*, *This week*, *This month*, *Last month*, or a custom date. Up to two alert reports (such as stock shortage) and two quick ones also appear as chips on the empty chat screen. Any AI answer with SQL can be kept with **Save as template**. Long-press a saved template to delete it.
 - **Schedules**: run a report or a question daily, on chosen weekdays, or on a day of the month (including the last day), at a set time in the server's time zone. Each schedule can:
   - deliver to the app inbox, to WhatsApp numbers, or both
   - send *only when there are rows*, so alert reports stay quiet on good days
@@ -43,7 +45,8 @@ Release builds ship **without** a server address. On first launch the app shows 
 - **Notifications**: the app checks the inbox on open, every minute while in use, and about every 15 minutes in the background (`expo-background-task`). New reports show as local notifications. Tapping one opens the report. The first check after install does not replay old reports. Remote push through Expo is used instead when the build has an EAS project ID and FCM credentials.
 - **Settings**: grouped cards with a large title, in the style of a native settings screen:
   - **Connection**: the server row opens the address and optional API key (kept in the device keychain), with **Test connection**, which reports reachability, database, model and key status separately.
-  - **Language**: *App language* (Urdu, the default, or English) and *Reply language* (Auto, Urdu script, Roman Urdu such as *"Ap k 20 customers hain."*, or English), each on its own picker page.
+  - **Language**: *App language* (English, the default, or Urdu) and *Reply language* (Auto, Urdu script, Roman Urdu such as *"Ap k 20 customers hain."*, or English), each on its own picker page.
+  - **Appearance**: *Theme*: Light (the default: a clean white, ChatGPT-style canvas), Dark, or Match phone.
   - **Chat**: *Show SQL queries*, and sounds and vibration.
   - Connection errors offer an **Open settings** shortcut straight to the server page.
 
@@ -71,7 +74,7 @@ Light and dark themes follow the system setting.
 - The message list is virtualized and inverted. Rows are memoized on message identity, and the reducer only replaces messages that changed.
 - The composer owns its text state, so typing never re-renders the conversation (enforced by a test).
 - Markdown parsing is memoized per message. The parser is a small purpose-built module (400-row table < 50 ms).
-- Chats persist with a debounced write, and stored results keep up to 1,000 rows per result (the server's default row cap).
+- Chats persist with a debounced write, one stored value per conversation, and only changed conversations are rewritten. A value that cannot be read is left untouched, never saved over. Stored results keep up to 250 rows each (fewer if a conversation would exceed Android's ~2 MB read window); the table says when a full result must be asked again. Histories saved by older versions move to the new format on first launch.
 - Fonts are imported per weight. The package roots would ship every weight: 6.8 MB instead of 2.5 MB on the web.
 
 Measured in the web build (Chromium, 390×844): cold start to interactive **~100 ms**, opening a 240-message chat **~420 ms** with 5 rows mounted, **0** long tasks while typing.
@@ -103,7 +106,7 @@ python3 -m http.server 8090 --directory dist    # or any static server
 pnpm test:e2e                                   # PW_CHROMIUM=/path/to/chromium if needed
 ```
 
-14 Playwright scenarios run at phone size. They check answers against ground-truth values in the `Eval_Retail` fixture. They cover follow-ups, reload persistence, stop and retry, recovery from a wrong server address, Roman Urdu replies, hidden-by-default SQL, the usage and answer-details sheets, dark mode, the Urdu default, real voice and photo questions, charts, and performance budgets.
+14 Playwright scenarios run at phone size. They check answers against ground-truth values in the `Eval_Retail` fixture. They cover follow-ups, reload persistence, stop and retry, recovery from a wrong server address, Roman Urdu replies, hidden-by-default SQL, the usage and answer-details sheets, dark mode, the Urdu interface, real voice and photo questions, charts, and performance budgets.
 
 ## Android release APK
 

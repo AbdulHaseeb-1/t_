@@ -118,11 +118,14 @@ export class AnalystService {
     emit({ type: 'status', stage: 'thinking' });
 
     // Keyword retrieval needs English words; translate only when the schema is too big to send whole.
-    let ctx = await this.catalog.contextFor(opts.englishQuestion ?? input.question);
+    // A follow-up ("and last month?") names no tables itself: the previous turn's question and SQL do.
+    const previous = history.at(-1);
+    const retrieval = (q: string) => (previous ? [q, previous.question, previous.sql ?? ''].join('\n') : q);
+    let ctx = await this.catalog.contextFor(retrieval(opts.englishQuestion ?? input.question));
     let english = opts.englishQuestion;
     if (!ctx.full && !english && lang !== 'en' && this.config.get('ASK_TRANSLATE_NON_ENGLISH')) {
       english = await this.translator.toEnglish(input.question, lang, meter);
-      ctx = await this.catalog.contextFor(english);
+      ctx = await this.catalog.contextFor(retrieval(english));
     }
     const snapshot = await this.catalog.snapshot();
     const timezone = this.config.get('REPORT_TIMEZONE');
@@ -162,10 +165,11 @@ export class AnalystService {
       ),
     );
 
-    const run = new AnalystRun(emit);
+    const run = new AnalystRun(emit, this.config.get('AGENT_MAX_QUERIES'));
     const errorHandlers: RunErrorHandlers<AnalystRun, AnalystAgent> = {
       // Out of steps: one more model turn without tools turns the evidence gathered into an answer.
       maxTurns: async ({ runData }) => {
+        run.degraded = true;
         const final = await this.runner.run(
           agent.clone({ modelSettings: { ...agent.modelSettings, toolChoice: 'none' } }),
           [...runData.history, user(STEP_BUDGET_REACHED)],
@@ -199,6 +203,7 @@ export class AnalystService {
 
     const results = run.shown();
     if (!answer) {
+      run.degraded = true;
       answer = results.length ? PHRASES[lang].found : PHRASES[lang].noAnswer;
       emit({ type: 'delta', text: answer });
     }
@@ -227,7 +232,8 @@ export class AnalystService {
       timings: { totalMs: this.ms(started), llmMs: Math.round(llmMs), dbMs: Math.round(run.dbMs) },
       usage: meter.summary(),
     };
-    this.cache.setAnswer(key, response);
+    // A stopgap answer must not be replayed to a retry once the cause (outage, budget) has passed.
+    if (!run.degraded) this.cache.setAnswer(key, response);
     return response;
   }
 

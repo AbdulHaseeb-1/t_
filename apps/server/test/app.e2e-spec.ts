@@ -92,6 +92,7 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       OPENAI_API_KEY: 'test',
       OPENAI_BASE_URL: await llm.start(),
       LLM_PROVIDER: 'openai',
+      AGENT_OPENAI_API: 'chat_completions', // the fake server speaks Chat Completions only
       MEDIA_MAX_AUDIO_MB: '1',
       TEMPLATES_FILE: 'test/fixtures/templates.json',
       USER_TEMPLATES_FILE: STATE[0],
@@ -332,7 +333,13 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
             {
               id: 'a',
               name: 'run_sql',
-              arguments: JSON.stringify({ sql: 'SELECT SUM(Quantity) AS Units FROM dbo.OrderLines' }),
+              arguments: JSON.stringify({
+                title: 'Units sold',
+                sql: 'SELECT SUM(Quantity) AS Units FROM dbo.OrderLines',
+                display: 'number',
+                chart: null,
+                replaces: null,
+              }),
             },
             { id: 'b', name: 'describe_tables', arguments: JSON.stringify({ tables: ['dbo.Products'] }) },
           ],
@@ -341,18 +348,27 @@ describe.skipIf(!host)('server e2e (SQL Server)', () => {
       if (turn === 2)
         return {
           toolCalls: [
-            { id: 'c', name: 'run_sql', arguments: JSON.stringify({ sql: 'DELETE FROM dbo.Products' }) },
+            {
+              id: 'c',
+              name: 'run_sql',
+              arguments: JSON.stringify({ title: 'Cleanup', sql: 'DELETE FROM dbo.Products', display: 'none', chart: null, replaces: null }),
+            },
           ],
         };
       return { content: 'Total units sold: see figures.' };
     };
     const { body } = await inject('POST', '/query/analyze', { question: 'How many units did we sell?' });
     expect(body.answer).toBe('Total units sold: see figures.');
-    expect(body.steps).toMatchObject([
-      { tool: 'run_sql', ok: true, rowCount: 1 },
-      { tool: 'describe_tables', ok: true },
-      { tool: 'run_sql', ok: false, error: expect.stringContaining('only SELECT') },
-    ]);
+    // The first two ran in parallel and report as they finish.
+    expect(body.steps).toHaveLength(3);
+    expect(body.steps.slice(0, 2)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: 'run_sql', ok: true, rowCount: 1 }),
+        expect.objectContaining({ tool: 'describe_tables', ok: true }),
+      ]),
+    );
+    expect(body.steps[2]).toMatchObject({ tool: 'run_sql', ok: false, error: expect.stringContaining('only SELECT') });
+    expect(body.results).toMatchObject([{ title: 'Units sold', display: { view: 'number' } }]);
     expect(body.usage.llmCalls).toBe(3);
   });
 

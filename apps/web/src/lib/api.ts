@@ -52,7 +52,14 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  const body = text ? (JSON.parse(text) as unknown) : undefined;
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : undefined;
+  } catch {
+    // A proxy or gateway error page, not the API: report the status, not a JSON syntax error.
+    if (!res.ok) throw new ApiError(res.status, res.statusText || `HTTP ${res.status}`);
+    throw new ApiError(res.status, 'The server sent a response that is not JSON.');
+  }
   if (!res.ok) {
     const b = body as { message?: string | string[]; issues?: { path: string; message: string }[] } | undefined;
     const issues = b?.issues?.map((i) => `${i.path}: ${i.message}`).join('; ');

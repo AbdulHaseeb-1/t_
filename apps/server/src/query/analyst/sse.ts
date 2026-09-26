@@ -11,6 +11,15 @@ export function wantsEventStream(req: FastifyRequest): boolean {
   return /\btext\/event-stream\b/i.test(req.headers.accept ?? '');
 }
 
+/** Aborts when the client goes away before the response is written, so an abandoned agent run stops spending. */
+export function abortOnDisconnect(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController();
+  reply.raw.on('close', () => {
+    if (!reply.raw.writableFinished) controller.abort();
+  });
+  return controller.signal;
+}
+
 /** Status and message for an error event, matching what the JSON API would have returned. */
 export function errorEvent(err: unknown): Extract<ChatEvent, { type: 'error' }> {
   if (err instanceof HttpException) {

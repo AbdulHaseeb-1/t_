@@ -5,7 +5,7 @@ Ask questions of a SQL Server database in plain language and get correct numbers
 ```
 apps/
   server/   NestJS 12 + Fastify API: question -> SQL -> answer, voice and photo input
-  mobile/   Ask Data: Expo SDK 57 app (Android APK, iOS, web), Urdu-first
+  mobile/   Ask Data: Expo SDK 57 app (Android APK, iOS, web), English and first-class Urdu
   web/      Model Bench: web tool to benchmark models on your database (served at /bench)
 infra/
   docker-compose.yml               SQL Server 2022 (+ optional API container)
@@ -73,6 +73,8 @@ Only the `.mdf` is needed. The log file is rebuilt on attach.
 | Method | Path | Purpose | LLM cost |
 |---|---|---|---|
 | POST | `/query/ask` | `{question, context?: [{question, sql}] (≤4 earlier turns), answer?=true, maxRows?, tier?='fast', noCache?}` → SQL, rows, answer, usage | 0–2 calls |
+| POST | `/query/chat` | `{question, context?: [{question, answer?, sql?}] (≤12), language?, tier?, noCache?}` → the assistant the app and WhatsApp use: answer, `results` (each with its display), tool `steps`. `Accept: text/event-stream` streams progress and text | bounded loop |
+| POST | `/query/chat/media` | multipart: `question`, `context`, `language`, `noCache`, files `audio` and/or `image` | + transcribe/vision |
 | POST | `/query/analyze` | `{question, tier?, maxSteps?}` → multi-step analysis with tool trace | bounded loop |
 | POST | `/query/sql` | `{sql, maxRows?}` → run read-only SQL directly | none |
 | GET | `/schema` | tables/views with row counts | none |
@@ -191,6 +193,14 @@ Both providers use one OpenAI-compatible code path.
 
 ## Accuracy on the real database (MDS_EPD)
 
+The figures in this section and the next measure the one-shot `/query/ask` pipeline (reports, schedules, the eval defaults). The chat agent behind the app and WhatsApp (`/query/chat`) is measured by the same harness and gold SQL with `--pipeline chat`, or side by side with `--preset pipelines`, and in the web bench with the **Chat agent** switch:
+
+```bash
+cd apps/server && pnpm eval --dataset eval/datasets/mds-epd.json --preset pipelines --repeat 3
+```
+
+An agent answer counts as correct when one of the results it shows matches gold; showing nothing counts as a refusal.
+
 40 questions in English, Urdu and Roman Urdu, with hand-verified gold SQL (`eval/datasets/mds-epd.json`), scored as execution accuracy with 3 runs each:
 
 | Stage | Accuracy | Fix |
@@ -236,7 +246,8 @@ The server adapts to model quirks at runtime. When a model rejects an optional p
 2. SQL guard: one statement, `SELECT`/`WITH` only, T-SQL-aware deny-list applied after removing strings and comments. Sensitive columns (`DB_DENY_COLUMNS`: passwords, tokens, CNIC/SSN) are hidden from the model and rejected by name, and `SELECT *` is refused so they cannot leak through a wildcard.
 3. Value hints only sample categorical code columns. Name-like columns and values that look like phones, e-mails or coordinates are never sent to the model.
 4. Execution inside a transaction that is always rolled back, with `SET ROWCOUNT` cap and request timeout.
-5. `API_KEY` header auth, rate limiting (stricter on `/query/analyze`), helmet, and secrets redacted from logs.
+5. `API_KEY` header auth (the server refuses to start in production without it), rate limiting (stricter on the agent endpoints `/query/chat`, `/query/chat/media` and `/query/analyze`), helmet, and secrets redacted from logs.
+6. The agent is bounded per answer: `AGENT_MAX_STEPS` model turns and `AGENT_MAX_QUERIES` database calls, however many it asks for in parallel. A client that disconnects stops the run.
 
 ## Development
 

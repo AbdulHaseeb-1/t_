@@ -6,6 +6,7 @@ export type UiLanguage = 'ur' | 'en';
 
 const en = {
   appNewChat: 'New chat',
+  jumpToLatest: 'Jump to the latest message',
   greeting: 'What would you like to know?',
   greetingHint: 'Ask about your database by typing, speaking, or sharing a photo.',
   placeholder: 'Ask a question',
@@ -142,6 +143,11 @@ const en = {
   sectionConnection: 'Connection',
   sectionLanguage: 'Language',
   sectionChat: 'Chat',
+  sectionAppearance: 'Appearance',
+  theme: 'Theme',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  themeSystem: 'Match phone',
   sectionAbout: 'About',
   server: 'Server',
   notConnected: 'Not set',
@@ -155,6 +161,7 @@ const en = {
   errAuth: 'The server rejected the API key. Check it in Settings.',
   errRate: 'Too many requests right now. Wait a moment and try again.',
   errServer: 'The server returned an error.',
+  errMediaGone: 'The voice message or photo is no longer on this phone. Send it again.',
   // Templates, schedules, inbox
   reports: 'Templates',
   reportsHint: 'Choose a template to run it. Browse by category or search by name.',
@@ -240,6 +247,7 @@ export type Strings = typeof en;
 
 const ur: Strings = {
   appNewChat: 'نئی گفتگو',
+  jumpToLatest: 'تازہ ترین پیغام پر جائیں',
   greeting: 'آپ کیا جاننا چاہتے ہیں؟',
   greetingHint: 'اپنے ڈیٹا بیس کے بارے میں لکھ کر، بول کر یا تصویر بھیج کر پوچھیں۔',
   placeholder: 'سوال پوچھیں',
@@ -376,6 +384,11 @@ const ur: Strings = {
   sectionConnection: 'کنکشن',
   sectionLanguage: 'زبان',
   sectionChat: 'گفتگو',
+  sectionAppearance: 'ظاہری انداز',
+  theme: 'تھیم',
+  themeLight: 'روشن',
+  themeDark: 'گہرا',
+  themeSystem: 'فون کے مطابق',
   sectionAbout: 'ایپ کے بارے میں',
   server: 'سرور',
   notConnected: 'درج نہیں',
@@ -389,6 +402,7 @@ const ur: Strings = {
   errAuth: 'سرور نے API کلید قبول نہیں کی۔ سیٹنگز میں چیک کریں۔',
   errRate: 'اس وقت بہت زیادہ درخواستیں ہیں۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔',
   errServer: 'سرور میں خرابی پیش آئی۔',
+  errMediaGone: 'یہ آواز کا پیغام یا تصویر اب فون پر موجود نہیں۔ براہِ کرم دوبارہ بھیجیں۔',
   // Templates, schedules, inbox
   reports: 'ٹیمپلیٹس',
   reportsHint: 'چلانے کے لیے ٹیمپلیٹ منتخب کریں۔ زمرے کے لحاظ سے دیکھیں یا نام سے تلاش کریں۔',

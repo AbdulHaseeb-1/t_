@@ -118,15 +118,18 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'hydrate': {
       const chats: Record<string, Chat> = {};
       for (const c of action.chats) {
-        // A request cannot survive an app restart.
-        chats[c.id] = {
-          ...c,
-          messages: c.messages.map((m) =>
-            m.role === 'assistant' && m.status === 'pending' ? { ...m, status: 'stopped', error: 'Interrupted.' } : m,
-          ),
-        };
+        // A request cannot survive an app restart. Untouched chats keep their identity (and are not re-saved).
+        const pending = c.messages.some((m) => m.role === 'assistant' && m.status === 'pending');
+        chats[c.id] = pending
+          ? {
+              ...c,
+              messages: c.messages.map((m) =>
+                m.role === 'assistant' && m.status === 'pending' ? { ...m, status: 'stopped', error: 'Interrupted.' } : m,
+              ),
+            }
+          : c;
       }
-      const order = action.chats.sort((a, b) => b.updatedAt - a.updatedAt).map((c) => c.id);
+      const order = [...action.chats].sort((a, b) => b.updatedAt - a.updatedAt).map((c) => c.id);
       return { ...state, hydrated: true, chats, order };
     }
     case 'new':
@@ -201,7 +204,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         text: r.answer ?? '',
         progress: undefined,
         sql: r.sql,
-        result: r.result ? { ...r.result, rows: r.result.rows.slice(0, STORED_ROWS) } : null,
+        // Chat answers carry their rows in `results`; `result` (the first of them) would store the same rows twice.
+        result: r.result && !r.results?.length ? { ...r.result, rows: r.result.rows.slice(0, STORED_ROWS) } : null,
         results: r.results?.map((x) => ({ ...x, result: { ...x.result, rows: x.result.rows.slice(0, STORED_ROWS) } })),
         error: undefined,
         fixInSettings: undefined,

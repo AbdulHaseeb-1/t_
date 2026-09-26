@@ -139,7 +139,8 @@ beforeAll(async () => {
         const args = { title: 'Orders', sql: 'SELECT COUNT(*) AS orders FROM sales.Orders', display: 'number', chart: null };
         return { toolCalls: [{ id: `call_${msgs.length}`, name: 'run_sql', arguments: JSON.stringify(args) }] };
       }
-      if (msgs[0].content.startsWith('You are a precise data analyst')) return { content: 'There are **3** orders in total.' };
+      // Chat answers and report summaries (ANSWER_SYSTEM, REPORT_ANSWER_SYSTEM) both get prose.
+      if (/^You are a precise (business )?data analyst/.test(msgs[0].content)) return { content: 'There are **3** orders in total.' };
       return { content: '```sql\nSELECT COUNT(*) AS orders FROM sales.Orders\n```' };
     },
     () => transcript,
@@ -187,6 +188,7 @@ describe('templates', () => {
   });
 
   it('substitutes typed parameters and writes a summary when asked', async () => {
+    const before = llm.requests.length;
     const r = await templates.run('big-orders', { params: { min: 3 } });
     expect(r.sql).toContain('qty >= 3');
     expect(r.result?.rows).toEqual([
@@ -194,6 +196,8 @@ describe('templates', () => {
       [1, 1, 3],
     ]);
     expect(r.answer).toContain('3');
+    // A report summary is written with the report prompt, not the chat-answer one.
+    expect(JSON.stringify(llm.requests.slice(before))).toContain('writing a compact report');
     const d = await templates.run('dated');
     expect(d.sql).toContain("DATE '2026-01-01'");
     expect(d.result?.rows).toEqual([[4]]);
@@ -408,6 +412,10 @@ describe('WhatsApp bot', () => {
 describe('WhatsApp formatting', () => {
   it('converts markdown and renders results as an aligned monospace table', () => {
     expect(toWhatsApp('## Top\n**Total**: 5\n- a\n| x | y |\n|---|---|')).toBe('*Top*\n*Total*: 5\n• a');
+    // Markdown italics would read as bold on WhatsApp; arithmetic and list markers stay as they are.
+    expect(toWhatsApp('**Sales** rose *12%*.\n* item\n2 * 3 * 4\n*Want this by salesman?*')).toBe(
+      '*Sales* rose _12%_.\n• item\n2 * 3 * 4\n_Want this by salesman?_',
+    );
     const r = { columns: [{ name: 'customer', type: 'text' }, { name: 'net_sales', type: 'decimal' }], rows: [['ALI', 1234.5], ['BILAL TRADERS', 99]], rowCount: 12, truncated: false, elapsedMs: 1 };
     expect(tableBlock(r, 2)).toBe('```\ncustomer       net sales\nALI              1,234.5\nBILAL TRADERS         99\n… 10 more rows\n```');
     const msg = answerMessage({ title: 'T', answer: 'x'.repeat(5000), result: r });

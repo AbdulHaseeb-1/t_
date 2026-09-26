@@ -4,8 +4,8 @@ import type { QueryResult, ShownResult } from '../lib/api';
 import { inferChart } from '../lib/chart';
 import { formatCell } from '../lib/format';
 import { scriptStyle, useI18n } from '../i18n';
-import { card, type, usePalette } from '../theme';
-import { Chart } from './Chart';
+import { card, type, usePalette, weight } from '../theme';
+import { Chart, StatTile } from './Chart';
 import { DataPanel } from './DataPanel';
 
 /** A list request needs visible rows even if an older model chose a chart. */
@@ -20,7 +20,7 @@ function NumberCard({ title, result }: { title: string; result: QueryResult }) {
   return (
     <View style={[styles.number, card(p)]} accessible accessibilityLabel={`${title}: ${formatCell(value)}`}>
       <Text style={[scriptStyle(title, type.meta), { color: p.muted }]}>{title}</Text>
-      <Text style={[type.display, { color: p.text, fontVariant: ['tabular-nums'] }]} selectable>{formatCell(value)}</Text>
+      <Text style={[styles.value, { color: p.text }]} selectable>{formatCell(value)}</Text>
     </View>
   );
 }
@@ -33,12 +33,12 @@ export const ResultWidget = memo(function ResultWidget({ item, question, showSql
     () => (table ? null : inferChart(item.result, question, lang, item.display.chart)),
     [table, item.result, question, lang, item.display.chart],
   );
-  const showChart = !table && spec && (item.display.view === 'chart' || (item.display.view === 'number' && spec.kind === 'kpis'));
+  const showChart = !table && spec && (item.display.view === 'chart' || (item.display.view === 'number' && (spec.kind === 'kpis' || spec.kind === 'stat')));
   const number = !table && item.display.view === 'number' && !showChart && item.result.columns.length === 1 && item.result.rows.length === 1 && typeof item.result.rows[0]?.[0] === 'number';
   const hasVisual = !!showChart || number;
   return (
     <View style={styles.group}>
-      {!!showChart && <Chart spec={spec} />}
+      {!!showChart && (spec.kind === 'stat' ? <StatTile spec={spec} title={item.title} /> : <Chart spec={spec} />)}
       {number && <NumberCard title={item.title} result={item.result} />}
       <DataPanel
         key={item.id}
@@ -53,5 +53,6 @@ export const ResultWidget = memo(function ResultWidget({ item, question, showSql
 
 const styles = StyleSheet.create({
   group: { gap: 12 },
-  number: { borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, gap: 4 },
+  number: { borderRadius: 16, borderCurve: 'continuous', paddingHorizontal: 18, paddingVertical: 16, gap: 2 },
+  value: { ...weight.semibold, fontSize: 34, lineHeight: 42, letterSpacing: -0.5 },
 });

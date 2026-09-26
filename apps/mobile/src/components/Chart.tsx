@@ -1,9 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { memo, useMemo, useState } from 'react';
-import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { scriptStyle, useI18n } from '../i18n';
-import { compactNumber, type Growth, humanize, lineDomain, niceMax, percent, type VizSpec } from '../lib/chart';
+import { compactNumber, type Growth, humanize, lineDomain, niceMax, percent, type Series, type VizSpec } from '../lib/chart';
 import { formatCell } from '../lib/format';
 import { card, type ChartPalette, type, useChartPalette, usePalette, weight } from '../theme';
 
@@ -13,7 +13,14 @@ import { card, type ChartPalette, type, useChartPalette, usePalette, weight } fr
  * validated series colors in fixed order, selective labels, and a readout line
  * above the plot that doubles as the tap tooltip (nothing floats over marks).
  */
-const AXIS = { fontSize: 12 };
+/** SVG text gets no font from the page on the web (it falls back to a serif): name the system sans. */
+const SVG_FONT = Platform.OS === 'web' ? { fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' } : {};
+const AXIS = { fontSize: 12, ...SVG_FONT };
+
+/** Rough rendered width of a compact value label ("26.3M") at the axis font size. */
+function valueWidth(v: number): number {
+  return compactNumber(v).length * 7.2;
+}
 
 function useWidth() {
   const [width, setWidth] = useState(0);
@@ -81,15 +88,25 @@ function Readout({ label, value, delta, deltaSuffix, note }: { label: string; va
   );
 }
 
-function Legend({ names, c }: { names: string[]; c: ChartPalette }) {
+/** Mark color for series `i` of `n`; the folded tail ("Other") takes the context gray. */
+function seriesColor(c: ChartPalette, i: number, n: number, other?: boolean): string {
+  return other && i === n - 1 ? c.context : c.series[i % c.series.length];
+}
+
+/** Display names: data values as they are ("North"), column names humanized ("Net sales"). */
+function seriesNames(series: Series[]): string[] {
+  return series.map((s) => s.label ?? humanize(s.name));
+}
+
+function Legend({ names, c, other }: { names: string[]; c: ChartPalette; other?: boolean }) {
   const p = usePalette();
   if (names.length < 2) return null;
   return (
     <View style={styles.legend}>
       {names.map((n, i) => (
-        <View key={n} style={styles.legendItem}>
-          <View style={[styles.swatch, { backgroundColor: c.series[i % c.series.length] }]} />
-          <Text style={[type.meta, { color: p.muted }]}>{humanize(n)}</Text>
+        <View key={n + i} style={styles.legendItem}>
+          <View style={[styles.swatch, { backgroundColor: seriesColor(c, i, names.length, other) }]} />
+          <Text style={[scriptStyle(n, type.meta), { color: p.muted }]}>{n}</Text>
         </View>
       ))}
     </View>
@@ -143,6 +160,8 @@ function Columns({ spec }: { spec: Extract<VizSpec, { kind: 'columns' }> }) {
   const y = (v: number) => pad.top + plotH - (v / max) * plotH;
   const base = pad.top + plotH;
   const everyLabel = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 44))));
+  // The peak gets its own value label only when it cannot collide with the highlighted one.
+  const labelRoom = (a: number, b: number) => Math.abs(a - b) * band >= (valueWidth(series.values[a]) + valueWidth(series.values[b])) / 2 + 6;
 
   return (
     <View style={styles.box} testID="chart-columns">
@@ -171,7 +190,7 @@ function Columns({ spec }: { spec: Extract<VizSpec, { kind: 'columns' }> }) {
               return (
                 <G key={k}>
                   <Path d={vBar(x, base, barW, h)} fill={on ? c.series[0] : c.context} />
-                  {(k === i || (k === growth.peakIndex && k !== i && sel === null)) && (
+                  {(k === i || (k === growth.peakIndex && k !== i && sel === null && labelRoom(k, i))) && (
                     <SvgText x={x + barW / 2} y={base - h - 5} textAnchor="middle" fill={on ? p.text : p.muted} {...AXIS}>
                       {compactNumber(v)}
                     </SvgText>
@@ -208,8 +227,9 @@ function Trend({ spec }: { spec: Extract<VizSpec, { kind: 'trend' }> }) {
   const { t } = useI18n();
   const { width, onLayout } = useWidth();
   const [sel, setSel] = useState<number | null>(null);
-  const { labels, series, growth } = spec;
+  const { labels, series, growth, other } = spec;
   const n = labels.length;
+  const names = seriesNames(series);
   const H = 170;
   const pad = { top: 14, right: 12, bottom: 22, left: 40 };
   const plotW = Math.max(0, width - pad.left - pad.right);
@@ -224,14 +244,16 @@ function Trend({ spec }: { spec: Extract<VizSpec, { kind: 'trend' }> }) {
 
   return (
     <View style={styles.box} testID="chart-trend">
-      <Title text={series.map((s) => humanize(s.name)).join(' · ')} />
+      <Title text={spec.title ?? names.join(' · ')} />
       <Readout
         label={labels[i]}
-        value={series.map((s) => compactNumber(s.values[i])).join('  ·  ')}
+        // Many series: their sum; the legend and table carry each one.
+        value={series.length > 3 ? compactNumber(series.reduce((a, s) => a + s.values[i], 0)) : series.map((s) => compactNumber(s.values[i])).join('  ·  ')}
+        note={series.length > 3 ? t.total.toLowerCase() : undefined}
         delta={prev ? (series[0].values[i] - prev) / Math.abs(prev) : undefined}
         deltaSuffix={i > 0 ? t.vsPrevious(labels[i - 1]) : undefined}
       />
-      <Legend names={series.map((s) => s.name)} c={c} />
+      <Legend names={names} c={c} other={other} />
       <View onLayout={onLayout} testID="chart-plot">
         {width > 0 && (
           <Svg width={width} height={H} accessibilityLabel={`${series.map((s) => humanize(s.name)).join(', ')} over ${labels[0]} to ${labels[n - 1]}`}>
@@ -255,7 +277,7 @@ function Trend({ spec }: { spec: Extract<VizSpec, { kind: 'trend' }> }) {
             )}
             {sel !== null && <Line x1={x(sel)} x2={x(sel)} y1={pad.top} y2={pad.top + plotH} stroke={p.faint} strokeWidth={1} />}
             {series.map((s, si) => {
-              const color = c.series[si % c.series.length];
+              const color = seriesColor(c, si, series.length, other);
               const pts = s.values.map((v, k) => `${x(k)},${y(v)}`);
               return (
                 <G key={s.name}>
@@ -317,7 +339,8 @@ function Bars({ spec }: { spec: Extract<VizSpec, { kind: 'bars' }> }) {
   const { t } = useI18n();
   const { width, onLayout } = useWidth();
   const [sel, setSel] = useState<number | null>(null);
-  const { labels, series, total } = spec;
+  const { labels, series, total, other } = spec;
+  const names = seriesNames(series);
   const k = series.length;
   const barH = k === 1 ? 18 : 12;
   const groupH = k * barH + (k - 1) * 2;
@@ -332,7 +355,7 @@ function Bars({ spec }: { spec: Extract<VizSpec, { kind: 'bars' }> }) {
 
   return (
     <View style={styles.box} testID="chart-bars">
-      <Title text={series.map((s) => humanize(s.name)).join(' · ')} />
+      <Title text={spec.title ?? names.join(' · ')} />
       {readIdx !== null ? (
         <Readout
           label={labels[readIdx]}
@@ -342,7 +365,7 @@ function Bars({ spec }: { spec: Extract<VizSpec, { kind: 'bars' }> }) {
       ) : total ? (
         <Readout label={t.totalOf(labels.length)} value={formatCell(total)} />
       ) : null}
-      <Legend names={series.map((s) => s.name)} c={c} />
+      <Legend names={names} c={c} other={other} />
       <View onLayout={onLayout} testID="chart-plot">
         {width > 0 && (
           <Svg width={width} height={H} accessibilityLabel={labels.map((l, r) => `${l} ${series.map((s) => compactNumber(s.values[r])).join(' ')}`).join(', ')}>
@@ -360,7 +383,7 @@ function Bars({ spec }: { spec: Extract<VizSpec, { kind: 'bars' }> }) {
                     const yy = y0 + si * (barH + 2);
                     return (
                       <G key={si}>
-                        <Path d={hBar(labelW, yy, w, barH)} fill={dim ? c.context : c.series[si % c.series.length]} />
+                        <Path d={hBar(labelW, yy, w, barH)} fill={dim ? c.context : seriesColor(c, si, k, other)} />
                         <SvgText x={labelW + w + 6} y={yy + barH / 2 + 4} fill={dim ? p.faint : p.text} {...AXIS}>
                           {compactNumber(v)}
                           {total && si === 0 ? `  ${Math.round((v / total) * 100)}%` : ''}
@@ -408,7 +431,7 @@ function Donut({ spec }: { spec: Extract<VizSpec, { kind: 'donut' }> }) {
               onPress={() => setSel(a.i === sel ? null : a.i)}
             />
           ))}
-          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontWeight="600" fontSize={17}>
+          <SvgText x={size / 2} y={size / 2 + 2} textAnchor="middle" fill={p.text} fontWeight="600" fontSize={17} {...SVG_FONT}>
             {shown === null ? compactNumber(total) : `${Math.round((series.values[shown] / total) * 100)}%`}
           </SvgText>
           <SvgText x={size / 2} y={size / 2 + 18} textAnchor="middle" fill={p.muted} {...AXIS}>
@@ -431,10 +454,207 @@ function Donut({ spec }: { spec: Extract<VizSpec, { kind: 'donut' }> }) {
   );
 }
 
+/**
+ * One figure against its comparison period: the value, then a signed change with
+ * an arrow (color by whether a rise is good news, never color alone) and the
+ * previous value it is measured against.
+ */
+export function StatTile({ spec, title }: { spec: Extract<VizSpec, { kind: 'stat' }>; title?: string }) {
+  const p = usePalette();
+  const c = useChartPalette();
+  const { t, rtl } = useI18n();
+  const label = title || spec.label;
+  const big = (v: number) => (Math.abs(v) >= 1e6 ? compactNumber(v) : formatCell(v));
+  const up = (spec.change ?? 0) >= 0;
+  const good = up === spec.upIsGood;
+  const versus = t.vsPrevious(`${big(spec.previous)} ${spec.previousLabel}`);
+  return (
+    <View
+      style={[styles.stat, card(p)]}
+      testID="chart-stat"
+      accessible
+      accessibilityLabel={`${label}: ${formatCell(spec.value)}${spec.change !== undefined ? `, ${percent(spec.change)}` : ''}, ${versus}`}
+    >
+      <Text style={[scriptStyle(label, type.meta), { color: p.muted, textAlign: rtl ? 'right' : 'left' }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: p.text, textAlign: rtl ? 'right' : 'left' }]} selectable>
+        {big(spec.value)}
+      </Text>
+      <View style={[styles.statDelta, { flexDirection: rtl ? 'row-reverse' : 'row' }]}>
+        {spec.change !== undefined && (
+          <View style={[styles.deltaPill, { backgroundColor: good ? c.goodSoft : c.badSoft, flexDirection: rtl ? 'row-reverse' : 'row' }]}>
+            <Feather name={up ? 'arrow-up-right' : 'arrow-down-right'} size={14} color={good ? c.good : c.bad} />
+            <Text style={[type.meta, weight.semibold, { color: p.text }]}>{percent(spec.change)}</Text>
+          </View>
+        )}
+        <Text style={[scriptStyle(versus, type.meta), { color: p.muted, flexShrink: 1 }]}>{versus}</Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * How a total splits across a second dimension: stacked columns over periods, or
+ * stacked horizontal bars across categories. 2px surface gaps between segments,
+ * the total at the end of each stack, and a legend that doubles as the readout:
+ * tap a column or bar to see each part's value.
+ */
+function Stacked({ spec }: { spec: Extract<VizSpec, { kind: 'stacked' }> }) {
+  const p = usePalette();
+  const c = useChartPalette();
+  const { t, rtl } = useI18n();
+  const { width, onLayout } = useWidth();
+  const [sel, setSel] = useState<number | null>(null);
+  const { labels, series, other, orientation } = spec;
+  const n = labels.length;
+  const names = seriesNames(series);
+  const totals = useMemo(() => labels.map((_, k) => series.reduce((a, s) => a + s.values[k], 0)), [labels, series]);
+  const columns = orientation === 'columns';
+  // Periods read from the latest; categories start from the whole.
+  const i = sel ?? (columns ? n - 1 : null);
+  const color = (si: number) => seriesColor(c, si, series.length, other);
+  const partsAt = (k: number | null) => series.map((s) => (k === null ? s.values.reduce((a, b) => a + b, 0) : s.values[k]));
+  const parts = partsAt(i);
+  const whole = parts.reduce((a, b) => a + b, 0);
+  const prevTotal = columns && i !== null && i > 0 ? totals[i - 1] : undefined;
+  const gap = 2;
+
+  let plot: React.ReactNode = null;
+  let H = 0;
+  if (width > 0 && columns) {
+    H = 170;
+    const pad = { top: 18, right: 4, bottom: 22, left: 38 };
+    const plotW = Math.max(0, width - pad.left - pad.right);
+    const plotH = H - pad.top - pad.bottom;
+    const max = niceMax(Math.max(...totals));
+    const band = plotW / n;
+    const barW = Math.min(24, band * 0.62);
+    const base = pad.top + plotH;
+    const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(plotW / 44))));
+    plot = (
+      <Svg width={width} height={H} accessibilityLabel={`${spec.title}: ${labels.map((l, k) => `${l} ${compactNumber(totals[k])}`).join(', ')}`}>
+        {[0, 0.5, 1].map((f) => (
+          <G key={f}>
+            <Line x1={pad.left} x2={width - pad.right} y1={base - f * plotH} y2={base - f * plotH} stroke={c.grid} strokeWidth={1} />
+            <SvgText x={pad.left - 6} y={base - f * plotH + 4} textAnchor="end" fill={p.muted} {...AXIS}>
+              {compactNumber(max * f)}
+            </SvgText>
+          </G>
+        ))}
+        {labels.map((l, k) => {
+          const x = pad.left + k * band + (band - barW) / 2;
+          const on = i === null || k === i;
+          const visible = series.map((s, si) => ({ si, h: (s.values[k] / max) * plotH })).filter((seg) => seg.h > 0);
+          let cum = 0;
+          return (
+            <G key={k} opacity={on ? 1 : 0.4}>
+              {visible.map((seg, j) => {
+                const bottom = base - cum - (j > 0 ? gap / 2 : 0);
+                const top = base - cum - seg.h + (j < visible.length - 1 ? gap / 2 : 0);
+                cum += seg.h;
+                const h = Math.max(1, bottom - top);
+                return j === visible.length - 1 ? (
+                  <Path key={seg.si} d={vBar(x, bottom, barW, h)} fill={color(seg.si)} />
+                ) : (
+                  <Rect key={seg.si} x={x} y={top} width={barW} height={h} fill={color(seg.si)} />
+                );
+              })}
+              {k === i && (
+                <SvgText x={x + barW / 2} y={base - (totals[k] / max) * plotH - 5} textAnchor="middle" fill={p.text} {...AXIS}>
+                  {compactNumber(totals[k])}
+                </SvgText>
+              )}
+              {showTick(k, n, every) && (
+                <SvgText x={x + barW / 2} y={H - 6} textAnchor="middle" fill={k === i ? p.text : p.muted} {...AXIS}>
+                  {l}
+                </SvgText>
+              )}
+              <Rect x={pad.left + k * band} y={pad.top - 10} width={band} height={plotH + 10} fill="transparent" onPress={() => setSel(k === sel ? null : k)} accessibilityLabel={`${l} ${formatCell(totals[k])}`} />
+            </G>
+          );
+        })}
+      </Svg>
+    );
+  } else if (width > 0) {
+    const barH = 18;
+    const rowGap = 12;
+    const labelW = Math.min(Math.max(64, Math.max(...labels.map((l) => textW(l))) + 10), width * 0.38, 150);
+    const valueW = 52;
+    const plotW = Math.max(10, width - labelW - valueW - 8);
+    const max = niceMax(Math.max(...totals));
+    H = n * (barH + rowGap);
+    plot = (
+      <Svg width={width} height={H} accessibilityLabel={`${spec.title}: ${labels.map((l, k) => `${l} ${compactNumber(totals[k])}`).join(', ')}`}>
+        {labels.map((l, r) => {
+          const y0 = r * (barH + rowGap);
+          const on = sel === null || sel === r;
+          const visible = series.map((s, si) => ({ si, w: (s.values[r] / max) * plotW })).filter((seg) => seg.w > 0);
+          let cum = 0;
+          return (
+            <G key={r}>
+              <SvgText x={labelW - 8} y={y0 + barH / 2 + 4} textAnchor="end" fill={on ? p.text : p.faint} {...AXIS}>
+                {fitText(l, labelW - 10)}
+              </SvgText>
+              <G opacity={on ? 1 : 0.4}>
+                {visible.map((seg, j) => {
+                  const start = labelW + cum + (j > 0 ? gap / 2 : 0);
+                  const end = labelW + cum + seg.w - (j < visible.length - 1 ? gap / 2 : 0);
+                  cum += seg.w;
+                  const w = Math.max(1, end - start);
+                  return j === visible.length - 1 ? (
+                    <Path key={seg.si} d={hBar(start, y0, w, barH)} fill={color(seg.si)} />
+                  ) : (
+                    <Rect key={seg.si} x={start} y={y0} width={w} height={barH} fill={color(seg.si)} />
+                  );
+                })}
+              </G>
+              <SvgText x={labelW + (totals[r] / max) * plotW + 6} y={y0 + barH / 2 + 4} fill={on ? p.text : p.faint} {...AXIS}>
+                {compactNumber(totals[r])}
+              </SvgText>
+              <Rect x={0} y={y0 - rowGap / 2} width={width} height={barH + rowGap} fill="transparent" onPress={() => setSel(r === sel ? null : r)} />
+            </G>
+          );
+        })}
+      </Svg>
+    );
+  }
+
+  return (
+    <View style={styles.box} testID="chart-stacked">
+      <Title text={spec.title} />
+      <Readout
+        label={i === null ? t.totalOf(n) : labels[i]}
+        value={formatCell(whole)}
+        delta={prevTotal ? (whole - prevTotal) / Math.abs(prevTotal) : undefined}
+        deltaSuffix={prevTotal !== undefined && i !== null ? t.vsPrevious(labels[i - 1]) : undefined}
+      />
+      <View style={styles.stackLegend}>
+        {names.map((name, si) => (
+          <View key={name + si} style={[styles.stackItem, { flexDirection: rtl ? 'row-reverse' : 'row' }]}>
+            <View style={[styles.swatch, { backgroundColor: color(si) }]} />
+            <Text style={[scriptStyle(name, type.meta), styles.flex, { color: p.text }]} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={[type.meta, { color: p.muted, fontVariant: ['tabular-nums'] }]}>
+              {`${compactNumber(parts[si])}  ${whole > 0 ? Math.round((parts[si] / whole) * 100) : 0}%`}
+            </Text>
+          </View>
+        ))}
+      </View>
+      <View onLayout={onLayout} testID="chart-plot">
+        {plot}
+      </View>
+    </View>
+  );
+}
+
 export const Chart = memo(function Chart({ spec }: { spec: VizSpec }) {
   switch (spec.kind) {
     case 'kpis':
       return <Kpis items={spec.items} />;
+    case 'stat':
+      return <StatTile spec={spec} />;
+    case 'stacked':
+      return <Stacked spec={spec} />;
     case 'columns':
       return <Columns spec={spec} />;
     case 'trend':
@@ -459,7 +679,13 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  stat: { borderRadius: 16, borderCurve: 'continuous', paddingHorizontal: 18, paddingVertical: 16, gap: 4 },
+  statValue: { ...weight.semibold, fontSize: 34, lineHeight: 42, letterSpacing: -0.5 },
+  statDelta: { alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  deltaPill: { alignItems: 'center', gap: 3, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+  stackLegend: { gap: 4 },
+  stackItem: { alignItems: 'center', gap: 8 },
+  kpi: { flexGrow: 1, flexBasis: '45%', borderRadius: 16, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   kpiValue: { ...weight.semibold, fontSize: 24, lineHeight: 31 },
   donutRow: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   donutLegend: { flex: 1, minWidth: 140, gap: 6 },

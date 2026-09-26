@@ -5,7 +5,7 @@ import type { Dataset, EvalCase } from './dataset.js';
 import { flips, summarize, type Flip, type VariantSummary } from './metrics.js';
 import { buildPipeline } from './pipeline.js';
 import { renderText, type RunInfo } from './report-text.js';
-import { type CaseResult, mapLimit, runCase } from './runner.js';
+import { type CaseResult, type EvalPipeline, mapLimit, runCase } from './runner.js';
 
 export type Variant = [name: string, overrides: Record<string, string>];
 
@@ -123,8 +123,9 @@ export async function computeGold(
 }
 
 /**
- * Runs every variant over the cases through the production ask pipeline and
- * scores each answer against gold. Used by the CLI and the web bench alike, so
+ * Runs every variant over the cases through a production pipeline (the one-shot
+ * ask pipeline, or the chat agent with EVAL_PIPELINE=chat) and scores each
+ * answer against gold. Used by the CLI and the web bench alike, so
  * both measure exactly the same thing.
  */
 export async function runEval(o: RunOptions): Promise<EvalReport> {
@@ -140,7 +141,8 @@ export async function runEval(o: RunOptions): Promise<EvalReport> {
 
   for (const [name, overrides] of o.variants) {
     check();
-    const { EVAL_FEWSHOT, ...envOverrides } = overrides;
+    const { EVAL_FEWSHOT, EVAL_PIPELINE, ...envOverrides } = overrides;
+    const kind: EvalPipeline = EVAL_PIPELINE === 'chat' ? 'chat' : 'ask';
     const pipe = buildPipeline({
       ...o.baseEnv,
       ...envOverrides,
@@ -158,11 +160,11 @@ export async function runEval(o: RunOptions): Promise<EvalReport> {
       for (let k = 0; k < o.repeats; k++) {
         await mapLimit(o.cases, o.concurrency, async (c: EvalCase) => {
           check();
-          let r = await runCase(pipe, name, k, c, o.gold.get(c.id), o.answers);
+          let r = await runCase(pipe, name, k, c, o.gold.get(c.id), o.answers, kind);
           // Rate limits and outages are not accuracy: back off and retry before recording.
           for (let retry = 1; r.category === 'llm_error' && retry <= 3 && !o.signal?.aborted; retry++) {
             await sleep(retryDelay * retry, o.signal);
-            r = await runCase(pipe, name, k, c, o.gold.get(c.id), o.answers);
+            r = await runCase(pipe, name, k, c, o.gold.get(c.id), o.answers, kind);
           }
           variantResults.push(r);
           o.onProgress?.({ variant: name, done: ++done, total, result: r });

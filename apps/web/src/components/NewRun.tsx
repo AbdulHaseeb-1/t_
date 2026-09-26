@@ -228,6 +228,12 @@ export function NewRun({
               Pipeline (same for every model)
             </summary>
             <Switch
+              label="Chat agent"
+              hint="The multi-step assistant the app and WhatsApp use, instead of one-shot SQL. The hints, re-check, few-shot and vote settings below apply to one-shot SQL only."
+              checked={!!features.agent}
+              onChange={(v) => setFeatures({ ...features, agent: v })}
+            />
+            <Switch
               label="Stored-value hints"
               hint="Show the model real values of low-cardinality columns."
               checked={!!features.valueHints}

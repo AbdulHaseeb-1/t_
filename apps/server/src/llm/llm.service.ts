@@ -245,6 +245,11 @@ export class LlmService {
         this.logger.warn(`${route.provider} failed (${(err as Error).message}); trying next provider`);
         return true;
       },
+      interrupted: (route, err) => {
+        this.bump(route.provider, { failures: 1 });
+        if (isFailoverError(err)) this.providers.get(route.provider)!.breaker.failure();
+        this.logger.warn(`${route.provider} failed mid-answer (${(err as Error).message})`);
+      },
       toError: (err, route, exhausted) => {
         if (exhausted) return new LlmUnavailableError(`All LLM providers failed: ${(err as Error)?.message ?? 'unknown'}`);
         if (err instanceof APIError) return new LlmRequestError(route?.provider ?? 'openai', err.message);

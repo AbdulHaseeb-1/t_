@@ -1,6 +1,22 @@
+import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, type ListRenderItem, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  FlatList,
+  KeyboardAvoidingView,
+  type ListRenderItem,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Composer } from '../components/Composer';
 import { Drawer } from '../components/Drawer';
@@ -16,12 +32,41 @@ import { type Message, usageTotals } from '../state/chat-reducer';
 import { type Outgoing, useActiveChat, useChatActions, useChatState } from '../state/chats';
 import { useReports } from '../state/reports';
 import { useSettings } from '../state/settings';
-import { layout, type, usePalette } from '../theme';
+import { card, layout, type, usePalette, weight } from '../theme';
 
 const EMPTY: Message[] = [];
 const keyExtractor = (m: Message) => m.id;
 const renderItem: ListRenderItem<Message> = ({ item }) => <MessageRow message={item} />;
 const Gap = () => <View style={styles.gap} />;
+/** Scrolled this far from the latest message, a button offers the way back. */
+const AWAY_PX = 280;
+
+/** Round "jump to latest" button over the conversation; fades and lifts in. */
+function JumpToLatest({ visible, onPress, label }: { visible: boolean; onPress: () => void; label: string }) {
+  const p = usePalette();
+  const [v] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const anim = Animated.timing(v, { toValue: visible ? 1 : 0, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    anim.start();
+    return () => anim.stop();
+  }, [visible, v]);
+  return (
+    <Animated.View
+      pointerEvents={visible ? 'box-none' : 'none'}
+      style={[styles.jump, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress}
+        hitSlop={8}
+        style={({ pressed }) => [styles.jumpButton, card(p, 'sm'), pressed && { backgroundColor: p.sunken }]}
+      >
+        <Feather name="arrow-down" size={18} color={p.text} />
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function ChatScreen() {
   const p = usePalette();
@@ -33,6 +78,17 @@ export default function ChatScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [starter, setStarter] = useState<{ id: number; text: string }>();
+  const [away, setAway] = useState(false);
+  const awayRef = useRef(false);
+  // Inverted list: offset 0 is the latest message.
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = e.nativeEvent.contentOffset.y > AWAY_PX;
+    if (next !== awayRef.current) {
+      awayRef.current = next;
+      setAway(next);
+    }
+  }, []);
+  const jumpToLatest = useCallback(() => list.current?.scrollToOffset({ offset: 0, animated: true }), []);
   const openUsage = useCallback(() => setUsageOpen(true), []);
   const list = useRef<FlatList<Message>>(null);
   const { server, ready } = useSettings();
@@ -98,7 +154,7 @@ export default function ChatScreen() {
         <View style={styles.fill}>
           {messages.length === 0 ? (
             <ScrollView contentContainerStyle={[styles.empty, windowHeight < 700 && styles.emptyCompact]} keyboardShouldPersistTaps="handled">
-              <RouteMark size={52} />
+              <RouteMark size={44} />
               {needsServer ? (
                 <>
                   <Text style={[scriptStyle(t.setupTitle, styles.greeting), { color: p.text, textAlign: 'center' }]}>{t.setupTitle}</Text>
@@ -132,6 +188,8 @@ export default function ChatScreen() {
               contentContainerStyle={styles.content}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
+              onScroll={onScroll}
+              scrollEventThrottle={64}
               initialNumToRender={10}
               maxToRenderPerBatch={8}
               windowSize={9}
@@ -139,8 +197,9 @@ export default function ChatScreen() {
               accessibilityLabel="Conversation"
             />
           )}
+          {messages.length > 0 && <JumpToLatest visible={away} onPress={jumpToLatest} label={t.jumpToLatest} />}
         </View>
-        <View style={[styles.composerDock, { backgroundColor: p.bg, borderTopColor: p.border }]}>
+        <View style={[styles.composerDock, { backgroundColor: p.bg }]}>
           <View style={styles.composer}>
             <Composer key={starter?.id ?? 0} busy={busy} initialText={starter?.text} onSend={send} onStop={actions.stop} />
           </View>
@@ -169,14 +228,16 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   headerFrame: { width: '100%', maxWidth: layout.pageWidth, alignSelf: 'center' },
-  content: { paddingHorizontal: layout.gutter, paddingVertical: 20, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
-  gap: { height: 20 },
-  empty: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 32, gap: 12, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  content: { paddingHorizontal: layout.gutter + 4, paddingVertical: 20, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  gap: { height: 24 },
+  empty: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 32, gap: 10, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
   emptyCompact: { paddingVertical: 14, gap: 8 },
-  greeting: { ...type.display, textAlign: 'center', marginTop: 8 },
+  greeting: { ...type.display, ...weight.semibold, fontSize: 26, lineHeight: 34, textAlign: 'center', marginTop: 12, letterSpacing: -0.3 },
   emptyHint: { maxWidth: 460 },
   setup: { marginTop: 10, borderRadius: 22, paddingHorizontal: 20, height: 44, justifyContent: 'center' },
   pressed: { opacity: 0.85 },
-  composerDock: { borderTopWidth: StyleSheet.hairlineWidth },
-  composer: { paddingHorizontal: layout.gutter, paddingTop: 10, paddingBottom: 12, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  composerDock: {},
+  composer: { paddingHorizontal: layout.gutter - 4, paddingTop: 6, paddingBottom: 10, maxWidth: layout.pageWidth, width: '100%', alignSelf: 'center' },
+  jump: { position: 'absolute', bottom: 12, alignSelf: 'center' },
+  jumpButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
 });

@@ -33,15 +33,17 @@ async function openSettings(page: Page) {
   await page.getByRole('button', { name: 'Settings' }).click();
 }
 
+/** The progress row (stage + timer) and the streaming cursor are both gone. */
 async function lastAnswerDone(page: Page) {
-  await expect(page.getByLabel('Working on it')).toHaveCount(0);
+  await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByLabel('Response in progress')).toHaveCount(0);
 }
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
     localStorage.clear();
-    // This suite asserts English labels; Urdu (the default) has its own suite.
+    // English is the default display language; Urdu has its own suite.
     localStorage.setItem('settings.language', JSON.stringify('en'));
   });
   await page.goto('/');
@@ -51,7 +53,7 @@ test.beforeEach(async ({ page }) => {
 test('answers from the real database and shows its evidence', async ({ page }) => {
   const errors = watchErrors(page);
   await ask(page, 'How many customers are based in Pakistan?');
-  await expect(page.getByLabel('Working on it')).toBeVisible();
+  await expect(page.getByRole('progressbar')).toBeVisible();
   await lastAnswerDone(page);
   await expect(page.getByText(/115/).first()).toBeVisible();
 
@@ -176,8 +178,13 @@ test('renders tables in dark mode', async ({ browser }) => {
   const ctx = await browser.newContext({ colorScheme: 'dark', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('settings.language', JSON.stringify('en')));
+  await page.evaluate(() => {
+    localStorage.setItem('settings.language', JSON.stringify('en'));
+    // The app is white by default; "Match phone" follows the dark system setting.
+    localStorage.setItem('settings.appearance', JSON.stringify('system'));
+  });
   await page.goto('/');
+  await expect.poll(() => page.getByTestId('header').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(33, 33, 33)');
   await ask(page, 'For each sales channel, what percentage of its orders were cancelled (0-100)? Show a table.');
   await lastAnswerDone(page);
   await expect(page.getByText(/Store/).first()).toBeVisible();
