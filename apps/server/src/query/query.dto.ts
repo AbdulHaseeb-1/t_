@@ -40,8 +40,11 @@ const chatContext = z
   .max(12)
   .default([]);
 
+/** Chat also takes short conversational messages ("hi", "ok", "ji"). */
+const message = z.string().trim().min(1).max(2000);
+
 export const chatSchema = z.object({
-  question,
+  question: message,
   context: chatContext,
   language,
   tier,
@@ -85,15 +88,18 @@ const jsonField = z
     }
   });
 
+const booleanField = (fallback: 'true' | 'false') =>
+  z
+    .enum(['true', 'false'])
+    .default(fallback)
+    .transform((v) => v === 'true');
+
 /** Text fields of a multipart /query/ask/media request (files are handled separately). */
 export const mediaFieldsSchema = z.object({
   question: z.string().trim().max(2000).default(''),
   context: jsonField.pipe(context),
   language,
-  answer: z
-    .enum(['true', 'false'])
-    .default('true')
-    .transform((v) => v === 'true'),
+  answer: booleanField('true'),
 });
 
 /** Text fields of a multipart /query/chat/media request. */
@@ -101,4 +107,6 @@ export const chatMediaFieldsSchema = z.object({
   question: z.string().trim().max(2000).default(''),
   context: jsonField.pipe(chatContext),
   language,
+  /** true = a fresh answer, e.g. when the person asks again. */
+  noCache: booleanField('false'),
 });

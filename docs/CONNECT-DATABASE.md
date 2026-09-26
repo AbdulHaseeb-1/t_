@@ -121,8 +121,8 @@ Edit `.env` and fill in:
 | `DB_HOST` | `localhost` if SQL Server is on the same machine, else its IP (e.g. `192.168.1.10`) |
 | `DB_PORT` | `1433`, or the fixed port of your named instance |
 | `DB_PASSWORD` | the `db_intel_reader` password from step 2 |
-| `OPENAI_API_KEY` | your OpenAI key. **Rotate the key you shared in chat earlier and use the new one.** |
-| `API_KEY` | a random secret the app must send. Generate: `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"` |
+| `OPENAI_API_KEY` | your OpenAI key. Keep it only in `.env`, never in chats, screenshots or commits. |
+| `API_KEY` | a random secret the app must send (the server refuses to start in production without one). Generate: `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"` |
 
 Build and start:
 

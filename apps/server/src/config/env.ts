@@ -32,8 +32,10 @@ export const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  /** When set, every request except /health must send `x-api-key`. */
+  /** When set, every request except /health must send `x-api-key`. Required in production. */
   API_KEY: optionalString,
+  /** Run in production without API_KEY: only for a server reachable solely on a trusted private network. */
+  ALLOW_NO_API_KEY: bool(false),
   CORS_ORIGINS: csv,
   THROTTLE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(60),
 
@@ -213,6 +215,8 @@ export const envSchema = z.object({
   ASK_ANSWER_MAX_ROWS: z.coerce.number().int().positive().default(60),
   /** Model turns per chat/analysis run (each turn may run several tools in parallel). */
   AGENT_MAX_STEPS: z.coerce.number().int().positive().default(8),
+  /** Database calls (run_sql, column_values) per chat/analysis run, however many the model asks for in parallel. */
+  AGENT_MAX_QUERIES: z.coerce.number().int().positive().default(16),
   /**
    * OpenAI API the agent uses. `responses` keeps the model's reasoning across tool calls;
    * `chat_completions` is for OpenAI-compatible gateways without the Responses API.
@@ -236,5 +240,13 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  return parsed.data;
+  const env = parsed.data;
+  if (env.NODE_ENV === 'production' && !env.API_KEY && !env.ALLOW_NO_API_KEY) {
+    // Without a key every route is open: arbitrary read-only SQL, schedules that send WhatsApp messages, paid model calls.
+    throw new Error(
+      'Invalid environment configuration:\n  API_KEY: required in production. Set a random secret the app sends as x-api-key, ' +
+        'or ALLOW_NO_API_KEY=true for a server reachable only on a trusted private network.',
+    );
+  }
+  return env;
 }

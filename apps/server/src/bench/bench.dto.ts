@@ -18,6 +18,8 @@ export const featuresSchema = z
     emptyRecheck: z.boolean().optional(),
     candidates: z.number().int().min(1).max(7).optional(),
     fewShot: z.boolean().optional(),
+    /** Run the chat agent (what the app and WhatsApp use) instead of one-shot text-to-SQL. */
+    agent: z.boolean().optional(),
   })
   .default({});
 
@@ -54,7 +56,10 @@ export function modelOverrides(m: ModelSpec, f: Features = {}): Record<string, s
     [`${p}_MODEL_FAST`]: m.model,
     [`${p}_MODEL_SMART`]: m.model,
   };
-  if (m.reasoningEffort) o.LLM_REASONING_EFFORT_FAST = m.reasoningEffort;
+  if (m.reasoningEffort) {
+    o.LLM_REASONING_EFFORT_FAST = m.reasoningEffort;
+    o.AGENT_REASONING_EFFORT = m.reasoningEffort;
+  }
   if (f.valueHints !== undefined) o.SCHEMA_VALUE_HINTS = String(f.valueHints);
   if (f.emptyRecheck !== undefined) o.ASK_EMPTY_RESULT_RECHECK = String(f.emptyRecheck);
   if (f.candidates !== undefined) o.ASK_SQL_CANDIDATES = String(f.candidates);
@@ -62,6 +67,7 @@ export function modelOverrides(m: ModelSpec, f: Features = {}): Record<string, s
     o.ASK_FEWSHOT_K = '3';
     o.EVAL_FEWSHOT = 'dataset';
   }
+  if (f.agent) o.EVAL_PIPELINE = 'chat';
   return o;
 }
 

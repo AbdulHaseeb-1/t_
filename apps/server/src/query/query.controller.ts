@@ -17,7 +17,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { DatabaseService } from '../database/database.service.js';
 import { AnalystService } from './analyst/analyst.service.js';
-import { sendEventStream, wantsEventStream } from './analyst/sse.js';
+import { abortOnDisconnect, sendEventStream, wantsEventStream } from './analyst/sse.js';
 import { AskService } from './ask.service.js';
 import { ExamplesService } from './examples.service.js';
 import { AUDIO_TYPES, IMAGE_TYPES, MediaService, type UploadedMedia } from './media.service.js';
@@ -37,6 +37,12 @@ import {
   type SqlInput,
   sqlSchema,
 } from './query.dto.js';
+
+/**
+ * Agent answers per client per minute: each can take several model turns and
+ * database queries, so the limit sits well under the global one.
+ */
+const AGENT_PER_MINUTE = 20;
 
 @Controller('query')
 export class QueryController {
@@ -80,19 +86,20 @@ export class QueryController {
    */
   @Post('chat')
   @HttpCode(200)
+  @Throttle({ default: { limit: AGENT_PER_MINUTE, ttl: 60_000 } })
   async chat(
     @Body(new ZodValidationPipe(chatSchema)) body: ChatInput,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    if (!wantsEventStream(req)) return reply.send(await this.analyst.chat(body));
+    if (!wantsEventStream(req)) return reply.send(await this.analyst.chat(body, { signal: abortOnDisconnect(reply) }));
     await sendEventStream(reply, (emit, signal) => this.analyst.chat(body, { emit, signal }));
   }
 
   /** `chat` for voice and/or image messages (multipart, fields as for ask/media plus chat context). */
   @Post('chat/media')
   @HttpCode(200)
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: AGENT_PER_MINUTE, ttl: 60_000 } })
   async chatMedia(@Req() req: FastifyRequest, @Res() reply: FastifyReply) {
     const { fields, files } = await this.readMultipart(req);
     const input = new ZodValidationPipe(chatMediaFieldsSchema).transform(fields);
@@ -100,7 +107,7 @@ export class QueryController {
       throw new BadRequestException('Send a question, a voice message or an image.');
     }
     const media = { ...input, audio: files.audio, image: files.image };
-    if (!wantsEventStream(req)) return reply.send(await this.media.chat(media));
+    if (!wantsEventStream(req)) return reply.send(await this.media.chat(media, { signal: abortOnDisconnect(reply) }));
     await sendEventStream(reply, (emit, signal) => this.media.chat(media, { emit, signal }));
   }
 

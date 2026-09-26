@@ -28,6 +28,8 @@ export interface AgentRouteHooks {
   succeeded(route: AgentRoute, usage: TurnUsage, latencyMs: number): Promise<void>;
   /** Records the failure; true when the next route should be tried. */
   failed(route: AgentRoute, err: unknown): boolean;
+  /** Records a failure after output was streamed (too late to switch routes, but it still counts against the provider). */
+  interrupted(route: AgentRoute, err: unknown): void;
   /** The error to surface when no route can answer. */
   toError(err: unknown, route: AgentRoute | undefined, exhausted: boolean): Error;
 }
@@ -109,7 +111,11 @@ export class FailoverAgentModel implements Model {
           }
           return;
         } catch (err) {
-          if (emitted || isAbort(err, request.signal)) throw err;
+          if (isAbort(err, request.signal)) throw err;
+          if (emitted) {
+            this.hooks.interrupted(route, err);
+            throw err;
+          }
           if (attempt < MAX_ATTEMPTS_PER_ROUTE - 1 && this.hooks.learn(route, err, request.tools.length > 0)) continue;
           lastError = err;
           if (!this.hooks.failed(route, err)) throw this.hooks.toError(err, route, false);
@@ -126,7 +132,7 @@ export class FailoverAgentModel implements Model {
  * (`reasoning_effort`, `prompt_cache_key`...) as the API reported them.
  */
 export function withoutParams(settings: ModelSettings, drop: Iterable<string>): ModelSettings {
-  const s: ModelSettings = { ...settings, providerData: { ...(settings.providerData ?? {}) } };
+  const s: ModelSettings = { ...settings, providerData: { ...settings.providerData } };
   const data = s.providerData!;
   for (const p of drop) {
     switch (p) {

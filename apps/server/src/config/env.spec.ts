@@ -24,4 +24,12 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ LLM_PROVIDER: 'gemini' })).toThrow(/LLM_PROVIDER/);
     expect(() => validateEnv({ LLM_FALLBACK_ORDER: 'openai,bogus' })).toThrow(/unknown provider/);
   });
+
+  it('refuses to run an open API in production unless explicitly allowed', () => {
+    expect(() => validateEnv({ NODE_ENV: 'production' })).toThrow(/API_KEY: required in production/);
+    expect(() => validateEnv({ NODE_ENV: 'production', API_KEY: '' })).toThrow(/API_KEY/);
+    expect(validateEnv({ NODE_ENV: 'production', API_KEY: 'k' }).API_KEY).toBe('k');
+    expect(validateEnv({ NODE_ENV: 'production', ALLOW_NO_API_KEY: 'true' }).API_KEY).toBeUndefined();
+    expect(validateEnv({}).API_KEY).toBeUndefined(); // development stays open for local work
+  });
 });

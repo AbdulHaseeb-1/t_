@@ -166,9 +166,14 @@ describe('bench helpers', () => {
       OPENROUTER_MODEL_FAST: 'a/b',
       OPENROUTER_MODEL_SMART: 'a/b',
       LLM_REASONING_EFFORT_FAST: 'low',
+      AGENT_REASONING_EFFORT: 'low',
       ASK_SQL_CANDIDATES: '3',
       ASK_FEWSHOT_K: '3',
       EVAL_FEWSHOT: 'dataset',
+    });
+    expect(modelOverrides({ provider: 'openai', model: 'm', reasoningEffort: 'high' }, { agent: true })).toMatchObject({
+      AGENT_REASONING_EFFORT: 'high',
+      EVAL_PIPELINE: 'chat',
     });
   });
 

@@ -85,6 +85,11 @@ function isSqlFailure(err: unknown): boolean {
   return err instanceof UnsafeSqlError || err instanceof SqlExecutionError;
 }
 
+function budgetSpent(run: AnalystRun): string {
+  run.degraded = true;
+  return `Query budget for this answer is spent (${run.maxQueries} database calls). Do not query again; answer from the results you have and say what is still missing.`;
+}
+
 /**
  * The agent's tools. They never throw at the model: every failure comes back as
  * text that says what went wrong and how to fix it, so it can correct itself.
@@ -113,10 +118,21 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         .enum(['line', 'column', 'bar', 'donut'])
         .nullable()
         .describe('Only with display "chart": line = time series with many points, column = a few periods, bar = ranked categories, donut = shares of one whole (at most 6 parts). Otherwise null.'),
+      replaces: z
+        .string()
+        .nullable()
+        .describe('Id of an earlier displayed result this query corrects (e.g. "r1"), which is then hidden from the person. Otherwise null.'),
     }),
-    execute: async ({ title, sql, display, chart }, ctx?: RunContext<AnalystRun>) => {
+    execute: async ({ title, sql, display, chart, replaces }, ctx?: RunContext<AnalystRun>) => {
       const run = runOf(ctx);
-      const q = run.addQuery({ title: title.trim() || 'Query', sql, display: toDisplay(display, chart) });
+      if (!run.takeQuery()) return budgetSpent(run);
+      const corrects = replaces?.trim().toLowerCase();
+      const q = run.addQuery({
+        title: title.trim() || 'Query',
+        sql,
+        display: toDisplay(display, chart),
+        ...(corrects && /^r\d+$/.test(corrects) ? { replaces: corrects } : {}),
+      });
       run.emit({ type: 'status', stage: 'query', label: q.title });
       const started = performance.now();
       try {
@@ -131,7 +147,10 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         const message = (err as Error).message;
         q.error = message;
         run.step({ tool: 'run_sql', label: q.title, ok: false, sql, resultId: q.id, error: message });
-        if (!isSqlFailure(err)) return `${q.id} failed: the database is unavailable (${message}). Do not retry; tell the person.`;
+        if (!isSqlFailure(err)) {
+          run.degraded = true;
+          return `${q.id} failed: the database is unavailable (${message}). Do not retry; tell the person.`;
+        }
         return `${q.id} failed: ${message}\n${sqlHint(message)}`;
       }
     },
@@ -188,6 +207,7 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         run.step({ tool: 'column_values', label, ok: false, error: 'unknown column' });
         return `Unknown column "${column}" in ${t.id}. Its columns: ${t.columns.map((x) => x.name).join(', ')}.`;
       }
+      if (!run.takeQuery()) return budgetSpent(run);
       const started = performance.now();
       try {
         const r = await db.readOnlyQuery(columnValuesSql(t, c, contains?.trim() || null, db.dialect), MAX_VALUES + 1);
@@ -202,6 +222,7 @@ export function analystTools({ config, db, catalog }: ToolDeps) {
         run.dbMs += performance.now() - started;
         const message = (err as Error).message;
         run.step({ tool: 'column_values', label, ok: false, error: message });
+        if (!isSqlFailure(err)) run.degraded = true;
         return `Could not read values: ${message}`;
       }
     },

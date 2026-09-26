@@ -29,7 +29,7 @@ pnpm --filter server start:prod          # then open http://localhost:3000/bench
 4. Set:
    - repeats (stability)
    - parallel requests
-   - the pipeline features (value hints, empty-result re-check, few-shot, SQL voting, answer writing), which are applied to every model alike
+   - the pipeline: one-shot SQL (the default) or the **Chat agent** the app and WhatsApp use, and the one-shot features (value hints, empty-result re-check, few-shot, SQL voting, answer writing), all applied to every model alike
 5. The summary shows case runs, **estimated cost** (calibrated on the dataset's last run when there is one) and estimated time.
 
 **Results** (live while the run is in progress)

@@ -7,10 +7,13 @@ import { Usage } from '@openai/agents';
 import { APIError } from 'openai';
 import type { QueryResult } from '../../database/database.types.js';
 import type { ColumnInfo, TableInfo } from '../../database/schema/schema.types.js';
+import type { EvalCase } from '../../eval/dataset.js';
 import { buildPipeline, type Pipeline } from '../../eval/pipeline.js';
+import { runCase } from '../../eval/runner.js';
 import { type AgentRoute, type AgentRouteHooks, FailoverAgentModel } from '../../llm/agent-model.js';
 import { exportMdfToDuckDb } from '../../mdf/export-duckdb.js';
 import { FakeOpenAI, type FakeReply } from '../../testing/fake-openai.js';
+import { chatSchema } from '../query.dto.js';
 import { AnalystRun, type ChatEvent } from './analyst.run.js';
 import type { ChatResponse } from './analyst.service.js';
 import { columnValuesSql, describeResult, sqlHint } from './analyst.tools.js';
@@ -23,6 +26,7 @@ const dir = mkdtempSync(join(tmpdir(), 'analyst-'));
 let llm: FakeOpenAI;
 let pipe: Pipeline;
 let script: (body: Body) => FakeReply;
+let rawEnv: Record<string, string>;
 
 interface Message {
   role: string;
@@ -34,14 +38,15 @@ type Body = Record<string, unknown> & { messages: Message[] };
 const toolMessages = (b: Body) => b.messages.filter((m) => m.role === 'tool');
 const lastTool = (b: Body) => String(toolMessages(b).at(-1)?.content ?? '');
 const call = (name: string, args: object, id = `call_${name}_${Math.random().toString(36).slice(2, 7)}`) => ({ id, name, arguments: JSON.stringify(args) });
-const sql = (title: string, text: string, display = 'table', chart: string | null = null) => call('run_sql', { title, sql: text, display, chart });
+const sql = (title: string, text: string, display = 'table', chart: string | null = null, replaces: string | null = null) =>
+  call('run_sql', { title, sql: text, display, chart, replaces });
 
 beforeAll(async () => {
   writeFileSync(join(dir, 'f.mdf'), gunzipSync(readFileSync(join(import.meta.dirname, '../../../test/fixtures/mdf/MdfFixture.mdf.gz'))));
   await exportMdfToDuckDb(join(dir, 'f.mdf'), join(dir, 'f.duckdb'));
   llm = new FakeOpenAI((body) => script(body as Body));
   const base = await llm.start();
-  pipe = buildPipeline({
+  rawEnv = {
     NODE_ENV: 'test',
     DB_ENGINE: 'duckdb',
     DUCKDB_FILE: join(dir, 'f.duckdb'),
@@ -53,7 +58,8 @@ beforeAll(async () => {
     LLM_REASONING_EFFORT_FAST: 'low',
     REPORT_TIMEZONE: 'Asia/Karachi',
     LOG_LEVEL: 'error',
-  });
+  };
+  pipe = buildPipeline(rawEnv);
 });
 
 afterAll(async () => {
@@ -239,6 +245,119 @@ describe('chat agent', () => {
   });
 });
 
+describe('chat agent: corrections, caching and limits', () => {
+  it('hides a displayed result the model corrected, and reports the corrected SQL', async () => {
+    script = (b) => {
+      const n = toolMessages(b).length;
+      if (n === 0) return { toolCalls: [sql('Units per shop', 'SELECT shop, SUM(qty) * 2 AS units FROM sales.Orders GROUP BY shop ORDER BY shop')] };
+      if (n === 1) return { toolCalls: [sql('Units by shop', 'SELECT shop, SUM(qty) AS units FROM sales.Orders GROUP BY shop ORDER BY shop', 'table', null, 'r1')] };
+      return { content: 'Shop **2** sold **7** units.' };
+    };
+    const res = await chat('units by shop');
+    expect(res.results.map((r) => [r.id, r.result.rows])).toEqual([['r2', [[1, 4], [2, 7]]]]);
+    expect(res.sql).not.toContain('* 2');
+  });
+
+  it('treats a rerun under the same title as a correction', async () => {
+    script = (b) => {
+      const n = toolMessages(b).length;
+      if (n === 0) return { toolCalls: [sql('Units by shop', 'SELECT shop, SUM(qty) * 2 AS units FROM sales.Orders GROUP BY shop ORDER BY shop')] };
+      if (n === 1) return { toolCalls: [sql('Units by shop', 'SELECT shop, SUM(qty) AS units FROM sales.Orders GROUP BY shop ORDER BY shop')] };
+      return { content: 'Shop **2** sold **7** units.' };
+    };
+    const res = await chat('units by shop, again');
+    expect(res.results.map((r) => r.id)).toEqual(['r2']);
+  });
+
+  it('does not cache a stopgap answer, so asking again reaches the model', async () => {
+    let calls = 0;
+    script = () => (calls++ === 0 ? { content: '' } : { content: 'The real answer.' });
+    const first = await chat('a question that first gets no answer', { noCache: false });
+    const second = await chat('a question that first gets no answer', { noCache: false });
+    expect(first.answer).not.toBe('The real answer.');
+    expect(second).toMatchObject({ answer: 'The real answer.', cache: null });
+    expect(calls).toBe(2);
+  });
+
+  it('stops querying once the per-answer budget is spent, however many calls run in parallel', async () => {
+    script = (b) =>
+      toolMessages(b).length === 0
+        ? { toolCalls: Array.from({ length: 18 }, (_, i) => sql(`Probe ${i + 1}`, 'SELECT COUNT(*) AS n FROM sales.Orders', 'none')) }
+        : { content: 'There are **3** orders.' };
+    const res = await chat('probe the orders from every angle', { noCache: false });
+    const outputs = toolMessages(llm.requests.at(-1) as Body).map((m) => String(m.content));
+    expect(outputs.filter((o) => o.startsWith('Query budget')).length).toBe(2);
+    expect(res.steps).toHaveLength(16);
+    // The answer rests on incomplete evidence: not cached.
+    const again = await chat('probe the orders from every angle', { noCache: false });
+    expect(again.cache).toBeNull();
+  });
+
+  it('retrieves the tables of the previous turn for a follow-up when the schema is too big to send whole', async () => {
+    const small = buildPipeline({ ...rawEnv, SCHEMA_CACHE_FILE: join(dir, 'schema-small.json'), SCHEMA_FULL_CONTEXT_MAX_CHARS: '1', SCHEMA_MAX_TABLES: '1' });
+    try {
+      script = () => ({ content: 'Last month there were **2**.' });
+      await small.analyst.chat({
+        question: 'and how many last month?',
+        context: [{ question: 'How many evolved rows are there?', answer: 'There are 4.', sql: 'SELECT COUNT(*) FROM dbo.Evolved' }],
+        language: 'en',
+        tier: 'fast',
+        noCache: true,
+      });
+      const instructions = String((llm.requests.at(-1) as Body).messages[0].content);
+      const detailed = instructions.split('Other objects')[0];
+      expect(detailed).toContain('dbo.Evolved');
+    } finally {
+      await small.close();
+    }
+  });
+
+  it('accepts short conversational messages', () => {
+    expect(chatSchema.safeParse({ question: 'hi' }).success).toBe(true);
+    expect(chatSchema.safeParse({ question: '  ' }).success).toBe(false);
+  });
+});
+
+describe('eval harness on the agent', () => {
+  const evalCase = (over: Partial<EvalCase>): EvalCase => ({
+    id: 'c1',
+    question: 'units by shop',
+    expect: 'result',
+    ordered: false,
+    tags: [],
+    difficulty: 'easy',
+    ...over,
+  });
+  const gold = async () => pipe.db.readOnlyQuery('SELECT shop, SUM(qty) AS units FROM sales.Orders GROUP BY shop');
+
+  it('scores the agent correct when one of the results it shows matches gold', async () => {
+    script = (b) =>
+      toolMessages(b).length === 0
+        ? {
+            toolCalls: [
+              sql('Order count', 'SELECT COUNT(*) AS orders FROM sales.Orders', 'number'),
+              sql('Units by shop', 'SELECT shop, SUM(qty) AS units FROM sales.Orders GROUP BY shop', 'chart', 'bar'),
+            ],
+          }
+        : { content: 'Shop **2** leads.' };
+    const r = await runCase(pipe, 'agent', 0, evalCase({}), await gold(), false, 'chat');
+    expect(r).toMatchObject({ verdict: 'correct', sql: expect.stringContaining('SUM(qty)'), answer: 'Shop **2** leads.' });
+  });
+
+  it('scores a correct refusal when the agent shows nothing', async () => {
+    script = () => ({ content: 'This database has no weather data.' });
+    const r = await runCase(pipe, 'agent', 0, evalCase({ question: 'what is the weather?', expect: 'refusal', gold: undefined }), undefined, false, 'chat');
+    expect(r).toMatchObject({ verdict: 'correct', category: 'correct' });
+  });
+
+  it('scores wrong rows against the primary result', async () => {
+    script = (b) =>
+      toolMessages(b).length === 0 ? { toolCalls: [sql('Units by shop', 'SELECT shop, SUM(qty) * 2 AS units FROM sales.Orders GROUP BY shop')] } : { content: 'Done.' };
+    const r = await runCase(pipe, 'agent', 0, evalCase({}), await gold(), false, 'chat');
+    expect(r.verdict).toBe('wrong');
+  });
+});
+
 describe('agent building blocks', () => {
   const result = (rows: unknown[][]): QueryResult => ({ columns: [{ name: 'n', type: 'int' }], rows, rowCount: rows.length, truncated: false, elapsedMs: 1 });
 
@@ -260,6 +379,23 @@ describe('agent building blocks', () => {
     const run = new AnalystRun();
     for (let i = 1; i <= 5; i++) run.addQuery({ title: `t${i}`, sql: 's', display: { view: 'table' }, result: result([[i]]) });
     expect(run.shown().map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
+  });
+
+  it('hides corrected results: by id when the correction ran, and by repeated title', () => {
+    const run = new AnalystRun();
+    run.addQuery({ title: 'Sales', sql: 's1', display: { view: 'table' }, result: result([[1]]) });
+    run.addQuery({ title: 'Sales fixed', sql: 's2', display: { view: 'table' }, replaces: 'r1', error: 'boom' });
+    expect(run.shown().map((r) => r.id)).toEqual(['r1']); // a failed correction hides nothing
+    run.addQuery({ title: 'Net sales', sql: 's3', display: { view: 'table' }, replaces: 'r1', result: result([[2]]) });
+    run.addQuery({ title: ' net  SALES', sql: 's4', display: { view: 'number' }, result: result([[3]]) });
+    run.addQuery({ title: 'Customers', sql: 's5', display: { view: 'table' }, result: result([[4]]) });
+    expect(run.shown().map((r) => r.id)).toEqual(['r4', 'r5']);
+  });
+
+  it('budgets database calls synchronously', () => {
+    const run = new AnalystRun(undefined, 2);
+    expect([run.takeQuery(), run.takeQuery(), run.takeQuery()]).toEqual([true, true, false]);
+    expect(run.dbCalls).toBe(2);
   });
 
   it('tells the model how to read results and fix errors', () => {
@@ -297,6 +433,7 @@ describe('FailoverAgentModel', () => {
       learn: (r) => (learnable() ? (log.push(`learn:${r.provider}`), true) : false),
       succeeded: async (r) => void log.push(`ok:${r.provider}`),
       failed: (r, err) => (log.push(`fail:${r.provider}`), err instanceof APIError && (err.status ?? 0) >= 500),
+      interrupted: (r) => void log.push(`interrupted:${r.provider}`),
       toError: (err, _r, exhausted) => new Error(exhausted ? 'all failed' : `fatal: ${(err as Error).message}`),
     };
     return { model: new FailoverAgentModel(routes, hooks), log };
@@ -357,6 +494,6 @@ describe('FailoverAgentModel', () => {
 
     const started = setup([midway, good]);
     await expect(collect(started.model)).rejects.toThrow(/status 503/);
-    expect(started.log).toEqual([]);
+    expect(started.log).toEqual(['interrupted:openai']); // no failover, but it counts against the provider
   });
 });

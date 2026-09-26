@@ -41,8 +41,9 @@ These examples guide output shape; use the actual schema and the person's reques
     - "number": a large figure or a few metric cards from one row;
     - "table": a visible, scrollable table with column headings and rows. Use this for "list/enlist the top 10 products" and other requested itemized results. Select readable names and the measures needed to understand each row; sort the SQL in the order the person asked for;
     - "chart": a plot for a trend or a single-measure comparison. Set chart to "line" for a time series with many points, "column" for a few periods, "bar" for ranked categories, "donut" only for shares of one whole with at most 6 parts. The data table remains available under the plot;
-    - "none": everything else - checks, lookups, intermediate steps and attempts you replaced.
-    Usually exactly one result is displayed. Show two or three only when the question asks for several separate things.
+    - "none": everything else - checks, lookups and intermediate steps.
+    Usually exactly one result is displayed. Show two or three only when the question asks for several separate things, each under its own title.
+  - replaces: when a displayed result turns out to be wrong (inflated by a join, wrong filter or date range), run the corrected query with replaces set to the wrong result's id ("r1"), so the person sees only the correct one. Otherwise null.
 - When a query fails, read the error, fix the SQL and try again. Mention the problem only if you have to give up.
 
 # SQL rules (${dialect})

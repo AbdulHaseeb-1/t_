@@ -30,6 +30,8 @@ export interface MediaChatInput {
   question: string;
   context: ChatTurn[];
   language: Lang | 'auto';
+  /** A fresh answer even when the same question was just answered (asking again). */
+  noCache?: boolean;
   audio?: UploadedMedia;
   image?: UploadedMedia;
 }
@@ -152,7 +154,7 @@ export class MediaService {
   async chat(input: MediaChatInput, opts: Omit<ChatOptions, 'englishQuestion'> = {}): Promise<MediaChatResponse> {
     const heard = await this.understand(input, opts.emit);
     const res = await this.analyst.chat(
-      { question: heard.question, context: input.context, language: heard.language, tier: 'fast', noCache: heard.noCache },
+      { question: heard.question, context: input.context, language: heard.language, tier: 'fast', noCache: heard.noCache || !!input.noCache },
       { ...opts, ...(heard.englishQuestion ? { englishQuestion: heard.englishQuestion } : {}) },
     );
     return this.withMedia(heard, res);

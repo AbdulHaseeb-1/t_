@@ -1,9 +1,13 @@
 # Evaluation harness
 
-Measures how often `/query/ask` returns the **right data**, what it costs, and how fast it is. It runs the real production services (`AskService`, `LlmService`, `SchemaCatalogService`) once per configuration variant.
+Measures how often the server returns the **right data**, what it costs, and how fast it is. It runs the real production services (`AskService` or the chat agent `AnalystService`, `LlmService`, `SchemaCatalogService`) once per configuration variant.
+
+Two pipelines can be measured with the same gold SQL: `ask` (one-shot text-to-SQL: `/query/ask`, reports, schedules; the default) and `chat` (the agent behind `/query/chat`, the app and WhatsApp). An agent answer is correct when one of the results it shows matches gold; showing no result counts as a refusal. The accuracy features below apply to `ask` only.
 
 ```bash
 pnpm eval                                  # current .env settings, retail dataset
+pnpm eval --pipeline chat                  # the chat agent instead of one-shot SQL
+pnpm eval --preset pipelines --repeat 3    # one-shot SQL vs the agent, same model, 3x each
 pnpm eval --preset ablation --repeat 3     # every accuracy feature alone + combined, 3x each
 pnpm eval --variant fast:LLM_REASONING_EFFORT_FAST=none --variant low:LLM_REASONING_EFFORT_FAST=low
 pnpm eval --filter 'q1[0-9]|ties'          # subset by case id or tag
